@@ -43,12 +43,7 @@ jobs:
         env:
           DOCKER_HUB_USERNAME: ${{ secrets.DOCKER_HUB_USERNAME }}
         run: |
-          # Set defaults
-          DOCKER_HUB_NAMESPACE="${{ vars.DOCKER_HUB_NAMESPACE }}"
-          if [ -z "${DOCKER_HUB_NAMESPACE}" ]; then
-            DOCKER_HUB_NAMESPACE="${DOCKER_HUB_USERNAME}"
-          fi
-          
+          # Set image names (defaults if not set in variables)
           BACKEND_IMAGE_NAME="${{ vars.BACKEND_IMAGE_NAME }}"
           if [ -z "${BACKEND_IMAGE_NAME}" ]; then
             BACKEND_IMAGE_NAME="kitchenhub-backend"
@@ -59,8 +54,9 @@ jobs:
             FRONTEND_IMAGE_NAME="kitchenhub-frontend"
           fi
           
-          BACKEND_IMAGE="${DOCKER_HUB_USERNAME}/${DOCKER_HUB_NAMESPACE}/${BACKEND_IMAGE_NAME}"
-          FRONTEND_IMAGE="${DOCKER_HUB_USERNAME}/${DOCKER_HUB_NAMESPACE}/${FRONTEND_IMAGE_NAME}"
+          # Docker Hub format: {username}/{repository-name}
+          BACKEND_IMAGE="${DOCKER_HUB_USERNAME}/${BACKEND_IMAGE_NAME}"
+          FRONTEND_IMAGE="${DOCKER_HUB_USERNAME}/${FRONTEND_IMAGE_NAME}"
           echo "BACKEND_IMAGE=${BACKEND_IMAGE}" >> $GITHUB_ENV
           echo "FRONTEND_IMAGE=${FRONTEND_IMAGE}" >> $GITHUB_ENV
           

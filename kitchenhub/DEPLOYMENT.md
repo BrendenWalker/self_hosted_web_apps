@@ -23,9 +23,10 @@ Configure the following secrets in your GitHub repository settings (Settings →
 
 Configure the following variables in your GitHub repository settings (Settings → Secrets and variables → Actions → Variables):
 
-1. **DOCKER_HUB_NAMESPACE** (optional) - Docker Hub namespace/organization (defaults to your username)
-2. **BACKEND_IMAGE_NAME** (optional) - Backend image name (defaults to `kitchenhub-backend`)
-3. **FRONTEND_IMAGE_NAME** (optional) - Frontend image name (defaults to `kitchenhub-frontend`)
+1. **BACKEND_IMAGE_NAME** (optional) - Backend image name (defaults to `kitchenhub-backend`)
+2. **FRONTEND_IMAGE_NAME** (optional) - Frontend image name (defaults to `kitchenhub-frontend`)
+
+**Note**: Docker Hub uses the format `{username}/{repository-name}`. The image names will be constructed as `{DOCKER_HUB_USERNAME}/{BACKEND_IMAGE_NAME}` and `{DOCKER_HUB_USERNAME}/{FRONTEND_IMAGE_NAME}`.
 
 ### Image Tagging Strategy
 
@@ -37,9 +38,9 @@ The workflow automatically tags images based on the event:
 - **Main/Master branch**: Also tags as `latest`
 
 Example image names:
-- `username/namespace/kitchenhub-backend:latest`
-- `username/namespace/kitchenhub-backend:main-abc12345`
-- `username/namespace/kitchenhub-backend:v1.0.0`
+- `derpmhichurp/kitchenhub-backend:latest`
+- `derpmhichurp/kitchenhub-backend:main-abc12345`
+- `derpmhichurp/kitchenhub-backend:v1.0.0`
 
 ## Portainer Stack Deployment
 
@@ -61,7 +62,6 @@ Example image names:
 ```env
 # Docker Hub Configuration
 DOCKER_HUB_REGISTRY_USERNAME=your-dockerhub-username
-DOCKER_HUB_IMAGE_NAMESPACE=your-namespace
 DOCKER_HUB_BACKEND_IMAGE_NAME=kitchenhub-backend
 DOCKER_HUB_FRONTEND_IMAGE_NAME=kitchenhub-frontend
 IMAGE_TAG=latest
@@ -112,7 +112,8 @@ The backend service includes a health check that verifies the API is responding.
 
 - Verify Docker Hub credentials and image names
 - Check that images exist in Docker Hub with the specified tag
-- Ensure `DOCKER_HUB_REGISTRY_USERNAME` and `DOCKER_HUB_IMAGE_NAMESPACE` are correct
+- Ensure `DOCKER_HUB_REGISTRY_USERNAME` matches your Docker Hub username
+- Verify the repository names match (e.g., `derpmhichurp/kitchenhub-backend`)
 
 ### Database Connection Issues
 

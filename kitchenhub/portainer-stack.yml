@@ -2,7 +2,7 @@ version: '3.8'
 
 services:
   backend:
-    image: ${DOCKER_HUB_REGISTRY_USERNAME}/${DOCKER_HUB_IMAGE_NAMESPACE}/${DOCKER_HUB_BACKEND_IMAGE_NAME:-kitchenhub-backend}:${IMAGE_TAG:-latest}
+    image: ${DOCKER_HUB_REGISTRY_USERNAME}/${DOCKER_HUB_BACKEND_IMAGE_NAME:-kitchenhub-backend}:${IMAGE_TAG:-latest}
     container_name: kitchenhub-backend
     ports:
       - "${BACKEND_PORT:-8080}:80"
@@ -24,7 +24,7 @@ services:
       start_period: 40s
 
   frontend:
-    image: ${DOCKER_HUB_REGISTRY_USERNAME}/${DOCKER_HUB_IMAGE_NAMESPACE}/${DOCKER_HUB_FRONTEND_IMAGE_NAME:-kitchenhub-frontend}:${IMAGE_TAG:-latest}
+    image: ${DOCKER_HUB_REGISTRY_USERNAME}/${DOCKER_HUB_FRONTEND_IMAGE_NAME:-kitchenhub-frontend}:${IMAGE_TAG:-latest}
     container_name: kitchenhub-frontend
     ports:
       - "${FRONTEND_PORT:-8081}:80"

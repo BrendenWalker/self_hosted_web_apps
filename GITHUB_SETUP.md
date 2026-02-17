@@ -39,9 +39,10 @@ These are optional and have defaults:
 
 | Variable Name | Default | Description |
 |--------------|---------|-------------|
-| `DOCKER_HUB_NAMESPACE` | Uses your username | Docker Hub namespace/organization |
 | `BACKEND_IMAGE_NAME` | `kitchenhub-backend` | Backend Docker image name |
 | `FRONTEND_IMAGE_NAME` | `kitchenhub-frontend` | Frontend Docker image name |
+
+**Note**: Docker Hub uses the format `{username}/{repository-name}`. Images will be published as `{DOCKER_HUB_USERNAME}/{BACKEND_IMAGE_NAME}` and `{DOCKER_HUB_USERNAME}/{FRONTEND_IMAGE_NAME}`.
 
 ### 3. Workflow Permissions
 
@@ -72,10 +73,10 @@ The workflow will:
 ## Image Naming Convention
 
 Images will be published as:
-- `{DOCKER_HUB_USERNAME}/{DOCKER_HUB_NAMESPACE}/{BACKEND_IMAGE_NAME}:{tag}`
-- `{DOCKER_HUB_USERNAME}/{DOCKER_HUB_NAMESPACE}/{FRONTEND_IMAGE_NAME}:{tag}`
+- `{DOCKER_HUB_USERNAME}/{BACKEND_IMAGE_NAME}:{tag}`
+- `{DOCKER_HUB_USERNAME}/{FRONTEND_IMAGE_NAME}:{tag}`
 
-Example: `myusername/mynamespace/kitchenhub-backend:latest`
+Example: `derpmhichurp/kitchenhub-backend:latest`
 
 ## Next Steps
 
@@ -92,9 +93,10 @@ Example: `myusername/mynamespace/kitchenhub-backend:latest`
 - Check that the token hasn't expired
 
 ### Images not found in Docker Hub
-- Verify the image names match your Docker Hub namespace
+- Verify the image names match your Docker Hub repositories (format: `username/repository-name`)
 - Check that images were successfully pushed in the Actions logs
-- Ensure you have permission to push to the specified namespace
+- Ensure the repositories exist on Docker Hub (e.g., `derpmhichurp/kitchenhub-backend`, `derpmhichurp/kitchenhub-frontend`)
+- Verify you have push permissions to these repositories
 
 ### Workflow doesn't trigger
 - Check that you're pushing to `main` or `master` branch
