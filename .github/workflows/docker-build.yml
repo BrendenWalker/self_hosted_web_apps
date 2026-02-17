@@ -91,6 +91,10 @@ jobs:
       - name: Set image names and tags
         env:
           DOCKER_HUB_USERNAME: ${{ secrets.DOCKER_HUB_USERNAME }}
+          GITHUB_EVENT_NAME: ${{ github.event_name }}
+          GITHUB_REF_TYPE: ${{ github.ref_type }}
+          GITHUB_REF_NAME: ${{ github.ref_name }}
+          GITHUB_EVENT_NUMBER: ${{ github.event.number }}
         run: |
           # Set image names (defaults if not set in variables)
           BACKEND_IMAGE_NAME="${{ vars.BACKEND_IMAGE_NAME }}"
@@ -110,14 +114,14 @@ jobs:
           echo "FRONTEND_IMAGE=${FRONTEND_IMAGE}" >> $GITHUB_ENV
           
           # Determine tags based on event type
-          if [ "${{ github.event_name }}" = "pull_request" ]; then
+          if [ "${GITHUB_EVENT_NAME}" = "pull_request" ]; then
             # PR builds: tag with PR number (for testing, won't push)
-            BACKEND_TAG="${BACKEND_IMAGE}:pr-${{ github.event.number }}"
-            FRONTEND_TAG="${FRONTEND_IMAGE}:pr-${{ github.event.number }}"
+            BACKEND_TAG="${BACKEND_IMAGE}:pr-${GITHUB_EVENT_NUMBER}"
+            FRONTEND_TAG="${FRONTEND_IMAGE}:pr-${GITHUB_EVENT_NUMBER}"
             echo "Building for PR (will not push)"
-          elif [ "${{ github.ref_type }}" = "tag" ]; then
+          elif [ "${GITHUB_EVENT_NAME}" = "push" ] && [ "${GITHUB_REF_TYPE}" = "tag" ]; then
             # Version tag: use the tag name and also tag as latest (for stable releases)
-            TAG_NAME="${{ github.ref_name }}"
+            TAG_NAME="${GITHUB_REF_NAME}"
             VERSION="${TAG_NAME#v}"  # Remove 'v' prefix
             
             # Tag with full version tag (e.g., v1.0.0)
@@ -141,7 +145,7 @@ jobs:
           else
             echo "Error: Unexpected event type. Only version tags and pull requests are supported."
             exit 1
-          fi
+          fi          
           
           echo "BACKEND_TAG=${BACKEND_TAG}" >> $GITHUB_ENV
           echo "FRONTEND_TAG=${FRONTEND_TAG}" >> $GITHUB_ENV
