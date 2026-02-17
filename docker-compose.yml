@@ -1,0 +1,61 @@
+version: '3.8'
+
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: kitchenhub-backend
+    ports:
+      - "8080:80"
+    env_file:
+      - .env
+    environment:
+      - PORT=80
+      - DB_HOST=${DB_HOST:-postgres}
+      - DB_PORT=${DB_PORT:-5432}
+      - DB_NAME=${DB_NAME:-hausfrau}
+      - DB_USER=${DB_USER:-postgres}
+      - DB_PASSWORD=${DB_PASSWORD:-postgres}
+#    depends_on:
+#      - postgres
+    networks:
+      - kitchenhub-network
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: kitchenhub-frontend
+    ports:
+      - "8081:80"
+    depends_on:
+      - backend
+    networks:
+      - kitchenhub-network
+    restart: unless-stopped
+
+  # Note: You mentioned you already have a PostgreSQL container
+  # This is optional - remove if you're using an existing one
+  # postgres:
+  #   image: postgres:15-alpine
+  #   container_name: kitchenhub-postgres
+  #   environment:
+  #     - POSTGRES_DB=${DB_NAME:-hausfrau}
+  #     - POSTGRES_USER=${DB_USER:-postgres}
+  #     - POSTGRES_PASSWORD=${DB_PASSWORD:-postgres}
+  #   volumes:
+  #     - postgres-data:/var/lib/postgresql/data
+  #   ports:
+  #     - "5432:5432"
+  #   networks:
+  #     - kitchenhub-network
+  #   restart: unless-stopped
+
+networks:
+  kitchenhub-network:
+    driver: bridge
+
+# volumes:
+#   postgres-data:

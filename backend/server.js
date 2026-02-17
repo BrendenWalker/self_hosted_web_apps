@@ -1,0 +1,430 @@
+const express = require('express');
+const cors = require('cors');
+const { Pool } = require('pg');
+require('dotenv').config();
+
+const app = express();
+const port = process.env.PORT || 80;
+
+// Middleware
+app.use(cors());
+app.use(express.json());
+
+// PostgreSQL connection pool
+const pool = new Pool({
+  host: process.env.DB_HOST || 'localhost',
+  port: process.env.DB_PORT || 5432,
+  database: process.env.DB_NAME || 'hausfrau',
+  user: process.env.DB_USER || 'postgres',
+  password: process.env.DB_PASSWORD || 'postgres',
+  max: 20,
+  idleTimeoutMillis: 30000,
+  connectionTimeoutMillis: 2000,
+});
+
+// Test database connection
+pool.query('SELECT NOW()', (err, res) => {
+  if (err) {
+    console.error('Database connection error:', err);
+  } else {
+    console.log('Database connected successfully');
+  }
+});
+
+// ==================== STORES ====================
+
+// Get all stores
+app.get('/api/stores', async (req, res) => {
+  try {
+    const result = await pool.query('SELECT * FROM store ORDER BY name');
+    res.json(result.rows);
+  } catch (error) {
+    console.error('Error fetching stores:', error);
+    res.status(500).json({ error: 'Failed to fetch stores' });
+  }
+});
+
+// Get single store
+app.get('/api/stores/:id', async (req, res) => {
+  try {
+    const result = await pool.query('SELECT * FROM store WHERE id = $1', [req.params.id]);
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Store not found' });
+    }
+    res.json(result.rows[0]);
+  } catch (error) {
+    console.error('Error fetching store:', error);
+    res.status(500).json({ error: 'Failed to fetch store' });
+  }
+});
+
+// Create store
+app.post('/api/stores', async (req, res) => {
+  try {
+    const { name } = req.body;
+    const result = await pool.query(
+      'INSERT INTO store (name) VALUES ($1) RETURNING *',
+      [name]
+    );
+    res.status(201).json(result.rows[0]);
+  } catch (error) {
+    console.error('Error creating store:', error);
+    res.status(500).json({ error: 'Failed to create store' });
+  }
+});
+
+// Update store
+app.put('/api/stores/:id', async (req, res) => {
+  try {
+    const { name } = req.body;
+    const result = await pool.query(
+      'UPDATE store SET name = $1, modified = CURRENT_TIMESTAMP WHERE id = $2 RETURNING *',
+      [name, req.params.id]
+    );
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Store not found' });
+    }
+    res.json(result.rows[0]);
+  } catch (error) {
+    console.error('Error updating store:', error);
+    res.status(500).json({ error: 'Failed to update store' });
+  }
+});
+
+// Delete store
+app.delete('/api/stores/:id', async (req, res) => {
+  try {
+    const result = await pool.query('DELETE FROM store WHERE id = $1 RETURNING *', [req.params.id]);
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Store not found' });
+    }
+    res.json({ message: 'Store deleted successfully' });
+  } catch (error) {
+    console.error('Error deleting store:', error);
+    res.status(500).json({ error: 'Failed to delete store' });
+  }
+});
+
+// ==================== STORE ZONES ====================
+
+// Get zones for a store
+app.get('/api/stores/:storeId/zones', async (req, res) => {
+  try {
+    const result = await pool.query(
+      `SELECT sz.*, d.name as department_name 
+       FROM storezones sz 
+       JOIN department d ON sz.departmentid = d.id 
+       WHERE sz.storeid = $1 
+       ORDER BY sz.zonesequence, d.name`,
+      [req.params.storeId]
+    );
+    res.json(result.rows);
+  } catch (error) {
+    console.error('Error fetching store zones:', error);
+    res.status(500).json({ error: 'Failed to fetch store zones' });
+  }
+});
+
+// Create/Update store zone
+app.post('/api/stores/:storeId/zones', async (req, res) => {
+  try {
+    const { zonesequence, zonename, departmentid } = req.body;
+    const result = await pool.query(
+      `INSERT INTO storezones (storeid, zonesequence, zonename, departmentid) 
+       VALUES ($1, $2, $3, $4) 
+       ON CONFLICT (storeid, zonesequence, departmentid) 
+       DO UPDATE SET zonename = $3, modified = CURRENT_TIMESTAMP 
+       RETURNING *`,
+      [req.params.storeId, zonesequence, zonename, departmentid]
+    );
+    res.status(201).json(result.rows[0]);
+  } catch (error) {
+    console.error('Error creating store zone:', error);
+    res.status(500).json({ error: 'Failed to create store zone' });
+  }
+});
+
+// Delete store zone
+app.delete('/api/stores/:storeId/zones/:zoneSequence/:departmentId', async (req, res) => {
+  try {
+    const result = await pool.query(
+      'DELETE FROM storezones WHERE storeid = $1 AND zonesequence = $2 AND departmentid = $3 RETURNING *',
+      [req.params.storeId, req.params.zoneSequence, req.params.departmentId]
+    );
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Store zone not found' });
+    }
+    res.json({ message: 'Store zone deleted successfully' });
+  } catch (error) {
+    console.error('Error deleting store zone:', error);
+    res.status(500).json({ error: 'Failed to delete store zone' });
+  }
+});
+
+// ==================== DEPARTMENTS ====================
+
+// Get all departments
+app.get('/api/departments', async (req, res) => {
+  try {
+    const result = await pool.query('SELECT * FROM department ORDER BY name');
+    res.json(result.rows);
+  } catch (error) {
+    console.error('Error fetching departments:', error);
+    res.status(500).json({ error: 'Failed to fetch departments' });
+  }
+});
+
+// Create department
+app.post('/api/departments', async (req, res) => {
+  try {
+    const { name } = req.body;
+    const result = await pool.query(
+      'INSERT INTO department (name) VALUES ($1) RETURNING *',
+      [name]
+    );
+    res.status(201).json(result.rows[0]);
+  } catch (error) {
+    console.error('Error creating department:', error);
+    res.status(500).json({ error: 'Failed to create department' });
+  }
+});
+
+// ==================== ITEMS ====================
+
+// Get all items
+app.get('/api/items', async (req, res) => {
+  try {
+    const result = await pool.query(
+      `SELECT i.*, d.name as department_name 
+       FROM items i 
+       LEFT JOIN department d ON i.department = d.id 
+       ORDER BY d.name, i.name`
+    );
+    res.json(result.rows);
+  } catch (error) {
+    console.error('Error fetching items:', error);
+    res.status(500).json({ error: 'Failed to fetch items' });
+  }
+});
+
+// Get single item
+app.get('/api/items/:id', async (req, res) => {
+  try {
+    const result = await pool.query(
+      `SELECT i.*, d.name as department_name 
+       FROM items i 
+       LEFT JOIN department d ON i.department = d.id 
+       WHERE i.id = $1`,
+      [req.params.id]
+    );
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Item not found' });
+    }
+    res.json(result.rows[0]);
+  } catch (error) {
+    console.error('Error fetching item:', error);
+    res.status(500).json({ error: 'Failed to fetch item' });
+  }
+});
+
+// Create item
+app.post('/api/items', async (req, res) => {
+  try {
+    const { name, department, qty } = req.body;
+  const result = await pool.query(
+      'INSERT INTO items (name, department, qty) VALUES ($1, $2, $3) RETURNING *',
+      [name, department || null, qty || 0]
+    );
+    res.status(201).json(result.rows[0]);
+  } catch (error) {
+    console.error('Error creating item:', error);
+    res.status(500).json({ error: 'Failed to create item' });
+  }
+});
+
+// Update item
+app.put('/api/items/:id', async (req, res) => {
+  try {
+    const { name, department, qty } = req.body;
+    const result = await pool.query(
+      'UPDATE items SET name = $1, department = $2, qty = $3 WHERE id = $4 RETURNING *',
+      [name, department || null, qty || 0, req.params.id]
+    );
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Item not found' });
+    }
+    res.json(result.rows[0]);
+  } catch (error) {
+    console.error('Error updating item:', error);
+    res.status(500).json({ error: 'Failed to update item' });
+  }
+});
+
+// Delete item
+app.delete('/api/items/:id', async (req, res) => {
+  try {
+    const result = await pool.query('DELETE FROM items WHERE id = $1 RETURNING *', [req.params.id]);
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Item not found' });
+    }
+    res.json({ message: 'Item deleted successfully' });
+  } catch (error) {
+    console.error('Error deleting item:', error);
+    res.status(500).json({ error: 'Failed to delete item' });
+  }
+});
+
+// ==================== SHOPPING LIST ====================
+
+// Get shopping list for a store (ordered by store layout)
+app.get('/api/shopping-list/:storeId', async (req, res) => {
+  try {
+    const { showPurchased } = req.query;
+    let query = `
+      SELECT 
+        sl.name,
+        sl.description,
+        sl.quantity,
+        sl.purchased,
+        sl.department_id,
+        sl.item_id,
+        COALESCE(sz.zonename, 'Uncategorized') as zone,
+        COALESCE(sz.zonesequence, 999) as zone_seq,
+        d.name as department_name
+      FROM shopping_list sl
+      LEFT JOIN storezones sz ON sz.departmentid = sl.department_id AND sz.storeid = $1
+      LEFT JOIN department d ON sl.department_id = d.id
+    `;
+    
+    const params = [req.params.storeId];
+    let paramCount = 1;
+    
+    if (showPurchased !== 'true') {
+      query += ` WHERE (sl.purchased IS NULL OR sl.purchased = 0)`;
+    }
+    
+    query += ' ORDER BY COALESCE(sz.zonesequence, 999), sl.name';
+    
+    const result = await pool.query(query, params);
+    res.json(result.rows);
+  } catch (error) {
+    console.error('Error fetching shopping list:', error);
+    res.status(500).json({ error: 'Failed to fetch shopping list' });
+  }
+});
+
+// Get all shopping list items (for management page)
+app.get('/api/shopping-list', async (req, res) => {
+  try {
+    const result = await pool.query(
+      `SELECT sl.*, d.name as department_name, i.name as item_name
+       FROM shopping_list sl
+       LEFT JOIN department d ON sl.department_id = d.id
+       LEFT JOIN items i ON sl.item_id = i.id
+       ORDER BY sl.name`
+    );
+    res.json(result.rows);
+  } catch (error) {
+    console.error('Error fetching shopping list:', error);
+    res.status(500).json({ error: 'Failed to fetch shopping list' });
+  }
+});
+
+// Add item to shopping list
+app.post('/api/shopping-list', async (req, res) => {
+  try {
+    const { name, description, quantity, department_id, item_id } = req.body;
+    const result = await pool.query(
+      `INSERT INTO shopping_list (name, description, quantity, department_id, item_id, purchased) 
+       VALUES ($1, $2, $3, $4, $5, 0) 
+       ON CONFLICT (name) 
+       DO UPDATE SET description = $2, quantity = $3, department_id = $4, item_id = $5, modified = CURRENT_TIMESTAMP 
+       RETURNING *`,
+      [name, description || null, quantity || '1', department_id || null, item_id || null]
+    );
+    res.status(201).json(result.rows[0]);
+  } catch (error) {
+    console.error('Error adding to shopping list:', error);
+    res.status(500).json({ error: 'Failed to add to shopping list' });
+  }
+});
+
+// Update shopping list item
+app.put('/api/shopping-list/:name', async (req, res) => {
+  try {
+    const { quantity, purchased } = req.body;
+    const updates = [];
+    const values = [];
+    let paramCount = 1;
+
+    if (quantity !== undefined) {
+      updates.push(`quantity = $${paramCount++}`);
+      values.push(quantity);
+    }
+    if (purchased !== undefined) {
+      updates.push(`purchased = $${paramCount++}`);
+      values.push(purchased ? 1 : 0);
+    }
+
+    if (updates.length === 0) {
+      return res.status(400).json({ error: 'No fields to update' });
+    }
+
+    updates.push(`modified = CURRENT_TIMESTAMP`);
+    values.push(req.params.name);
+
+    const result = await pool.query(
+      `UPDATE shopping_list SET ${updates.join(', ')} WHERE name = $${paramCount} RETURNING *`,
+      values
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Shopping list item not found' });
+    }
+    res.json(result.rows[0]);
+  } catch (error) {
+    console.error('Error updating shopping list:', error);
+    res.status(500).json({ error: 'Failed to update shopping list' });
+  }
+});
+
+// Mark item as purchased/unpurchased
+app.patch('/api/shopping-list/:name/purchased', async (req, res) => {
+  try {
+    const { purchased } = req.body;
+    const result = await pool.query(
+      'UPDATE shopping_list SET purchased = $1, modified = CURRENT_TIMESTAMP WHERE name = $2 RETURNING *',
+      [purchased ? 1 : 0, req.params.name]
+    );
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Shopping list item not found' });
+    }
+    res.json(result.rows[0]);
+  } catch (error) {
+    console.error('Error updating purchased status:', error);
+    res.status(500).json({ error: 'Failed to update purchased status' });
+  }
+});
+
+// Remove item from shopping list
+app.delete('/api/shopping-list/:name', async (req, res) => {
+  try {
+    const result = await pool.query('DELETE FROM shopping_list WHERE name = $1 RETURNING *', [req.params.name]);
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Shopping list item not found' });
+    }
+    res.json({ message: 'Item removed from shopping list' });
+  } catch (error) {
+    console.error('Error removing from shopping list:', error);
+    res.status(500).json({ error: 'Failed to remove from shopping list' });
+  }
+});
+
+// Health check
+app.get('/api/health', (req, res) => {
+  res.json({ status: 'ok', timestamp: new Date().toISOString() });
+});
+
+app.listen(port, () => {
+  console.log(`Server running on port ${port}`);
+});

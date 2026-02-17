@@ -1,0 +1,19 @@
+{
+  "name": "firebird-migration",
+  "version": "1.0.0",
+  "description": "Migration script from Firebird to PostgreSQL",
+  "main": "migrate-from-firebird.js",
+  "scripts": {
+    "migrate": "node migrate-from-firebird.js"
+  },
+  "dependencies": {
+    "node-firebird": "^1.1.2"
+  },
+  "keywords": [
+    "migration",
+    "firebird",
+    "postgresql"
+  ],
+  "author": "",
+  "license": "ISC"
+}
