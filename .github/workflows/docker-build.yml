@@ -107,3 +107,73 @@ jobs:
             ${{ env.FRONTEND_TAG_LATEST }}
           cache-from: type=registry,ref=${{ env.FRONTEND_IMAGE }}:buildcache
           cache-to: type=registry,ref=${{ env.FRONTEND_IMAGE }}:buildcache,mode=max
+
+      - name: Update Docker Hub repository descriptions
+        if: github.event_name != 'pull_request'
+        env:
+          DOCKER_HUB_USERNAME: ${{ secrets.DOCKER_HUB_USERNAME }}
+          DOCKER_HUB_TOKEN: ${{ secrets.DOCKER_HUB_TOKEN }}
+        run: |
+          # Install jq if not available (should be pre-installed on ubuntu-latest)
+          if ! command -v jq &> /dev/null; then
+            sudo apt-get update && sudo apt-get install -y jq
+          fi
+          
+          # Function to update Docker Hub repository description
+          update_dockerhub_description() {
+            local repo_name=$1
+            local description_file=$2
+            local token=$3
+            
+            if [ ! -f "$description_file" ]; then
+              echo "Warning: Description file not found: $description_file"
+              return
+            fi
+            
+            # Read description from markdown file and escape for JSON
+            local full_description=$(cat "$description_file")
+            local description_json=$(echo "$full_description" | jq -Rs .)
+            
+            # Update repository description
+            local response=$(curl -s -w "\n%{http_code}" \
+              -X PATCH \
+              -H "Authorization: JWT ${token}" \
+              -H "Content-Type: application/json" \
+              -d "{\"full_description\": ${description_json}}" \
+              "https://hub.docker.com/v2/repositories/${DOCKER_HUB_USERNAME}/${repo_name}/")
+            
+            local http_code=$(echo "$response" | tail -n1)
+            local body=$(echo "$response" | sed '$d')
+            
+            if [ "$http_code" = "200" ]; then
+              echo "✓ Successfully updated description for ${DOCKER_HUB_USERNAME}/${repo_name}"
+            else
+              echo "✗ Failed to update description for ${DOCKER_HUB_USERNAME}/${repo_name}"
+              echo "  HTTP Code: $http_code"
+              echo "  Response: $body"
+            fi
+          }
+          
+          # Get JWT token for Docker Hub API (reuse for both repositories)
+          echo "Authenticating with Docker Hub API..."
+          TOKEN=$(curl -s -H "Content-Type: application/json" \
+            -X POST \
+            -d "{\"username\": \"${DOCKER_HUB_USERNAME}\", \"password\": \"${DOCKER_HUB_TOKEN}\"}" \
+            https://hub.docker.com/v2/users/login/ | jq -r .token)
+          
+          if [ -z "$TOKEN" ] || [ "$TOKEN" = "null" ]; then
+            echo "Error: Failed to authenticate with Docker Hub API"
+            exit 1
+          fi
+          
+          echo "Authentication successful"
+          
+          # Update backend repository description
+          BACKEND_REPO_NAME=$(echo "${{ env.BACKEND_IMAGE }}" | cut -d'/' -f2)
+          echo "Updating description for backend repository: ${BACKEND_REPO_NAME}"
+          update_dockerhub_description "$BACKEND_REPO_NAME" "./${{ env.PROJECT_SUBFOLDER }}/docker-descriptions/backend.md" "$TOKEN"
+          
+          # Update frontend repository description
+          FRONTEND_REPO_NAME=$(echo "${{ env.FRONTEND_IMAGE }}" | cut -d'/' -f2)
+          echo "Updating description for frontend repository: ${FRONTEND_REPO_NAME}"
+          update_dockerhub_description "$FRONTEND_REPO_NAME" "./${{ env.PROJECT_SUBFOLDER }}/docker-descriptions/frontend.md" "$TOKEN"

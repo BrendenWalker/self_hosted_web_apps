@@ -62,6 +62,7 @@ The workflow will:
 - ✅ Only trigger when files in `kitchenhub/` directory change
 - ✅ Tag images with appropriate version tags
 - ✅ Push `latest` tag for main/master branch and version tags
+- ✅ **Automatically update Docker Hub repository descriptions** from `kitchenhub/docker-descriptions/*.md` files
 
 ## Testing the Workflow
 
@@ -78,12 +79,26 @@ Images will be published as:
 
 Example: `derpmhichurp/kitchenhub-backend:latest`
 
+## Docker Hub Repository Descriptions
+
+The workflow automatically updates Docker Hub repository descriptions from markdown files:
+
+- **Location**: `kitchenhub/docker-descriptions/`
+- **Files**: `backend.md` and `frontend.md`
+- **When**: After successfully pushing images (not on pull requests)
+
+Simply edit these markdown files and commit. The next build will automatically sync them to Docker Hub.
+
+See `kitchenhub/docker-descriptions/README.md` for more details.
+
 ## Next Steps
 
 1. ✅ Configure secrets in GitHub (see above)
-2. ✅ Push code to GitHub
-3. ✅ Verify workflow runs successfully
-4. ✅ Update Portainer stack with your image names (see `kitchenhub/DEPLOYMENT.md`)
+2. ✅ Review and customize Docker Hub descriptions in `kitchenhub/docker-descriptions/`
+3. ✅ Push code to GitHub
+4. ✅ Verify workflow runs successfully
+5. ✅ Check Docker Hub repositories to see updated descriptions
+6. ✅ Update Portainer stack with your image names (see `kitchenhub/DEPLOYMENT.md`)
 
 ## Troubleshooting
 
