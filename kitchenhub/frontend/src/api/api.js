@@ -21,6 +21,8 @@ export const getStoreZones = (storeId) => api.get(`/stores/${storeId}/zones`);
 export const createStoreZone = (storeId, data) => api.post(`/stores/${storeId}/zones`, data);
 export const deleteStoreZone = (storeId, zoneSequence, departmentId) => 
   api.delete(`/stores/${storeId}/zones/${zoneSequence}/${departmentId}`);
+export const swapStoreZones = (storeId, seqA, seqB) =>
+  api.post(`/stores/${storeId}/zones/swap`, { seqA, seqB });
 
 // Departments
 export const getDepartments = () => api.get('/departments');

@@ -187,7 +187,7 @@ function ShoppingListPage() {
   return (
     <div className="shopping-list-page">
       <div className="page-header">
-        <h1>Manage Shopping List</h1>
+        <h1>Modify Shopping List</h1>
         <div className="header-actions">
           <button
             className="btn btn-primary"
