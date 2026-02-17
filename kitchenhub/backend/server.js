@@ -147,6 +147,51 @@ app.post('/api/stores/:storeId/zones', async (req, res) => {
   }
 });
 
+// Swap the order of two zone sequences for a store
+app.post('/api/stores/:storeId/zones/swap', async (req, res) => {
+  const client = await pool.connect();
+  try {
+    const { seqA, seqB } = req.body;
+
+    if (seqA === undefined || seqB === undefined) {
+      return res.status(400).json({ error: 'seqA and seqB are required' });
+    }
+
+    // Use a temporary sequence value that should not normally appear
+    const tempSeq = -1;
+
+    await client.query('BEGIN');
+
+    // Move A to temporary
+    await client.query(
+      'UPDATE storezones SET zonesequence = $3, modified = CURRENT_TIMESTAMP WHERE storeid = $1 AND zonesequence = $2',
+      [req.params.storeId, seqA, tempSeq]
+    );
+
+    // Move B to A
+    await client.query(
+      'UPDATE storezones SET zonesequence = $2, modified = CURRENT_TIMESTAMP WHERE storeid = $1 AND zonesequence = $3',
+      [req.params.storeId, seqA, seqB]
+    );
+
+    // Move temporary (original A) to B
+    await client.query(
+      'UPDATE storezones SET zonesequence = $2, modified = CURRENT_TIMESTAMP WHERE storeid = $1 AND zonesequence = $3',
+      [req.params.storeId, seqB, tempSeq]
+    );
+
+    await client.query('COMMIT');
+
+    res.json({ message: 'Store zones reordered successfully' });
+  } catch (error) {
+    await client.query('ROLLBACK');
+    console.error('Error swapping store zone order:', error);
+    res.status(500).json({ error: 'Failed to reorder store zones' });
+  } finally {
+    client.release();
+  }
+});
+
 // Delete store zone
 app.delete('/api/stores/:storeId/zones/:zoneSequence/:departmentId', async (req, res) => {
   try {
