@@ -30,17 +30,25 @@ Configure the following variables in your GitHub repository settings (Settings â
 
 ### Image Tagging Strategy
 
-The workflow automatically tags images based on the event:
+The workflow uses **semver-based versioning** for releases:
 
-- **Pull Requests**: `pr-{number}` (builds but doesn't push)
-- **Tags**: `{tag-name}` and `latest`
-- **Branches**: `{branch-name}-{short-sha}`
-- **Main/Master branch**: Also tags as `latest`
+- **Version Tags** (e.g., `v1.0.0`): Builds and pushes with multiple tags:
+  - `v1.0.0` - Full version tag
+  - `1.0.0` - Version without 'v' prefix
+  - `latest` - Only for stable releases (not pre-releases like `v1.0.0-beta.1`)
+- **Pull Requests**: Builds but doesn't push (tagged as `pr-{number}` for testing)
+
+**Creating a Release:**
+```bash
+git tag v1.0.0
+git push origin v1.0.0
+```
 
 Example image names:
-- `derpmhichurp/kitchenhub-backend:latest`
-- `derpmhichurp/kitchenhub-backend:main-abc12345`
+- `derpmhichurp/kitchenhub-backend:latest` (stable releases only)
 - `derpmhichurp/kitchenhub-backend:v1.0.0`
+- `derpmhichurp/kitchenhub-backend:1.0.0`
+- `derpmhichurp/kitchenhub-backend:v1.0.0-beta.1` (pre-release, no `latest` tag)
 
 ## Portainer Stack Deployment
 

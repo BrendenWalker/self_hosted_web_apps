@@ -54,22 +54,65 @@ The workflow should work with default permissions. If you encounter permission i
 
 ## Workflow Behavior
 
-The workflow will:
+The workflow uses **semver-based versioning** for safety and consistency:
 
-- ✅ Build on pushes to `main`/`master` branches
-- ✅ Build on tags starting with `v*` (e.g., `v1.0.0`)
-- ✅ Build (but not push) on pull requests
-- ✅ Only trigger when files in `kitchenhub/` directory change
-- ✅ Tag images with appropriate version tags
-- ✅ Push `latest` tag for main/master branch and version tags
-- ✅ **Automatically update Docker Hub repository descriptions** from `kitchenhub/docker-descriptions/*.md` files
+### Version Tag Releases (Builds & Pushes)
+
+- ✅ **Only builds and pushes on semver tags** (e.g., `v1.0.0`, `v2.1.3`, `v1.0.0-beta.1`)
+- ✅ Validates tag format matches semver specification
+- ✅ Tags images with:
+  - Full tag name: `v1.0.0`
+  - Version without 'v': `1.0.0`
+  - `latest` (only for stable releases, not pre-releases)
+- ✅ Automatically updates Docker Hub repository descriptions
+
+### Pull Request Validation
+
+- ✅ **PRs build but don't push** (for testing)
+- ✅ Validates PR includes version information (warning only, doesn't block)
+- ✅ Only triggers when files in `kitchenhub/` directory change
+
+### Creating a Release
+
+1. Create a semver tag: `git tag v1.0.0`
+2. Push the tag: `git push origin v1.0.0`
+3. The workflow will automatically:
+   - Validate the tag format
+   - Build and push images
+   - Tag with version and `latest` (if stable release)
+   - Update Docker Hub descriptions
+
+**Supported tag formats:**
+- `v1.0.0` - Stable release (tags as `latest`)
+- `v1.0.0-beta.1` - Pre-release (doesn't tag as `latest`)
+- `v2.1.3+build.1` - Build metadata
 
 ## Testing the Workflow
 
-1. Push your code to GitHub
-2. Go to **Actions** tab in your repository
-3. You should see the workflow run automatically
-4. Check the logs if there are any issues
+### Testing with a PR
+
+1. Create a pull request to `main`/`master`
+2. The workflow will build images (but not push) for testing
+3. Check the Actions tab to see build results
+
+### Creating a Release
+
+1. **Create and push a version tag:**
+   ```bash
+   git tag v1.0.0
+   git push origin v1.0.0
+   ```
+
+2. **The workflow will automatically:**
+   - Validate the semver format
+   - Build both backend and frontend images
+   - Push to Docker Hub with version tags
+   - Update Docker Hub descriptions
+
+3. **Check the results:**
+   - Go to **Actions** tab to see the workflow run
+   - Check Docker Hub for your new images
+   - Images will be tagged as: `v1.0.0`, `1.0.0`, and `latest` (for stable releases)
 
 ## Image Naming Convention
 

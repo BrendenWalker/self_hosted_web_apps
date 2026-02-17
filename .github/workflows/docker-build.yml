@@ -2,11 +2,8 @@ name: Build and Publish Docker Images
 
 on:
   push:
-    branches:
-      - main
-      - master
     tags:
-      - 'v*'
+      - 'v[0-9]+.[0-9]+.[0-9]+*'  # Semver tags: v1.0.0, v2.1.3, v1.0.0-beta.1, etc.
     paths:
       - 'kitchenhub/**'
       - '.github/workflows/docker-build.yml'
@@ -19,7 +16,42 @@ on:
       - '.github/workflows/docker-build.yml'
 
 jobs:
+  validate-pr:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Fetch full history for version checking
+
+      - name: Validate PR has version information
+        run: |
+          PR_BODY="${{ github.event.pull_request.body }}"
+          PR_TITLE="${{ github.event.pull_request.title }}"
+          
+          # Check if PR title or body mentions version
+          if echo "$PR_TITLE $PR_BODY" | grep -qiE '(version|v[0-9]+\.[0-9]+\.[0-9]+|semver|release)'; then
+            echo "✓ PR contains version information"
+            exit 0
+          fi
+          
+          # Check if there are version tags in the branch
+          echo "Checking for version tags in branch..."
+          if git tag --merged HEAD | grep -qE '^v[0-9]+\.[0-9]+\.[0-9]+'; then
+            echo "✓ Found version tags in branch history"
+            exit 0
+          fi
+          
+          echo "::warning::PR does not appear to include version information"
+          echo "::notice::For releases, please include version information in the PR title or description"
+          echo "::notice::Example: 'Release v1.0.0' or 'Version bump to 1.0.0'"
+          # Don't fail, just warn
+          exit 0
+
   build-and-push:
+    needs: validate-pr
+    if: always() && (needs.validate-pr.result == 'success' || needs.validate-pr.result == 'skipped')
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
@@ -38,6 +70,23 @@ jobs:
         run: |
           PROJECT_SUBFOLDER="${PROJECT_SUBFOLDER:-kitchenhub}"
           echo "PROJECT_SUBFOLDER=${PROJECT_SUBFOLDER}" >> $GITHUB_ENV
+
+      - name: Validate semver tag
+        if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
+        run: |
+          TAG_NAME="${{ github.ref_name }}"
+          # Remove 'v' prefix if present for validation
+          VERSION="${TAG_NAME#v}"
+          
+          # Validate semver format (major.minor.patch with optional pre-release/build)
+          if ! echo "$VERSION" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*)?(\+[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*)?$'; then
+            echo "Error: Tag '$TAG_NAME' does not follow semver format (e.g., v1.0.0, v2.1.3-beta.1)"
+            exit 1
+          fi
+          
+          echo "✓ Valid semver tag: $TAG_NAME"
+          echo "VERSION=${VERSION}" >> $GITHUB_ENV
+          echo "TAG_NAME=${TAG_NAME}" >> $GITHUB_ENV
 
       - name: Set image names and tags
         env:
@@ -60,27 +109,44 @@ jobs:
           echo "BACKEND_IMAGE=${BACKEND_IMAGE}" >> $GITHUB_ENV
           echo "FRONTEND_IMAGE=${FRONTEND_IMAGE}" >> $GITHUB_ENV
           
-          # Determine tags
+          # Determine tags based on event type
           if [ "${{ github.event_name }}" = "pull_request" ]; then
+            # PR builds: tag with PR number (for testing, won't push)
             BACKEND_TAG="${BACKEND_IMAGE}:pr-${{ github.event.number }}"
             FRONTEND_TAG="${FRONTEND_IMAGE}:pr-${{ github.event.number }}"
+            echo "Building for PR (will not push)"
           elif [ "${{ github.ref_type }}" = "tag" ]; then
-            BACKEND_TAG="${BACKEND_IMAGE}:${{ github.ref_name }}"
-            FRONTEND_TAG="${FRONTEND_IMAGE}:${{ github.ref_name }}"
-            BACKEND_TAG_LATEST="${BACKEND_IMAGE}:latest"
-            FRONTEND_TAG_LATEST="${FRONTEND_IMAGE}:latest"
-          else
-            BRANCH_NAME="${{ github.ref_name }}"
-            SHA_SHORT="${{ github.sha }}" && SHA_SHORT="${SHA_SHORT:0:8}"
-            BACKEND_TAG="${BACKEND_IMAGE}:${BRANCH_NAME}-${SHA_SHORT}"
-            FRONTEND_TAG="${FRONTEND_IMAGE}:${BRANCH_NAME}-${SHA_SHORT}"
-            if [ "${BRANCH_NAME}" = "main" ] || [ "${BRANCH_NAME}" = "master" ]; then
+            # Version tag: use the tag name and also tag as latest (for stable releases)
+            TAG_NAME="${{ github.ref_name }}"
+            VERSION="${TAG_NAME#v}"  # Remove 'v' prefix
+            
+            # Tag with full version tag (e.g., v1.0.0)
+            BACKEND_TAG="${BACKEND_IMAGE}:${TAG_NAME}"
+            FRONTEND_TAG="${FRONTEND_IMAGE}:${TAG_NAME}"
+            
+            # Also tag with version without 'v' prefix (e.g., 1.0.0)
+            BACKEND_TAG_VERSION="${BACKEND_IMAGE}:${VERSION}"
+            FRONTEND_TAG_VERSION="${FRONTEND_IMAGE}:${VERSION}"
+            
+            # Tag as latest only for stable releases (no pre-release identifiers)
+            if [[ ! "$VERSION" =~ - ]]; then
               BACKEND_TAG_LATEST="${BACKEND_IMAGE}:latest"
               FRONTEND_TAG_LATEST="${FRONTEND_IMAGE}:latest"
+              echo "Stable release detected - will also tag as 'latest'"
+            else
+              echo "Pre-release detected - will not tag as 'latest'"
             fi
+            
+            echo "Building version: ${TAG_NAME}"
+          else
+            echo "Error: Unexpected event type. Only version tags and pull requests are supported."
+            exit 1
           fi
+          
           echo "BACKEND_TAG=${BACKEND_TAG}" >> $GITHUB_ENV
           echo "FRONTEND_TAG=${FRONTEND_TAG}" >> $GITHUB_ENV
+          [ -n "${BACKEND_TAG_VERSION:-}" ] && echo "BACKEND_TAG_VERSION=${BACKEND_TAG_VERSION}" >> $GITHUB_ENV
+          [ -n "${FRONTEND_TAG_VERSION:-}" ] && echo "FRONTEND_TAG_VERSION=${FRONTEND_TAG_VERSION}" >> $GITHUB_ENV
           [ -n "${BACKEND_TAG_LATEST:-}" ] && echo "BACKEND_TAG_LATEST=${BACKEND_TAG_LATEST}" >> $GITHUB_ENV
           [ -n "${FRONTEND_TAG_LATEST:-}" ] && echo "FRONTEND_TAG_LATEST=${FRONTEND_TAG_LATEST}" >> $GITHUB_ENV
 
@@ -92,6 +158,7 @@ jobs:
           push: ${{ github.event_name != 'pull_request' }}
           tags: |
             ${{ env.BACKEND_TAG }}
+            ${{ env.BACKEND_TAG_VERSION }}
             ${{ env.BACKEND_TAG_LATEST }}
           cache-from: type=registry,ref=${{ env.BACKEND_IMAGE }}:buildcache
           cache-to: type=registry,ref=${{ env.BACKEND_IMAGE }}:buildcache,mode=max
@@ -104,6 +171,7 @@ jobs:
           push: ${{ github.event_name != 'pull_request' }}
           tags: |
             ${{ env.FRONTEND_TAG }}
+            ${{ env.FRONTEND_TAG_VERSION }}
             ${{ env.FRONTEND_TAG_LATEST }}
           cache-from: type=registry,ref=${{ env.FRONTEND_IMAGE }}:buildcache
           cache-to: type=registry,ref=${{ env.FRONTEND_IMAGE }}:buildcache,mode=max
