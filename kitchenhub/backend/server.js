@@ -6,6 +6,9 @@ require('dotenv').config();
 const app = express();
 const port = process.env.PORT || 80;
 
+// App readiness state
+let isReady = false;
+
 // Middleware
 app.use(cors());
 app.use(express.json());
@@ -22,7 +25,7 @@ const pool = new Pool({
   connectionTimeoutMillis: 2000,
 });
 
-// Test database connection
+// Test database connection (non-blocking, doesn't affect readiness)
 pool.query('SELECT NOW()', (err, res) => {
   if (err) {
     console.error('Database connection error:', err);
@@ -420,11 +423,23 @@ app.delete('/api/shopping-list/:name', async (req, res) => {
   }
 });
 
-// Health check
+// Health check endpoint (does not hit database)
 app.get('/api/health', (req, res) => {
-  res.json({ status: 'ok', timestamp: new Date().toISOString() });
+  if (isReady) {
+    res.status(200).json({ 
+      status: 'ready', 
+      timestamp: new Date().toISOString() 
+    });
+  } else {
+    res.status(503).json({ 
+      status: 'not ready', 
+      timestamp: new Date().toISOString() 
+    });
+  }
 });
 
 app.listen(port, () => {
   console.log(`Server running on port ${port}`);
+  // Mark app as ready once server is listening
+  isReady = true;
 });
