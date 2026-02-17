@@ -1,0 +1,263 @@
+.shopping-page {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.shopping-header {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  margin-bottom: 1rem;
+  padding: 1rem;
+  background: white;
+  border-radius: 8px;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+  flex-shrink: 0;
+}
+
+.shopping-header h1 {
+  margin: 0;
+  color: #2c3e50;
+}
+
+.store-selector {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.store-selector label {
+  font-weight: 500;
+}
+
+.store-select {
+  flex: 1;
+  padding: 0.5rem;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  font-size: 1rem;
+}
+
+.toggle-purchased {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  cursor: pointer;
+}
+
+.error-message {
+  padding: 1rem;
+  background-color: #fee;
+  color: #c33;
+  border-radius: 4px;
+  margin-bottom: 1rem;
+}
+
+.shopping-sync-status {
+  min-height: 1.5rem;
+  margin-bottom: 0.5rem;
+  font-size: 0.9rem;
+}
+
+.sync-status.offline {
+  color: #e67e22;
+}
+
+.sync-status.syncing {
+  color: #7f8c8d;
+}
+
+.loading {
+  text-align: center;
+  padding: 2rem;
+  color: #666;
+}
+
+/* Single scroll: body flows with content; only .page-scroll scrolls (no nested scroll) */
+.shopping-page-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.shopping-list-container {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.zone-section {
+  background: white;
+  border-radius: 8px;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+  overflow: hidden;
+}
+
+.zone-header {
+  margin: 0;
+  padding: 1rem;
+  background-color: #3498db;
+  color: white;
+  font-size: 1.2rem;
+}
+
+.items-list {
+  padding: 0.5rem;
+}
+
+.shopping-item {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 1rem;
+  border-bottom: 1px solid #eee;
+  transition: background-color 0.2s;
+}
+
+.shopping-item:last-child {
+  border-bottom: none;
+}
+
+.shopping-item:hover {
+  background-color: #f9f9f9;
+}
+
+.shopping-item.purchased {
+  opacity: 0.6;
+}
+
+.shopping-item.purchased .item-name {
+  text-decoration: line-through;
+}
+
+.item-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  cursor: pointer;
+  flex: 1;
+}
+
+.item-checkbox input[type="checkbox"] {
+  width: 24px;
+  height: 24px;
+  cursor: pointer;
+}
+
+.item-name {
+  font-size: 1.1rem;
+  font-weight: 500;
+  color: #2c3e50;
+}
+
+.item-quantity {
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: #2c3e50;
+  white-space: nowrap;
+}
+
+.purchased-section {
+  margin-top: 2rem;
+  background: white;
+  border-radius: 8px;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+  padding: 1rem;
+}
+
+.purchased-section h2 {
+  margin: 0 0 1rem 0;
+  color: #2c3e50;
+}
+
+.empty-message {
+  text-align: center;
+  padding: 3rem;
+  color: #666;
+  font-size: 1.1rem;
+}
+
+.purchase-confirm-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 1rem;
+}
+
+.purchase-confirm-modal {
+  background: white;
+  border-radius: 8px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+  padding: 1.5rem 2rem;
+  max-width: 360px;
+  width: 100%;
+}
+
+.purchase-confirm-title {
+  margin: 0 0 1.5rem 0;
+  font-size: 1.15rem;
+  font-weight: 600;
+  color: #2c3e50;
+}
+
+.purchase-confirm-actions {
+  display: flex;
+  gap: 0.75rem;
+  justify-content: flex-end;
+}
+
+.purchase-confirm-actions .btn {
+  padding: 0.5rem 1.25rem;
+  border-radius: 4px;
+  font-size: 1rem;
+  cursor: pointer;
+  border: none;
+}
+
+.purchase-confirm-actions .btn-primary {
+  background: #3498db;
+  color: white;
+}
+
+.purchase-confirm-actions .btn-primary:hover {
+  background: #2980b9;
+}
+
+.purchase-confirm-actions .btn-secondary {
+  background: #ecf0f1;
+  color: #2c3e50;
+}
+
+.purchase-confirm-actions .btn-secondary:hover {
+  background: #bdc3c7;
+}
+
+@media (max-width: 768px) {
+  .shopping-header {
+    padding: 0.75rem;
+  }
+
+  .shopping-item {
+    flex-wrap: wrap;
+    padding: 0.75rem;
+  }
+
+  .item-checkbox {
+    width: 100%;
+  }
+
+  .item-quantity {
+    margin-left: auto;
+    font-size: 1rem;
+  }
+
+  .zone-header {
+    font-size: 1rem;
+    padding: 0.75rem;
+  }
+}

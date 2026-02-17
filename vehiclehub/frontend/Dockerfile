@@ -1,0 +1,33 @@
+# Pin to version tag for reproducible builds (avoid floating tag drift)
+FROM node:18.20.0-alpine3.19 AS build
+
+# Version injected at build (e.g. from CI tag or pr-N); Vite inlines VITE_* at build time
+ARG VERSION=dev
+ENV VITE_VERSION=$VERSION
+
+WORKDIR /app
+
+# Copy package files
+COPY vehiclehub/frontend/package*.json ./
+
+# Install dependencies
+RUN npm install
+
+# Copy application files
+COPY vehiclehub/frontend/ .
+
+# Build application
+RUN npm run build
+
+# Production stage; pin to version tag for reproducible builds
+FROM nginx:1.27.0-alpine
+
+# Copy built files from build stage
+COPY --from=build /app/dist /usr/share/nginx/html
+
+# Copy nginx configuration
+COPY vehiclehub/frontend/nginx.conf /etc/nginx/conf.d/default.conf
+
+EXPOSE 80
+
+CMD ["nginx", "-g", "daemon off;"]

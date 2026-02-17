@@ -1,0 +1,193 @@
+# -*- coding: utf-8 -*-
+"""Emit scripts/recipe-odt-ingredients-data.mjs — keys match Recipe/Text/ODT/*.txt exactly."""
+from pathlib import Path
+import json
+
+ROOT = Path(__file__).resolve().parent
+OUT = ROOT / "recipe-odt-ingredients-data.mjs"
+ODT_TXT_DIR = ROOT.parent / "Recipe" / "Text" / "ODT"
+
+RECIPES = [
+    {
+        "name": "Bacon Cheese Ale Dip",
+        "servings": 8,
+        "ingredients": [
+            [16, "Ounce", "Cream cheese"],
+            [0.25, "Cup", "Sour cream"],
+            [1.5, "Tablespoon", "Dijon mustard"],
+            [1, "Teaspoon", "Garlic powder"],
+            [1, "Cup", "Beer, amber"],
+            [2, "Cup", "Cheddar cheese, shredded"],
+            [1, "Pound", "Bacon"],
+            [0.25, "Cup", "Heavy cream"],
+            [1, "each", "Green onion"],
+        ],
+    },
+    {
+        "name": "Slow Cooker Beef and Bean Chili",
+        "servings": 8,
+        "ingredients": [
+            [1, "Tablespoon", "Olive oil"],
+            [1, "each", "Yellow onion, chopped"],
+            [3, "cloves", "Garlic, minced"],
+            [0.5, "Cup", "Beef broth"],
+            [2, "Tablespoon", "Chili powder"],
+            [2.5, "Teaspoon", "Cumin, ground"],
+            [2, "Teaspoon", "Paprika"],
+            [2, "Teaspoon", "Cocoa powder, unsweetened"],
+            [0.5, "Teaspoon", "Coriander, ground"],
+            [1, "Teaspoon", "Salt"],
+            [0.5, "Teaspoon", "Black pepper"],
+            [2, "Pound", "Ground beef, lean"],
+            [43.5, "Ounce", "Diced tomatoes, canned"],
+            [8, "Ounce", "Tomato sauce"],
+            [15, "Ounce", "Dark red kidney beans, canned"],
+            [15, "Ounce", "Light red kidney beans, canned"],
+            [1, "Tablespoon", "Apple cider vinegar"],
+        ],
+    },
+    {
+        "name": "Easy Crock Pot Chicken Soup",
+        "servings": 4,
+        "ingredients": [
+            [0.5, "Pound", "Chicken breast, boneless skinless"],
+            [0.5, "Tablespoon", "Onion, dried"],
+            [1, "Teaspoon", "Garlic, minced"],
+            [1, "each", "Carrot"],
+            [1, "each", "Celery stalk"],
+            [0.5, "Teaspoon", "Italian seasoning"],
+            [3, "Cup", "Chicken broth"],
+            [0.25, "Cup", "Orzo pasta"],
+            [0.25, "Cup", "Parmesan cheese, shaved"],
+        ],
+    },
+    {
+        "name": "Thai Green Curry Lentil Soup",
+        "servings": 6,
+        "ingredients": [
+            [2, "Tablespoon", "Olive oil"],
+            [1, "each", "Onion, diced"],
+            [2, "cloves", "Garlic, minced"],
+            [4, "Cup", "Vegetable broth"],
+            [1, "Cup", "French green lentils, dry"],
+            [0.25, "Cup", "Thai green curry paste"],
+            [1, "Tablespoon", "Fresh ginger, minced"],
+            [0.5, "Teaspoon", "Coriander, ground"],
+            [0.5, "Teaspoon", "Salt"],
+            [14, "Ounce", "Coconut milk, lite canned"],
+            [0.25, "Cup", "Cilantro, chopped"],
+        ],
+    },
+    {
+        "name": "Instant Pot Mac and Cheese",
+        "servings": 8,
+        "ingredients": [
+            [1, "Pound", "Elbow macaroni"],
+            [4, "Cup", "Water"],
+            [4, "Tablespoon", "Butter"],
+            [1, "Teaspoon", "Kosher salt"],
+            [0.5, "Teaspoon", "Mustard, ground"],
+            [0.5, "Teaspoon", "Smoked paprika"],
+            [5, "Ounce", "Evaporated milk, canned"],
+            [3.5, "Cup", "Cheddar cheese, shredded"],
+            [2, "Cup", "Fontina cheese, shredded"],
+            [0.5, "Cup", "Parmesan cheese, grated"],
+        ],
+    },
+    {
+        "name": "Moroccan Lentil and Chickpea Soup (Harira)",
+        "servings": 8,
+        "ingredients": [
+            [0.25, "Cup", "Olive oil, extra virgin"],
+            [1, "each", "Onion, chopped"],
+            [2, "each", "Celery ribs, chopped"],
+            [5, "cloves", "Garlic, minced"],
+            [1, "Tablespoon", "Fresh ginger, grated"],
+            [2, "Teaspoon", "Coriander, ground"],
+            [2, "Teaspoon", "Smoked paprika"],
+            [1, "Teaspoon", "Cumin, ground"],
+            [0.5, "Teaspoon", "Cinnamon, ground"],
+            [0.75, "Cup", "Cilantro, minced"],
+            [4, "Cup", "Chicken broth"],
+            [4, "Cup", "Water"],
+            [15, "Ounce", "Chickpeas, canned"],
+            [1, "Cup", "Brown lentils, dry"],
+            [28, "Ounce", "Crushed tomatoes, canned"],
+            [0.5, "Cup", "Orzo pasta"],
+            [2, "Tablespoon", "Lemon juice"],
+        ],
+    },
+    {
+        "name": "Slow-Cooked Lasagna Soup",
+        "servings": 8,
+        "ingredients": [
+            [19.5, "Ounce", "Italian turkey sausage"],
+            [1, "each", "Onion, chopped"],
+            [2, "each", "Carrots, chopped"],
+            [3, "cloves", "Garlic, minced"],
+            [32, "Ounce", "Chicken broth, reduced sodium"],
+            [29, "Ounce", "Stewed tomatoes, canned"],
+            [16, "Ounce", "Tomato sauce, canned"],
+            [2, "Teaspoon", "Italian seasoning"],
+            [6, "each", "Lasagna noodles"],
+            [2, "Cup", "Spinach, fresh chopped"],
+            [1, "Cup", "Mozzarella cheese, part-skim"],
+        ],
+    },
+    {
+        "name": "Chicken and Sausage Jambalaya",
+        "servings": 6,
+        "ingredients": [
+            [2, "Teaspoon", "Olive oil"],
+            [2, "each", "Chicken breast, boneless skinless"],
+            [8, "Ounce", "Kielbasa sausage"],
+            [1, "each", "Onion, diced"],
+            [1, "each", "Green bell pepper, diced"],
+            [0.5, "Cup", "Celery, diced"],
+            [2, "Tablespoon", "Garlic, chopped"],
+            [0.5, "Teaspoon", "Onion powder"],
+            [1, "Teaspoon", "Salt"],
+            [0.5, "Teaspoon", "Black pepper"],
+            [2, "Cup", "White rice, uncooked"],
+            [4, "Cup", "Chicken stock"],
+            [3, "each", "Bay leaves"],
+            [2, "Teaspoon", "Worcestershire sauce"],
+        ],
+    },
+]
+
+
+def main():
+    names = sorted(f.name for f in ODT_TXT_DIR.iterdir() if f.suffix == ".txt")
+    if len(names) != len(RECIPES):
+        raise SystemExit(f"count mismatch: {len(names)} files vs {len(RECIPES)} recipes")
+    data = dict(zip(names, RECIPES))
+
+    lines = [
+        "/**",
+        " * Curated ingredient rows for Recipe/Text/ODT/*.txt (from Recipe/ODT).",
+        " * Keys use prefix ODT/ relative to Recipe/Text. See RecipeConversion.md §6.",
+        " */",
+        "export default {",
+    ]
+    for key in sorted(data.keys()):
+        entry = data[key]
+        k = "ODT/" + key
+        lines.append(f"  {json.dumps(k)}: {{")
+        lines.append(f"    name: {json.dumps(entry['name'])}, ")
+        lines.append(f"    servings: {entry['servings']}, ")
+        lines.append("    ingredients: [")
+        for row in entry["ingredients"]:
+            q, m, name = row
+            if isinstance(q, float) and q == int(q):
+                q = int(q)
+            lines.append(f"      [{q}, {json.dumps(m)}, {json.dumps(name)}],")
+        lines.append("    ],")
+        lines.append("  },")
+    lines.append("};")
+    OUT.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    print("Wrote", OUT, "recipes:", len(data))
+
+
+if __name__ == "__main__":
+    main()

@@ -1,0 +1,534 @@
+name: Build and Publish Docker Images
+
+on:
+  push:
+    tags:
+      - 'kitchenhub/*'   # e.g., kitchenhub/1.0.0 (X.X.X only, no v prefix)
+      - 'vehiclehub/*'   # e.g., vehiclehub/1.0.0
+      - 'retirementhub/*'   # e.g., retirementhub/1.0.0
+      - 'mailhub/*'      # e.g., mailhub/1.0.0
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'kitchenhub/**'
+      - 'vehiclehub/**'
+      - 'retirementhub/**'
+      - 'mailhub/**'
+      - '.github/workflows/docker-build.yml'
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      checks: write   # required for publish-unit-test-result-action to create check runs
+    strategy:
+      matrix:
+        project: [kitchenhub, retirementhub]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: '20'
+
+      - name: Install backend dependencies (${{ matrix.project }})
+        run: npm install
+        working-directory: ${{ matrix.project }}/backend
+
+      - name: Run backend tests (${{ matrix.project }})
+        env:
+          JEST_JUNIT_OUTPUT_DIR: test-results
+          JEST_JUNIT_OUTPUT_NAME: junit.xml
+        run: |
+          mkdir -p test-results
+          npm run test:ci
+        working-directory: ${{ matrix.project }}/backend
+
+      - name: Install frontend dependencies (${{ matrix.project }})
+        run: npm install
+        working-directory: ${{ matrix.project }}/frontend
+
+      - name: Run frontend tests (${{ matrix.project }})
+        run: |
+          mkdir -p test-results
+          npm run test:ci
+        working-directory: ${{ matrix.project }}/frontend
+
+      - name: Publish test results to GitHub
+        if: always() && !cancelled()
+        uses: EnricoMi/publish-unit-test-result-action@v2
+        with:
+          files: |
+            ${{ matrix.project }}/backend/test-results/junit.xml
+            ${{ matrix.project }}/frontend/test-results/junit.xml
+          check_name: Test results (${{ matrix.project }})
+          comment_mode: off
+
+      - name: Coverage summary
+        if: always() && !cancelled()
+        run: |
+          echo '## Code coverage' >> $GITHUB_STEP_SUMMARY
+          for dir in ${{ matrix.project }}/backend ${{ matrix.project }}/frontend; do
+            name=$(basename "$(dirname "$dir")")-$(basename "$dir")
+            path="$dir/coverage/coverage-summary.json"
+            if [ -f "$path" ]; then
+              node -e "
+            const c = require('./$path');
+            const tot = c.total;
+            if (tot) {
+              console.log('### ' + '$name'.replace(/-/g, ' ') + '\n');
+              console.log('| | Coverage |');
+              console.log('|---|---------|');
+              ['lines', 'statements', 'functions', 'branches'].forEach(k => tot[k] && console.log('|' + k + '|' + tot[k].pct + '%|'));
+              console.log('');
+            }
+          "
+            fi
+          done >> $GITHUB_STEP_SUMMARY
+
+  validate-pr:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0  # Fetch full history for version checking
+
+      - name: Validate PR has version information
+        run: |
+          PR_BODY="${{ github.event.pull_request.body }}"
+          PR_TITLE="${{ github.event.pull_request.title }}"
+          
+          # Check if PR title or body mentions version
+          if echo "$PR_TITLE $PR_BODY" | grep -qiE '(version|[0-9]+\.[0-9]+\.[0-9]+|semver|release)'; then
+            echo "✓ PR contains version information"
+            exit 0
+          fi
+          
+          # Check if there are version tags in the branch
+          echo "Checking for version tags in branch..."
+          if git tag --merged HEAD | grep -qE '^[a-z]+/[0-9]+\.[0-9]+\.[0-9]+'; then
+            echo "✓ Found version tags in branch history"
+            exit 0
+          fi
+          
+          echo "::warning::PR does not appear to include version information"
+          echo "::notice::For releases, please include version information in the PR title or description"
+          echo "::notice::Example: 'Release 1.0.0' or 'Version bump to 1.0.0'"
+          # Don't fail, just warn
+          exit 0
+
+  build-and-push:
+    needs: [test]
+    if: success() && (github.event_name == 'pull_request' || (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')))
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        project: [kitchenhub, vehiclehub, retirementhub, mailhub]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0  # Full history required to verify tag branch ancestry
+
+      # Login *before* Buildx so the builder uses authenticated pulls (avoids 429 rate limit).
+      - name: Ensure Docker Hub credentials are set
+        run: |
+          if [ -z "${{ secrets.DOCKER_HUB_USERNAME }}" ] || [ -z "${{ secrets.DOCKER_HUB_TOKEN }}" ]; then
+            echo "::error::Docker Hub rate limit: add repository secrets DOCKER_HUB_USERNAME and DOCKER_HUB_TOKEN so base image pulls use your account limit (see https://docs.docker.com/docker-hub/download-rate-limit/)."
+            exit 1
+          fi
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v4
+        with:
+          username: ${{ secrets.DOCKER_HUB_USERNAME }}
+          password: ${{ secrets.DOCKER_HUB_TOKEN }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Check if tag is on main branch
+        if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
+        run: |
+          git fetch origin main || true
+          TAG_COMMIT="$(git rev-parse HEAD)"
+          if git show-ref --verify --quiet refs/remotes/origin/main && git merge-base --is-ancestor "${TAG_COMMIT}" origin/main 2>/dev/null; then
+            echo "IS_MAIN_BRANCH=true" >> $GITHUB_ENV
+            echo "Tag commit is on main - image will be tagged as 'latest' (if stable)"
+          else
+            echo "IS_MAIN_BRANCH=false" >> $GITHUB_ENV
+            echo "Tag commit is not on main - image will be tagged as 'beta' (floating pre-release)"
+          fi
+
+      - name: Determine target service from tag
+        if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
+        run: |
+          TAG_REF="${{ github.ref_name }}"
+          
+          # Expect format: <service>/<version> with X.X.X (no v prefix), e.g. kitchenhub/1.2.3
+          if [[ "$TAG_REF" != */* ]] || [[ "$TAG_REF" == *"/v"* ]]; then
+            echo "Error: Tag '$TAG_REF' must be in the form '<service>/<version>' (e.g., kitchenhub/1.2.3). Use X.X.X only, no 'v' prefix."
+            exit 1
+          fi
+          
+          SERVICE="${TAG_REF%%/*}"
+          VERSION="${TAG_REF#*/}"
+          
+          if [ "$SERVICE" != "kitchenhub" ] && [ "$SERVICE" != "vehiclehub" ] && [ "$SERVICE" != "retirementhub" ] && [ "$SERVICE" != "mailhub" ]; then
+            echo "Error: Unsupported service '$SERVICE' in tag. Expected 'kitchenhub', 'vehiclehub', 'retirementhub', or 'mailhub'."
+            exit 1
+          fi
+          
+          # Validate semver format (major.minor.patch with optional pre-release/build)
+          if ! echo "$VERSION" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*)?(\+[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*)?$'; then
+            echo "Error: Version '$VERSION' from tag '$TAG_REF' does not follow semver format (e.g., 1.0.0, 2.1.3-beta.1)"
+            exit 1
+          fi
+          
+          echo "TARGET_SERVICE=${SERVICE}" >> $GITHUB_ENV
+          echo "VERSION=${VERSION}" >> $GITHUB_ENV
+          echo "Resolved service '$SERVICE' and version '$VERSION' from tag '$TAG_REF'"
+
+      - name: Set project configuration
+        if: github.event_name == 'pull_request' || env.TARGET_SERVICE == '' || matrix.project == env.TARGET_SERVICE
+        run: |
+          PROJECT_SUBFOLDER="${{ matrix.project }}"
+          echo "PROJECT_SUBFOLDER=${PROJECT_SUBFOLDER}" >> $GITHUB_ENV
+          
+          # Set default image names based on project
+          if [ "${PROJECT_SUBFOLDER}" = "kitchenhub" ]; then
+            DEFAULT_BACKEND="kitchenhub-backend"
+            DEFAULT_FRONTEND="kitchenhub-frontend"
+          elif [ "${PROJECT_SUBFOLDER}" = "vehiclehub" ]; then
+            DEFAULT_BACKEND="vehiclehub-backend"
+            DEFAULT_FRONTEND="vehiclehub-frontend"
+          elif [ "${PROJECT_SUBFOLDER}" = "mailhub" ]; then
+            DEFAULT_POSTFIX="mailhub-postfix"
+            DEFAULT_AMAVISD="mailhub-amavisd"
+            DEFAULT_DOVECOT="mailhub-dovecot"
+          else
+            DEFAULT_BACKEND="retirementhub-backend"
+            DEFAULT_FRONTEND="retirementhub-frontend"
+          fi
+          echo "DEFAULT_BACKEND=${DEFAULT_BACKEND}" >> $GITHUB_ENV
+          echo "DEFAULT_FRONTEND=${DEFAULT_FRONTEND}" >> $GITHUB_ENV
+          if [ "${PROJECT_SUBFOLDER}" = "mailhub" ]; then
+            echo "DEFAULT_POSTFIX=${DEFAULT_POSTFIX}" >> $GITHUB_ENV
+            echo "DEFAULT_AMAVISD=${DEFAULT_AMAVISD}" >> $GITHUB_ENV
+            echo "DEFAULT_DOVECOT=${DEFAULT_DOVECOT}" >> $GITHUB_ENV
+          fi
+
+      - name: Set image names and tags
+        if: github.event_name == 'pull_request' || env.TARGET_SERVICE == '' || matrix.project == env.TARGET_SERVICE
+        env:
+          DOCKER_HUB_USERNAME: ${{ secrets.DOCKER_HUB_USERNAME }}
+          GITHUB_EVENT_NAME: ${{ github.event_name }}
+          GITHUB_REF_TYPE: ${{ github.ref_type }}
+          GITHUB_REF_NAME: ${{ github.ref_name }}
+          GITHUB_EVENT_NUMBER: ${{ github.event.number }}
+        run: |
+          # VERSION is set by "Determine target service from tag" for tag builds; set for PR builds so images get version in-app
+          if [ "${GITHUB_EVENT_NAME}" = "pull_request" ]; then
+            echo "VERSION=pr-${GITHUB_EVENT_NUMBER}" >> $GITHUB_ENV
+          fi
+          if [ "${{ env.PROJECT_SUBFOLDER }}" = "mailhub" ]; then
+            POSTFIX_IMAGE_NAME="${{ vars.MAILHUB_POSTFIX_IMAGE_NAME }}"
+            AMAVISD_IMAGE_NAME="${{ vars.MAILHUB_AMAVISD_IMAGE_NAME }}"
+            DOVECOT_IMAGE_NAME="${{ vars.MAILHUB_DOVECOT_IMAGE_NAME }}"
+            [ -z "${POSTFIX_IMAGE_NAME}" ] && POSTFIX_IMAGE_NAME="${{ env.DEFAULT_POSTFIX }}"
+            [ -z "${AMAVISD_IMAGE_NAME}" ] && AMAVISD_IMAGE_NAME="${{ env.DEFAULT_AMAVISD }}"
+            [ -z "${DOVECOT_IMAGE_NAME}" ] && DOVECOT_IMAGE_NAME="${{ env.DEFAULT_DOVECOT }}"
+            POSTFIX_IMAGE="${DOCKER_HUB_USERNAME}/${POSTFIX_IMAGE_NAME}"
+            AMAVISD_IMAGE="${DOCKER_HUB_USERNAME}/${AMAVISD_IMAGE_NAME}"
+            DOVECOT_IMAGE="${DOCKER_HUB_USERNAME}/${DOVECOT_IMAGE_NAME}"
+            echo "POSTFIX_IMAGE=${POSTFIX_IMAGE}" >> $GITHUB_ENV
+            echo "AMAVISD_IMAGE=${AMAVISD_IMAGE}" >> $GITHUB_ENV
+            echo "DOVECOT_IMAGE=${DOVECOT_IMAGE}" >> $GITHUB_ENV
+            if [ "${GITHUB_EVENT_NAME}" = "pull_request" ]; then
+              echo "POSTFIX_TAGS=${POSTFIX_IMAGE}:pr-${GITHUB_EVENT_NUMBER}" >> $GITHUB_ENV
+              echo "AMAVISD_TAGS=${AMAVISD_IMAGE}:pr-${GITHUB_EVENT_NUMBER}" >> $GITHUB_ENV
+              echo "DOVECOT_TAGS=${DOVECOT_IMAGE}:pr-${GITHUB_EVENT_NUMBER}" >> $GITHUB_ENV
+            else
+              POSTFIX_TAG="${POSTFIX_IMAGE}:${VERSION}"
+              AMAVISD_TAG="${AMAVISD_IMAGE}:${VERSION}"
+              DOVECOT_TAG="${DOVECOT_IMAGE}:${VERSION}"
+              POSTFIX_TAGS="${POSTFIX_TAG}"
+              AMAVISD_TAGS="${AMAVISD_TAG}"
+              DOVECOT_TAGS="${DOVECOT_TAG}"
+              IS_MAIN="${{ env.IS_MAIN_BRANCH }}"
+              if [ "${IS_MAIN}" = "true" ] && [[ ! "$VERSION" =~ - ]]; then
+                POSTFIX_TAGS="${POSTFIX_TAGS}"$'\n'"${POSTFIX_IMAGE}:latest"
+                AMAVISD_TAGS="${AMAVISD_TAGS}"$'\n'"${AMAVISD_IMAGE}:latest"
+                DOVECOT_TAGS="${DOVECOT_TAGS}"$'\n'"${DOVECOT_IMAGE}:latest"
+              elif [ "${IS_MAIN}" = "false" ]; then
+                POSTFIX_TAGS="${POSTFIX_TAGS}"$'\n'"${POSTFIX_IMAGE}:beta"
+                AMAVISD_TAGS="${AMAVISD_TAGS}"$'\n'"${AMAVISD_IMAGE}:beta"
+                DOVECOT_TAGS="${DOVECOT_TAGS}"$'\n'"${DOVECOT_IMAGE}:beta"
+              fi
+              echo "POSTFIX_TAGS<<EOF" >> $GITHUB_ENV
+              echo "$POSTFIX_TAGS" >> $GITHUB_ENV
+              echo "EOF" >> $GITHUB_ENV
+              echo "AMAVISD_TAGS<<EOF" >> $GITHUB_ENV
+              echo "$AMAVISD_TAGS" >> $GITHUB_ENV
+              echo "EOF" >> $GITHUB_ENV
+              echo "DOVECOT_TAGS<<EOF" >> $GITHUB_ENV
+              echo "$DOVECOT_TAGS" >> $GITHUB_ENV
+              echo "EOF" >> $GITHUB_ENV
+            fi
+            exit 0
+          fi
+          # Set image names (use project-specific variables or defaults)
+          PROJECT_VAR_PREFIX=$(echo "${{ env.PROJECT_SUBFOLDER }}" | tr '[:lower:]' '[:upper:]')
+          
+          # Try project-specific variables first (e.g., KITCHENHUB_BACKEND_IMAGE_NAME)
+          BACKEND_VAR="${PROJECT_VAR_PREFIX}_BACKEND_IMAGE_NAME"
+          FRONTEND_VAR="${PROJECT_VAR_PREFIX}_FRONTEND_IMAGE_NAME"
+          
+          # Fall back to generic variables or defaults
+          BACKEND_IMAGE_NAME="${{ vars.BACKEND_IMAGE_NAME }}"
+          if [ -z "${BACKEND_IMAGE_NAME}" ]; then
+            BACKEND_IMAGE_NAME="${{ env.DEFAULT_BACKEND }}"
+          fi
+          
+          FRONTEND_IMAGE_NAME="${{ vars.FRONTEND_IMAGE_NAME }}"
+          if [ -z "${FRONTEND_IMAGE_NAME}" ]; then
+            FRONTEND_IMAGE_NAME="${{ env.DEFAULT_FRONTEND }}"
+          fi
+          
+          # Docker Hub format: {username}/{repository-name}
+          BACKEND_IMAGE="${DOCKER_HUB_USERNAME}/${BACKEND_IMAGE_NAME}"
+          FRONTEND_IMAGE="${DOCKER_HUB_USERNAME}/${FRONTEND_IMAGE_NAME}"
+          echo "BACKEND_IMAGE=${BACKEND_IMAGE}" >> $GITHUB_ENV
+          echo "FRONTEND_IMAGE=${FRONTEND_IMAGE}" >> $GITHUB_ENV
+          
+          # Determine tags based on event type
+          if [ "${GITHUB_EVENT_NAME}" = "pull_request" ]; then
+            # PR builds: tag with PR number (for testing, won't push)
+            BACKEND_TAG="${BACKEND_IMAGE}:pr-${GITHUB_EVENT_NUMBER}"
+            FRONTEND_TAG="${FRONTEND_IMAGE}:pr-${GITHUB_EVENT_NUMBER}"
+            echo "Building for PR (will not push)"
+          elif [ "${GITHUB_EVENT_NAME}" = "push" ] && [ "${GITHUB_REF_TYPE}" = "tag" ]; then
+            # Version tag: VERSION is set by the 'Determine target service from tag' step (X.X.X format)
+            BACKEND_TAG="${BACKEND_IMAGE}:${VERSION}"
+            FRONTEND_TAG="${FRONTEND_IMAGE}:${VERSION}"
+            
+            # On main + stable: also tag as 'latest'. On other branches: tag as 'beta' (floating pre-release).
+            IS_MAIN="${{ env.IS_MAIN_BRANCH }}"
+            if [ "${IS_MAIN}" = "true" ] && [[ ! "$VERSION" =~ - ]]; then
+              BACKEND_TAG_LATEST="${BACKEND_IMAGE}:latest"
+              FRONTEND_TAG_LATEST="${FRONTEND_IMAGE}:latest"
+              echo "Tag on main, stable release - will also tag as 'latest'"
+            elif [ "${IS_MAIN}" = "false" ]; then
+              BACKEND_TAG_BETA="${BACKEND_IMAGE}:beta"
+              FRONTEND_TAG_BETA="${FRONTEND_IMAGE}:beta"
+              echo "Tag not on main - will also tag as 'beta' (floating pre-release)"
+            else
+              echo "Pre-release on main - will not tag as 'latest'"
+            fi
+            
+            echo "Building version: ${VERSION}"
+          else
+            echo "Error: Unexpected event type. Only version tags and pull requests are supported."
+            exit 1
+          fi          
+          
+          echo "BACKEND_TAG=${BACKEND_TAG}" >> $GITHUB_ENV
+          echo "FRONTEND_TAG=${FRONTEND_TAG}" >> $GITHUB_ENV
+          # Build tag list for build step (avoid empty lines for optional tags)
+          BACKEND_TAGS="${BACKEND_TAG}"
+          [ -n "${BACKEND_TAG_LATEST:-}" ] && BACKEND_TAGS="${BACKEND_TAGS}"$'\n'"${BACKEND_TAG_LATEST}"
+          [ -n "${BACKEND_TAG_BETA:-}" ] && BACKEND_TAGS="${BACKEND_TAGS}"$'\n'"${BACKEND_TAG_BETA}"
+          FRONTEND_TAGS="${FRONTEND_TAG}"
+          [ -n "${FRONTEND_TAG_LATEST:-}" ] && FRONTEND_TAGS="${FRONTEND_TAGS}"$'\n'"${FRONTEND_TAG_LATEST}"
+          [ -n "${FRONTEND_TAG_BETA:-}" ] && FRONTEND_TAGS="${FRONTEND_TAGS}"$'\n'"${FRONTEND_TAG_BETA}"
+          echo "BACKEND_TAGS<<EOF" >> $GITHUB_ENV
+          echo "$BACKEND_TAGS" >> $GITHUB_ENV
+          echo "EOF" >> $GITHUB_ENV
+          echo "FRONTEND_TAGS<<EOF" >> $GITHUB_ENV
+          echo "$FRONTEND_TAGS" >> $GITHUB_ENV
+          echo "EOF" >> $GITHUB_ENV
+
+      - name: Set build context
+        if: github.event_name == 'pull_request' || env.TARGET_SERVICE == '' || matrix.project == env.TARGET_SERVICE
+        run: |
+          # Both projects now use monorepo root as context (to access common folder)
+          # The Dockerfiles use paths like vehiclehub/backend/ or kitchenhub/backend/
+          BACKEND_CONTEXT="."
+          FRONTEND_CONTEXT="."
+          echo "BACKEND_CONTEXT=${BACKEND_CONTEXT}" >> $GITHUB_ENV
+          echo "FRONTEND_CONTEXT=${FRONTEND_CONTEXT}" >> $GITHUB_ENV
+
+      - name: Build and push backend image
+        if: (github.event_name == 'pull_request' || env.TARGET_SERVICE == '' || matrix.project == env.TARGET_SERVICE) && matrix.project != 'mailhub'
+        uses: docker/build-push-action@v7
+        with:
+          context: ${{ env.BACKEND_CONTEXT }}
+          file: ./${{ env.PROJECT_SUBFOLDER }}/backend/Dockerfile
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: ${{ env.BACKEND_TAGS }}
+          build-args: |
+            VERSION=${{ env.VERSION }}
+          cache-from: type=registry,ref=${{ env.BACKEND_IMAGE }}:buildcache
+          cache-to: type=registry,ref=${{ env.BACKEND_IMAGE }}:buildcache,mode=max
+
+      - name: Build and push frontend image
+        if: (github.event_name == 'pull_request' || env.TARGET_SERVICE == '' || matrix.project == env.TARGET_SERVICE) && matrix.project != 'mailhub'
+        uses: docker/build-push-action@v7
+        with:
+          context: ${{ env.FRONTEND_CONTEXT }}
+          file: ./${{ env.PROJECT_SUBFOLDER }}/frontend/Dockerfile
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: ${{ env.FRONTEND_TAGS }}
+          build-args: |
+            VERSION=${{ env.VERSION }}
+          cache-from: type=registry,ref=${{ env.FRONTEND_IMAGE }}:buildcache
+          cache-to: type=registry,ref=${{ env.FRONTEND_IMAGE }}:buildcache,mode=max
+
+      - name: Build and push mailhub-postfix image
+        if: (github.event_name == 'pull_request' || env.TARGET_SERVICE == '' || matrix.project == env.TARGET_SERVICE) && matrix.project == 'mailhub'
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: ./mailhub/postfix/Dockerfile
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: ${{ env.POSTFIX_TAGS }}
+          build-args: |
+            VERSION=${{ env.VERSION }}
+          cache-from: type=registry,ref=${{ env.POSTFIX_IMAGE }}:buildcache
+          cache-to: type=registry,ref=${{ env.POSTFIX_IMAGE }}:buildcache,mode=max
+
+      - name: Build and push mailhub-amavisd image
+        if: (github.event_name == 'pull_request' || env.TARGET_SERVICE == '' || matrix.project == env.TARGET_SERVICE) && matrix.project == 'mailhub'
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: ./mailhub/amavisd/Dockerfile
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: ${{ env.AMAVISD_TAGS }}
+          build-args: |
+            VERSION=${{ env.VERSION }}
+          cache-from: type=registry,ref=${{ env.AMAVISD_IMAGE }}:buildcache
+          cache-to: type=registry,ref=${{ env.AMAVISD_IMAGE }}:buildcache,mode=max
+
+      - name: Build and push mailhub-dovecot image
+        if: (github.event_name == 'pull_request' || env.TARGET_SERVICE == '' || matrix.project == env.TARGET_SERVICE) && matrix.project == 'mailhub'
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: ./mailhub/dovecot/Dockerfile
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: ${{ env.DOVECOT_TAGS }}
+          build-args: |
+            VERSION=${{ env.VERSION }}
+          cache-from: type=registry,ref=${{ env.DOVECOT_IMAGE }}:buildcache
+          cache-to: type=registry,ref=${{ env.DOVECOT_IMAGE }}:buildcache,mode=max
+
+      - name: Update Docker Hub repository descriptions
+        if: github.event_name != 'pull_request' && (env.TARGET_SERVICE == '' || matrix.project == env.TARGET_SERVICE) && matrix.project != 'mailhub'
+        env:
+          DOCKER_HUB_USERNAME: ${{ secrets.DOCKER_HUB_USERNAME }}
+          DOCKER_HUB_TOKEN: ${{ secrets.DOCKER_HUB_TOKEN }}
+        run: |
+          # Install jq if not available (should be pre-installed on ubuntu-latest)
+          if ! command -v jq &> /dev/null; then
+            sudo apt-get update && sudo apt-get install -y jq
+          fi
+          
+          # Function to update Docker Hub repository description
+          update_dockerhub_description() {
+            local repo_name=$1
+            local description_file=$2
+            local token=$3
+            
+            if [ ! -f "$description_file" ]; then
+              echo "Warning: Description file not found: $description_file"
+              return
+            fi
+            
+            # Read description from markdown file and escape for JSON
+            local full_description=$(cat "$description_file")
+            local description_json=$(echo "$full_description" | jq -Rs .)
+            
+            # Update repository description
+            local response=$(curl -s -w "\n%{http_code}" \
+              -X PATCH \
+              -H "Authorization: JWT ${token}" \
+              -H "Content-Type: application/json" \
+              -d "{\"full_description\": ${description_json}}" \
+              "https://hub.docker.com/v2/repositories/${DOCKER_HUB_USERNAME}/${repo_name}/")
+            
+            local http_code=$(echo "$response" | tail -n1)
+            local body=$(echo "$response" | sed '$d')
+            
+            if [ "$http_code" = "200" ]; then
+              echo "✓ Successfully updated description for ${DOCKER_HUB_USERNAME}/${repo_name}"
+            else
+              echo "✗ Failed to update description for ${DOCKER_HUB_USERNAME}/${repo_name}"
+              echo "  HTTP Code: $http_code"
+              echo "  Response: $body"
+            fi
+          }
+          
+          # Get JWT token for Docker Hub API (reuse for both repositories)
+          echo "Authenticating with Docker Hub API..."
+          TOKEN=$(curl -s -H "Content-Type: application/json" \
+            -X POST \
+            -d "{\"username\": \"${DOCKER_HUB_USERNAME}\", \"password\": \"${DOCKER_HUB_TOKEN}\"}" \
+            https://hub.docker.com/v2/users/login/ | jq -r .token)
+          
+          if [ -z "$TOKEN" ] || [ "$TOKEN" = "null" ]; then
+            echo "Error: Failed to authenticate with Docker Hub API"
+            exit 1
+          fi
+          
+          echo "Authentication successful"
+          
+          # Update backend repository description
+          BACKEND_REPO_NAME=$(echo "${{ env.BACKEND_IMAGE }}" | cut -d'/' -f2)
+          echo "Updating description for backend repository: ${BACKEND_REPO_NAME}"
+          update_dockerhub_description "$BACKEND_REPO_NAME" "./${{ env.PROJECT_SUBFOLDER }}/docker-descriptions/backend.md" "$TOKEN"
+          
+          # Update frontend repository description
+          FRONTEND_REPO_NAME=$(echo "${{ env.FRONTEND_IMAGE }}" | cut -d'/' -f2)
+          echo "Updating description for frontend repository: ${FRONTEND_REPO_NAME}"
+          update_dockerhub_description "$FRONTEND_REPO_NAME" "./${{ env.PROJECT_SUBFOLDER }}/docker-descriptions/frontend.md" "$TOKEN"
+
+      - name: Update Docker Hub repository descriptions (mailhub)
+        if: github.event_name != 'pull_request' && (env.TARGET_SERVICE == '' || matrix.project == env.TARGET_SERVICE) && matrix.project == 'mailhub'
+        env:
+          DOCKER_HUB_USERNAME: ${{ secrets.DOCKER_HUB_USERNAME }}
+          DOCKER_HUB_TOKEN: ${{ secrets.DOCKER_HUB_TOKEN }}
+        run: |
+          if ! command -v jq &> /dev/null; then
+            sudo apt-get update && sudo apt-get install -y jq
+          fi
+          update_dockerhub_description() {
+            local repo_name=$1
+            local description_file=$2
+            local token=$3
+            if [ ! -f "$description_file" ]; then return; fi
+            local description_json=$(cat "$description_file" | jq -Rs .)
+            local response=$(curl -s -w "\n%{http_code}" -X PATCH \
+              -H "Authorization: JWT ${token}" -H "Content-Type: application/json" \
+              -d "{\"full_description\": ${description_json}}" \
+              "https://hub.docker.com/v2/repositories/${DOCKER_HUB_USERNAME}/${repo_name}/")
+            local http_code=$(echo "$response" | tail -n1)
+            if [ "$http_code" = "200" ]; then
+              echo "✓ Updated description for ${repo_name}"
+            else
+              echo "✗ Failed to update ${repo_name}: $http_code"
+            fi
+          }
+          TOKEN=$(curl -s -H "Content-Type: application/json" -X POST \
+            -d "{\"username\": \"${DOCKER_HUB_USERNAME}\", \"password\": \"${DOCKER_HUB_TOKEN}\"}" \
+            https://hub.docker.com/v2/users/login/ | jq -r .token)
+          [ -z "$TOKEN" ] || [ "$TOKEN" = "null" ] && exit 1
+          update_dockerhub_description "mailhub-postfix" "./mailhub/docker-descriptions/postfix.md" "$TOKEN"
+          update_dockerhub_description "mailhub-amavisd" "./mailhub/docker-descriptions/amavisd.md" "$TOKEN"
+          update_dockerhub_description "mailhub-dovecot" "./mailhub/docker-descriptions/dovecot.md" "$TOKEN"

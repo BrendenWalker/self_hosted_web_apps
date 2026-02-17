@@ -1,0 +1,39 @@
+version: '3.8'
+
+services:
+  backend:
+    image: ${DOCKER_HUB_REGISTRY_USERNAME}/${DOCKER_HUB_BACKEND_IMAGE_NAME:-vehiclehub-backend}:${IMAGE_TAG:-latest}
+    container_name: vehiclehub-backend
+    ports:
+      - "${BACKEND_PORT:-8090}:80"
+    environment:
+      - PORT=80
+      - DB_HOST=${DB_HOST}
+      - DB_PORT=${DB_PORT:-5432}
+      - DB_NAME=${DB_NAME:-vehiclehub}
+      - DB_USER=${DB_USER}
+      - DB_PASSWORD=${DB_PASSWORD}
+    networks:
+      - vehiclehub-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:80/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  frontend:
+    image: ${DOCKER_HUB_REGISTRY_USERNAME}/${DOCKER_HUB_FRONTEND_IMAGE_NAME:-vehiclehub-frontend}:${IMAGE_TAG:-latest}
+    container_name: vehiclehub-frontend
+    ports:
+      - "${FRONTEND_PORT:-8091}:80"
+    depends_on:
+      - backend
+    networks:
+      - vehiclehub-network
+    restart: unless-stopped
+
+networks:
+  vehiclehub-network:
+    driver: bridge

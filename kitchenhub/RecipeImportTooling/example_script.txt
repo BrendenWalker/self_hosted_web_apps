@@ -1,0 +1,155 @@
+-- 1. NEW MEASUREMENTS (Omitting 'id' for SERIAL auto-generation)
+INSERT INTO common.ingredient_measurements (name, to_grams) VALUES
+('cloves', NULL),
+('slices', NULL),
+('can', NULL),
+('jar', NULL),
+('each', NULL),
+('ribs', NULL)
+ON CONFLICT (name) DO NOTHING;
+
+-- 2. NEW ITEMS (Omitting 'id' for SERIAL auto-generation)
+INSERT INTO public.items (name, department) VALUES
+('Butter', 99),
+('Garlic', 99),
+('Heavy Cream', 99),
+('Chicken Broth', 99),
+('Salt', 99),
+('Pepper', 99),
+('Fettuccine Noodles', 99),
+('Chicken Breast', 99),
+('Parmesan Cheese, grated', 99),
+('Baby Carrots', 99),
+('Red Potatoes', 99),
+('Pork Chops', 99),
+('Ranch Dressing Mix', 99),
+('Water', 99),
+('Smoked Sausage', 99),
+('Prepared Mustard', 99),
+('Mustard Seeds', 99),
+('Sweet Potato', 99),
+('Onion', 99),
+('Green Cabbage, shredded', 99),
+('Apple', 99),
+('Coconut Oil', 99),
+('Chilis', 99),
+('Ginger', 99),
+('Ground Cumin', 99),
+('Ground Coriander', 99),
+('Tamarind Concentrate', 99),
+('Crushed Tomatoes', 99),
+('Coconut Milk', 99),
+('Lemon Juice', 99),
+('Flour, All-Purpose', 99),
+('Eggs', 99),
+('Milk', 99),
+('Pork Sausages, small fresh', 99),
+('Almond Butter, creamy', 99),
+('Baking Powder', 99)
+ON CONFLICT (name) DO NOTHING;
+
+-- *** 3. RECIPE INSERTS ***
+
+-- RECIPE 1: Instant Pot Fettuccine Alfredo (ID will be auto-generated)
+INSERT INTO recipe.recipe (name, servings, instructions) VALUES
+('Instant Pot Fettuccine Alfredo', '5', '1. Place the butter and garlic in the pot. 2. Pour in the chicken broth and 1 cup of the heavy cream. 3. Sprinkle in the fettuccine noodles, in a random pattern, and gently press them down. 4. If Adding Chicken: Add the chicken, and space evenly over the noodles. Sprinkle with the salt and pepper. 5. Press down on the mixture to submerge as many of the noodle as possible. Then place the lid on the pot, lock in place, and set the steam release knob to Sealing position. 6. Press the Pressure Cook/Manual button or dial, then the +/- to select 6 minutes (7 minutes for a softer noodle). After the cook cycle has finished, let the pot sit undisturbed for 5 minutes (5 minute natural release). 7. Manually release the remaining pressure. 8. Remove the chicken and give the pasta mixture a good stir. 9. Shred the chicken and add back into the pot. 10. Add the grated parmesan and stir it in. If it...');
+
+INSERT INTO recipe.recipe_ingredients (recipe_id, ingredient_id, qty, measurement_id)
+SELECT currval('recipe.recipe_id_seq'), items.id, qty_val, measurements.id FROM 
+(
+    VALUES
+    (3.00, 'Tbsp', 'Butter'),
+    (4.00, 'cloves', 'Garlic'),
+    (2.00, 'cups', 'Chicken Broth'),
+    (1.25, 'cups', 'Heavy Cream'),
+    (0.50, 'tsp', 'Salt'),
+    (0.50, 'tsp', 'Pepper'),
+    (8.00, 'ounces', 'Fettuccine Noodles'),
+    (1.00, 'lb', 'Chicken Breast'),
+    (1.00, 'cup', 'Parmesan Cheese, grated')
+) AS recipe_data(qty_val, measurement_name, item_name)
+JOIN public.items items ON items.name = recipe_data.item_name
+JOIN common.ingredient_measurements measurements ON measurements.name = recipe_data.measurement_name;
+
+-- RECIPE 2: Ranch Pork Chop With Veggies (ID will be auto-generated)
+INSERT INTO recipe.recipe (name, servings, instructions) VALUES
+('Ranch Pork Chop With Veggies', 99, '1. Dice potatoes into bit size pieces. 2. Place potatoes and carrots in crock pot. 3. Add 1 Tablespoon water. 4. 1 teaspoon Ranch Dressing Mix. 5. Place pork chop(s) on top of veggies. 6. 2 teaspoons Ranch Dressing Mix (or to taste). 7. Cover crock pot. 8. High temp for 4 Hours or until meat internal ...');
+
+INSERT INTO recipe.recipe_ingredients (recipe_id, ingredient_id, qty, measurement_id)
+SELECT currval('recipe.recipe_id_seq'), items.id, qty_val, measurements.id FROM 
+(
+    VALUES
+    (8.00, 'ounces', 'Baby Carrots'),
+    (8.00, 'ounces', 'Red Potatoes'),
+    (8.00, 'ounces', 'Pork Chops'),
+    (1.00, 'packet', 'Ranch Dressing Mix'),
+    (1.00, 'Tablespoon', 'Water'),
+    (3.00, 'Teaspoon', 'Ranch Dressing Mix') -- Summing the two teaspoon measures
+) AS recipe_data(qty_val, measurement_name, item_name)
+JOIN public.items items ON items.name = recipe_data.item_name
+JOIN common.ingredient_measurements measurements ON measurements.name = recipe_data.measurement_name;
+
+
+-- RECIPE 3: Smoked Sausage Cabbage and Apple (ID will be auto-generated)
+INSERT INTO recipe.recipe (name, servings, instructions) VALUES
+('Smoked Sausage Cabbage and Apple', 99, 'Place chicken broth and prepared mustard in deep 12" skillet. add mustard seeds and bring to boil. add sweet potato. add onion. reduce heat to medium, cover and cook 5 minutes until potatoes are *almost* tender. add smoked sausage and cabbage. cover and cook 15 minutes until potatoes tender and cabbage is crisp tender. stir in apple. cover sim...');
+
+INSERT INTO recipe.recipe_ingredients (recipe_id, ingredient_id, qty, measurement_id)
+SELECT currval('recipe.recipe_id_seq'), items.id, qty_val, measurements.id FROM 
+(
+    VALUES
+    (1.00, 'Pound', 'Smoked Sausage'),
+    (13.00, 'ounces', 'Chicken Broth'),
+    (1.00, 'Tablespoon', 'Prepared Mustard'),
+    (1.00, 'Teaspoon', 'Mustard Seeds'),
+    (1.00, 'Pound', 'Sweet Potato'),
+    (0.67, 'Cup', 'Onion'),
+    (1.25, 'Pound', 'Green Cabbage, shredded'),
+    (1.00, 'large', 'Apple')
+) AS recipe_data(qty_val, measurement_name, item_name)
+JOIN public.items items ON items.name = recipe_data.item_name
+JOIN common.ingredient_measurements measurements ON measurements.name = recipe_data.measurement_name;
+
+-- RECIPE 4: Tamarind Red Lentil Soup (ID will be auto-generated)
+INSERT INTO recipe.recipe (name, servings, instructions) VALUES
+('Tamarind Red Lentil Soup', 99, '1. Heat 1 teaspoon of oil in a large heavy bottomed stock pot over medium heat. Add onion, and sauté it for 5 minutes. 2. Add the additional teaspoon of oil and the minced garlic, chili, and ginger, and cook for 1 minute. 3. Stir in the cumin, coriander, and salt, then add the rinsed lentils. Mix the lentils in and let cook for about 1 minute. Then add the 6 cups of water and 1 tablespoon of tamarind concentrate. 4. Bring to a boil over high heat, then turn the heat to low and simmer, covered, for 15 minutes. 5. Add the tomatoes and coconut milk, and bring to a simmer. Cook for an additional 15 minutes. As it cooks taste and add 1-2 more ta...');
+
+INSERT INTO recipe.recipe_ingredients (recipe_id, ingredient_id, qty, measurement_id)
+SELECT currval('recipe.recipe_id_seq'), items.id, qty_val, measurements.id FROM 
+(
+    VALUES
+    (2.00, 'tsp', 'Coconut Oil'),
+    (1.00, 'each', 'Onion'),
+    (4.00, 'cloves', 'Garlic'),
+    (6.00, 'each', 'Chilis'),
+    (1.50, 'Tablespoon', 'Ginger'),
+    (2.00, 'Teaspoon', 'Ground Cumin'),
+    (1.00, 'Teaspoon', 'Ground Coriander'),
+    (1.50, 'Teaspoon', 'Salt'),
+    (2.00, 'Cup', 'Red lentils'),
+    (6.00, 'Cup', 'Water'),
+    (3.00, 'Tablespoon', 'Tamarind Concentrate'),
+    (1.00, 'can', 'Crushed Tomatoes'),
+    (1.00, 'can', 'Coconut Milk'),
+    (3.00, 'Tablespoon', 'Lemon Juice')
+) AS recipe_data(qty_val, measurement_name, item_name)
+JOIN public.items items ON items.name = recipe_data.item_name
+JOIN common.ingredient_measurements measurements ON measurements.name = recipe_data.measurement_name;
+
+
+-- RECIPE 5: Toad In Der Hole (ID will be auto-generated)
+INSERT INTO recipe.recipe (name, servings, instructions) VALUES
+('Toad In Der Hole', 99, 'Combine above in blender in high speed for 2-3 seconds, scrape down the side and blend again for 40 seconds. Refrigerate batter for at least 1 hour. Preheat oven to 400. Brown sausages. Arrange sausages in single layer in a baking tin or dish about 6 x 10 and 2 inches deep. Moisten with 2 tablespoons of their drippings.. Keep them at least an inch apart. Carefully pour batter over sausages. Cook in the middle of the oven for 30 minutes or until the pudding has risen ove...');
+
+INSERT INTO recipe.recipe_ingredients (recipe_id, ingredient_id, qty, measurement_id)
+SELECT currval('recipe.recipe_id_seq'), items.id, qty_val, measurements.id FROM 
+(
+    VALUES
+    (1.00, 'Cup', 'Flour, All-Purpose'),
+    (2.00, 'each', 'Eggs'),
+    (1.00, 'Cup', 'Milk'),
+    (0.50, 'tsp', 'Salt'),
+    (1.00, 'Pound', 'Pork Sausages, small fresh')
+) AS recipe_data(qty_val, measurement_name, item_name)
+JOIN public.items items ON items.name = recipe_data.item_name
+JOIN common.ingredient_measurements measurements ON measurements.name = recipe_data.measurement_name;

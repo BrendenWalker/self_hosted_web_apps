@@ -1,0 +1,36 @@
+# Pin to version tag for reproducible builds (avoid floating tag drift)
+FROM node:18.20.0-alpine3.19 AS build
+
+# Version injected at build (e.g. from CI tag or pr-N); Vite inlines VITE_* at build time
+ARG VERSION=dev
+ENV VITE_VERSION=$VERSION
+
+# Prefer IPv4 for registry.npmjs.org — broken IPv6 in Docker Desktop often causes long hangs with no log output
+ENV NODE_OPTIONS=--dns-result-order=ipv4first
+
+WORKDIR /app
+
+# Copy package files (package-lock.json must be committed for reproducible, faster installs)
+COPY kitchenhub/frontend/package*.json ./
+
+# Install dependencies: npm ci uses the lockfile (faster than npm install) and streams more reliably with | cat
+RUN npm ci --no-audit --no-fund --loglevel=info 2>&1 | cat
+
+# Copy application files
+COPY kitchenhub/frontend/ .
+
+# Build application
+RUN npm run build
+
+# Production stage; pin to version tag for reproducible builds
+FROM nginx:1.27.0-alpine
+
+# Copy built files from build stage
+COPY --from=build /app/dist /usr/share/nginx/html
+
+# Copy nginx configuration
+COPY kitchenhub/frontend/nginx.conf /etc/nginx/conf.d/default.conf
+
+EXPOSE 80
+
+CMD ["nginx", "-g", "daemon off;"]

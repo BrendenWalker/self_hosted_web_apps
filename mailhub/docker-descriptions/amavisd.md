@@ -1,0 +1,1 @@
+Mailhub Amavisd image. Content filter (ClamAV + SpamAssassin, file-based Bayes). Listens on 10024 for Postfix, reinjects to Postfix on 10025 after scanning. Config and data in `/home/mailhub-amavisd` (bind from host).

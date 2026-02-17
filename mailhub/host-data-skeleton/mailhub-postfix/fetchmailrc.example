@@ -1,0 +1,20 @@
+# Fetchmail — copy to fetchmailrc and chmod 700 fetchmailrc.
+# Container sets 700 at startup if you forget.
+# See: man fetchmail
+
+# --- Poll one account, deliver to local user via SMTP (localhost) ---
+# poll "imap.example.com"
+#   protocol imap
+#   user "myuser"
+#   password "secret"
+#   ssl
+#   smtphost "mailhub-postfix"
+#   to "localuser" here
+
+# --- Optional: fetchall, keep, ssl cert checks ---
+#   fetchall
+#   keep
+#   sslcertck
+#   sslcertpath /etc/ssl/certs
+
+# --- Multiple polls: repeat "poll" blocks ---

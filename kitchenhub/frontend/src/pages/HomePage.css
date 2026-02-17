@@ -1,0 +1,99 @@
+.home-page {
+  width: 100%;
+}
+
+.home-hero {
+  background: white;
+  border-radius: 8px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  padding: 2.5rem 2rem;
+  margin-bottom: 2rem;
+}
+
+.home-hero h1 {
+  margin: 0 0 0.75rem 0;
+  color: #2c3e50;
+  font-size: 2rem;
+}
+
+.home-subtitle {
+  margin: 0 0 1.75rem 0;
+  color: #555;
+  font-size: 1rem;
+}
+
+.home-quick-links {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1.5rem;
+}
+
+.home-card {
+  display: block;
+  text-decoration: none;
+  padding: 1.5rem;
+  border-radius: 8px;
+  border: 1px solid #e0e0e0;
+  background-color: #fafafa;
+  color: #2c3e50;
+  transition: all 0.2s;
+}
+
+.home-card h2 {
+  margin: 0 0 0.5rem 0;
+  font-size: 1.25rem;
+}
+
+.home-card p {
+  margin: 0;
+  font-size: 0.95rem;
+  color: #555;
+}
+
+.home-card:hover {
+  border-color: #3498db;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.08);
+  transform: translateY(-2px);
+}
+
+.home-details {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1.5rem;
+}
+
+.home-detail-card {
+  background: white;
+  border-radius: 8px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  padding: 1.75rem 1.5rem;
+}
+
+.home-detail-card h3 {
+  margin: 0 0 0.75rem 0;
+  color: #2c3e50;
+}
+
+.home-detail-card p {
+  margin: 0;
+  color: #555;
+  line-height: 1.5;
+}
+
+.home-detail-card ul {
+  margin: 0;
+  padding-left: 1.25rem;
+  color: #555;
+  line-height: 1.5;
+}
+
+@media (max-width: 900px) {
+  .home-quick-links {
+    grid-template-columns: 1fr;
+  }
+
+  .home-details {
+    grid-template-columns: 1fr;
+  }
+}
+

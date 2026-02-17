@@ -1,0 +1,1 @@
+Mailhub Dovecot image. LMTP delivery (port 24), IMAPS (993), ManageSieve (4190), POP3S (995). Sieve filtering at delivery; passwd-file auth. Config and Maildir in `/home/mailhub-dovecot` (bind from host).
