@@ -1,0 +1,68 @@
+---
+globs: **/database/**/*.sql,**/backend/**/*.js
+description: Database schema and query patterns
+---
+
+# Database Patterns
+
+## Schema Organization
+
+- Each service has its own `database/` directory
+- Main schema in `schema.sql`
+- Additional schemas in separate files (e.g., `recipe-schema.sql`, `mealplanner-schema.sql`)
+- Use PostgreSQL-specific features (SERIAL, schemas, etc.)
+
+## Schema Naming
+
+- Use lowercase for all identifiers
+- Use underscores for multi-word names (e.g., `shopping_list`, `store_zones`)
+- Use `id SERIAL PRIMARY KEY` for primary keys (no triggers needed)
+- Use `TIMESTAMP DEFAULT CURRENT_TIMESTAMP` for created/modified fields
+
+## Schema Organization
+
+- Main tables in default schema
+- Feature-specific tables in named schemas (e.g., `recipe.*`, `mealplanner.*`)
+- Reference shared schemas when needed (e.g., `common.department`)
+
+## Connection Pool
+
+All backends use the shared database configuration:
+
+```javascript
+const { createDbPool, testConnection } = require('../../common/database/db-config');
+
+const pool = createDbPool({
+  database: process.env.DB_NAME || 'defaultdb',
+});
+
+testConnection(pool); // Non-blocking, doesn't affect readiness
+```
+
+## Query Patterns
+
+- **Always use parameterized queries** to prevent SQL injection
+- Use `$1, $2, $3...` for parameters
+- Handle errors with try/catch
+- Return appropriate HTTP status codes
+
+```javascript
+// Good
+const result = await pool.query('SELECT * FROM table WHERE id = $1', [id]);
+
+// Bad - SQL injection risk
+const result = await pool.query(`SELECT * FROM table WHERE id = ${id}`);
+```
+
+## Foreign Keys
+
+- Use `ON DELETE CASCADE` for dependent records
+- Use `ON DELETE SET NULL` for optional references
+- Always define foreign key constraints explicitly
+
+## Timestamps
+
+- `created TIMESTAMP DEFAULT CURRENT_TIMESTAMP` - Set once on creation
+- `modified TIMESTAMP DEFAULT CURRENT_TIMESTAMP` - Update on every modification
+- Use `modified` for change detection and cache invalidation
+- Use `created` for sorting and display purposes

@@ -1,0 +1,74 @@
+---
+globs: **/frontend/**/*.{js,jsx,ts,tsx}
+description: Frontend service patterns and conventions
+---
+
+# Frontend Service Patterns
+
+## Architecture
+
+All frontend services use React + Vite with the same structure:
+
+### Project Structure
+
+```
+frontend/
+  ├── src/
+  │   ├── api/
+  │   │   └── api.js          # Axios API client
+  │   ├── pages/               # Page components
+  │   ├── App.jsx              # Main app component with routing
+  │   ├── App.css              # App styles
+  │   ├── main.jsx             # Entry point
+  │   └── index.css            # Global styles
+  ├── index.html
+  ├── vite.config.js
+  └── nginx.conf               # Production nginx config
+```
+
+### API Client Pattern
+
+Each frontend has its own `src/api/api.js` that inlines the API client pattern:
+
+```javascript
+import axios from 'axios';
+
+const API_BASE_URL = import.meta.env.VITE_API_URL || '/api';
+
+const api = axios.create({
+  baseURL: API_BASE_URL,
+  headers: {
+    'Content-Type': 'application/json',
+  },
+});
+
+export default api;
+```
+
+**Note**: Frontends inline this code rather than importing from `common/` because Vite needs to bundle it at build time.
+
+### Routing
+
+- Use React Router (`BrowserRouter`)
+- Routes defined in `App.jsx`
+- Navigation via `Link` components
+- Standard pages: Home, List/Management, Detail pages
+
+### Styling
+
+- Component-specific CSS files (e.g., `ShoppingPage.css`)
+- Global styles in `index.css`
+- App-level styles in `App.css`
+- Use semantic class names matching component names
+
+### Environment Variables
+
+- `VITE_API_URL` - API base URL (defaults to `/api` for production proxy)
+- Set via `.env` file (not committed to git)
+
+### Production Build
+
+- Built with Vite (`npm run build`)
+- Output to `dist/` directory
+- Served by nginx in production
+- nginx proxies `/api/*` requests to backend

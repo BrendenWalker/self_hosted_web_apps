@@ -1,0 +1,50 @@
+---
+alwaysApply: true
+description: Monorepo structure and organization patterns
+---
+
+# Monorepo Structure
+
+This is a monorepo containing multiple self-hosted web applications. Each service follows a consistent structure and pattern.
+
+## Project Organization
+
+- **Root level**: Contains shared code and configuration
+  - `common/` - Shared code used across services
+  - `.github/workflows/` - CI/CD workflows
+  - Each service in its own subfolder (e.g., `kitchenhub/`, `vehiclehub/`)
+
+- **Service structure**: Each service follows this pattern:
+  ```
+  {service-name}/
+    ├── backend/          # Node.js/Express API
+    │   ├── Dockerfile
+    │   ├── package.json
+    │   └── server.js
+    ├── frontend/         # React + Vite application
+    │   ├── Dockerfile
+    │   ├── package.json
+    │   ├── vite.config.js
+    │   └── src/
+    ├── database/         # PostgreSQL schema files
+    │   └── schema.sql
+    ├── docker-compose.yml
+    ├── portainer-stack.yml
+    ├── env.example
+    └── README.md
+  ```
+
+## Port Allocation
+
+To avoid conflicts, each service uses different ports:
+- **KitchenHub**: Backend 8080, Frontend 8081
+- **VehicleHub**: Backend 8090, Frontend 8091
+- Future services should use 8100+, 8110+, etc.
+
+## Shared Code
+
+The `common/` directory contains reusable code:
+- `common/database/db-config.js` - PostgreSQL connection pool (used by backends)
+- `common/api/api-client.js` - API client reference (frontends inline this)
+
+Backends import from common using relative paths: `require('../../common/database/db-config')`
