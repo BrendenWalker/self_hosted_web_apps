@@ -3,11 +3,8 @@ name: Build and Publish Docker Images
 on:
   push:
     tags:
-      - 'v[0-9]+.[0-9]+.[0-9]+*'  # Semver tags: v1.0.0, v2.1.3, v1.0.0-beta.1, etc.
-    paths:
-      - 'kitchenhub/**'
-      - 'vehiclehub/**'
-      - '.github/workflows/docker-build.yml'
+      - 'kitchenhub/v*'   # e.g., kitchenhub/v1.0.0
+      - 'vehiclehub/v*'   # e.g., vehiclehub/v1.0.0
   pull_request:
     branches:
       - main
@@ -61,6 +58,8 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Full history required to verify tag branch ancestry
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -71,7 +70,73 @@ jobs:
           username: ${{ secrets.DOCKER_HUB_USERNAME }}
           password: ${{ secrets.DOCKER_HUB_TOKEN }}
 
+      - name: Ensure tag commit is on main (or master)
+        if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
+        run: |
+          # Fetch main and master so we can check ancestry
+          git fetch origin main master || true
+          
+          TAG_COMMIT="$(git rev-parse HEAD)"
+          echo "Tag commit: ${TAG_COMMIT}"
+          
+          ALLOWED_BRANCHES=("origin/main" "origin/master")
+          FOUND_ALLOWED_BRANCH=0
+          
+          for BRANCH in "${ALLOWED_BRANCHES[@]}"; do
+            if git show-ref --verify --quiet "refs/remotes/${BRANCH}"; then
+              echo "Checking if tag commit is reachable from ${BRANCH}..."
+              if git merge-base --is-ancestor "${TAG_COMMIT}" "${BRANCH}"; then
+                echo "✓ Tag commit is reachable from ${BRANCH}"
+                FOUND_ALLOWED_BRANCH=1
+                break
+              else
+                echo "Tag commit is NOT reachable from ${BRANCH}"
+              fi
+            else
+              echo "Remote branch ${BRANCH} not found (skipping)"
+            fi
+          done
+          
+          if [ "${FOUND_ALLOWED_BRANCH}" -ne 1 ]; then
+            echo "Error: Release tags must point to commits reachable from 'main' or 'master'."
+            echo "Please only create release tags on the mainline branch."
+            exit 1
+          fi
+
+      - name: Determine target service from tag
+        if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
+        run: |
+          TAG_REF="${{ github.ref_name }}"
+          
+          # Expect format: <service>/v<version>, e.g. kitchenhub/v1.2.3
+          if [[ "$TAG_REF" != */v* ]]; then
+            echo "Error: Tag '$TAG_REF' must be in the form '<service>/v<version>' (e.g., kitchenhub/v1.2.3)"
+            exit 1
+          fi
+          
+          SERVICE="${TAG_REF%%/*}"
+          TAG_NAME="${TAG_REF#*/}"  # e.g., v1.2.3
+          
+          if [ "$SERVICE" != "kitchenhub" ] && [ "$SERVICE" != "vehiclehub" ]; then
+            echo "Error: Unsupported service '$SERVICE' in tag. Expected 'kitchenhub' or 'vehiclehub'."
+            exit 1
+          fi
+          
+          VERSION="${TAG_NAME#v}"
+          
+          # Validate semver format (major.minor.patch with optional pre-release/build)
+          if ! echo "$VERSION" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*)?(\+[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*)?$'; then
+            echo "Error: Version '$VERSION' from tag '$TAG_REF' does not follow semver format (e.g., v1.0.0, v2.1.3-beta.1)"
+            exit 1
+          fi
+          
+          echo "TARGET_SERVICE=${SERVICE}" >> $GITHUB_ENV
+          echo "TAG_NAME=${TAG_NAME}" >> $GITHUB_ENV
+          echo "VERSION=${VERSION}" >> $GITHUB_ENV
+          echo "Resolved service '$SERVICE' and version '$VERSION' from tag '$TAG_REF'"
+
       - name: Set project configuration
+        if: github.event_name == 'pull_request' || env.TARGET_SERVICE == '' || matrix.project == env.TARGET_SERVICE
         run: |
           PROJECT_SUBFOLDER="${{ matrix.project }}"
           echo "PROJECT_SUBFOLDER=${PROJECT_SUBFOLDER}" >> $GITHUB_ENV
@@ -87,24 +152,8 @@ jobs:
           echo "DEFAULT_BACKEND=${DEFAULT_BACKEND}" >> $GITHUB_ENV
           echo "DEFAULT_FRONTEND=${DEFAULT_FRONTEND}" >> $GITHUB_ENV
 
-      - name: Validate semver tag
-        if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
-        run: |
-          TAG_NAME="${{ github.ref_name }}"
-          # Remove 'v' prefix if present for validation
-          VERSION="${TAG_NAME#v}"
-          
-          # Validate semver format (major.minor.patch with optional pre-release/build)
-          if ! echo "$VERSION" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*)?(\+[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*)?$'; then
-            echo "Error: Tag '$TAG_NAME' does not follow semver format (e.g., v1.0.0, v2.1.3-beta.1)"
-            exit 1
-          fi
-          
-          echo "✓ Valid semver tag: $TAG_NAME"
-          echo "VERSION=${VERSION}" >> $GITHUB_ENV
-          echo "TAG_NAME=${TAG_NAME}" >> $GITHUB_ENV
-
       - name: Set image names and tags
+        if: github.event_name == 'pull_request' || env.TARGET_SERVICE == '' || matrix.project == env.TARGET_SERVICE
         env:
           DOCKER_HUB_USERNAME: ${{ secrets.DOCKER_HUB_USERNAME }}
           GITHUB_EVENT_NAME: ${{ github.event_name }}
@@ -143,9 +192,9 @@ jobs:
             FRONTEND_TAG="${FRONTEND_IMAGE}:pr-${GITHUB_EVENT_NUMBER}"
             echo "Building for PR (will not push)"
           elif [ "${GITHUB_EVENT_NAME}" = "push" ] && [ "${GITHUB_REF_TYPE}" = "tag" ]; then
-            # Version tag: use the tag name and also tag as latest (for stable releases)
-            TAG_NAME="${GITHUB_REF_NAME}"
-            VERSION="${TAG_NAME#v}"  # Remove 'v' prefix
+            # Version tag: TAG_NAME and VERSION are set by the 'Determine target service from tag' step
+            TAG_NAME="${TAG_NAME}"
+            VERSION="${VERSION}"
             
             # Tag with full version tag (e.g., v1.0.0)
             BACKEND_TAG="${BACKEND_IMAGE}:${TAG_NAME}"
@@ -178,6 +227,7 @@ jobs:
           if [ -n "${FRONTEND_TAG_LATEST:-}" ]; then echo "FRONTEND_TAG_LATEST=${FRONTEND_TAG_LATEST}" >> $GITHUB_ENV; fi
 
       - name: Set build context
+        if: github.event_name == 'pull_request' || env.TARGET_SERVICE == '' || matrix.project == env.TARGET_SERVICE
         run: |
           # Both projects now use monorepo root as context (to access common folder)
           # The Dockerfiles use paths like vehiclehub/backend/ or kitchenhub/backend/
@@ -187,6 +237,7 @@ jobs:
           echo "FRONTEND_CONTEXT=${FRONTEND_CONTEXT}" >> $GITHUB_ENV
 
       - name: Build and push backend image
+        if: github.event_name == 'pull_request' || env.TARGET_SERVICE == '' || matrix.project == env.TARGET_SERVICE
         uses: docker/build-push-action@v5
         with:
           context: ${{ env.BACKEND_CONTEXT }}
@@ -200,6 +251,7 @@ jobs:
           cache-to: type=registry,ref=${{ env.BACKEND_IMAGE }}:buildcache,mode=max
 
       - name: Build and push frontend image
+        if: github.event_name == 'pull_request' || env.TARGET_SERVICE == '' || matrix.project == env.TARGET_SERVICE
         uses: docker/build-push-action@v5
         with:
           context: ${{ env.FRONTEND_CONTEXT }}
@@ -213,7 +265,7 @@ jobs:
           cache-to: type=registry,ref=${{ env.FRONTEND_IMAGE }}:buildcache,mode=max
 
       - name: Update Docker Hub repository descriptions
-        if: github.event_name != 'pull_request'
+        if: github.event_name != 'pull_request' && (env.TARGET_SERVICE == '' || matrix.project == env.TARGET_SERVICE)
         env:
           DOCKER_HUB_USERNAME: ${{ secrets.DOCKER_HUB_USERNAME }}
           DOCKER_HUB_TOKEN: ${{ secrets.DOCKER_HUB_TOKEN }}
