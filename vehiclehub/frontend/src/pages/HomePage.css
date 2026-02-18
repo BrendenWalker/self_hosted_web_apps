@@ -87,6 +87,128 @@
   margin-bottom: 0.5rem;
 }
 
+.home-upcoming-services {
+  margin: 3rem 0;
+  background: white;
+  padding: 2rem;
+  border-radius: 8px;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.home-upcoming-services h2 {
+  color: #2c3e50;
+  margin-bottom: 1.5rem;
+  font-size: 1.8rem;
+}
+
+.loading-message,
+.error-message,
+.no-services-message {
+  text-align: center;
+  color: #666;
+  padding: 2rem;
+  font-size: 1.1rem;
+}
+
+.error-message {
+  color: #e74c3c;
+}
+
+.upcoming-services-list {
+  display: grid;
+  gap: 1rem;
+}
+
+.upcoming-service-card {
+  background: #f8f9fa;
+  padding: 1.5rem;
+  border-radius: 8px;
+  border-left: 4px solid #3498db;
+  text-decoration: none;
+  color: inherit;
+  transition: transform 0.2s, box-shadow 0.2s;
+  display: block;
+}
+
+.upcoming-service-card:hover {
+  transform: translateX(4px);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+}
+
+.upcoming-service-card.overdue {
+  border-left-color: #e74c3c;
+  background: #fff5f5;
+}
+
+.service-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1rem;
+}
+
+.service-card-header h3 {
+  color: #2c3e50;
+  margin: 0;
+  font-size: 1.3rem;
+}
+
+.service-badge {
+  padding: 0.25rem 0.75rem;
+  border-radius: 12px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.badge-upcoming {
+  background: #3498db;
+  color: white;
+}
+
+.badge-overdue {
+  background: #e74c3c;
+  color: white;
+}
+
+.service-card-details {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.service-card-details p {
+  margin: 0;
+  color: #666;
+  line-height: 1.6;
+}
+
+.service-card-details strong {
+  color: #2c3e50;
+}
+
+.service-vehicle {
+  font-size: 1.1rem;
+}
+
+.service-date {
+  font-size: 1rem;
+}
+
+.date-overdue {
+  color: #e74c3c;
+  font-weight: 600;
+}
+
+.days-until {
+  color: #7f8c8d;
+  font-size: 0.9rem;
+}
+
+.service-miles {
+  color: #7f8c8d;
+  font-size: 0.95rem;
+}
+
 @media (max-width: 768px) {
   .home-hero h1 {
     font-size: 2rem;
@@ -98,5 +220,19 @@
 
   .home-quick-links {
     grid-template-columns: 1fr;
+  }
+
+  .home-upcoming-services {
+    padding: 1.5rem;
+  }
+
+  .home-upcoming-services h2 {
+    font-size: 1.5rem;
+  }
+
+  .service-card-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.5rem;
   }
 }

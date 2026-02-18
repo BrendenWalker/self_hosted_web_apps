@@ -1,15 +1,15 @@
-FROM node:18-alpine as build
+FROM node:18-alpine AS build
 
 WORKDIR /app
 
 # Copy package files
-COPY package*.json ./
+COPY kitchenhub/frontend/package*.json ./
 
 # Install dependencies
 RUN npm install
 
 # Copy application files
-COPY . .
+COPY kitchenhub/frontend/ .
 
 # Build application
 RUN npm run build
@@ -21,7 +21,7 @@ FROM nginx:alpine
 COPY --from=build /app/dist /usr/share/nginx/html
 
 # Copy nginx configuration
-COPY nginx.conf /etc/nginx/conf.d/default.conf
+COPY kitchenhub/frontend/nginx.conf /etc/nginx/conf.d/default.conf
 
 EXPOSE 80
 
