@@ -12,7 +12,7 @@ require('dotenv').config();
  * @returns {Pool} PostgreSQL connection pool
  */
 function createDbPool(options = {}) {
-  return new Pool({
+  const config = {
     host: options.host || process.env.DB_HOST || 'localhost',
     port: options.port || process.env.DB_PORT || 5432,
     database: options.database || process.env.DB_NAME,
@@ -20,8 +20,19 @@ function createDbPool(options = {}) {
     password: options.password || process.env.DB_PASSWORD || 'postgres',
     max: options.max || 20,
     idleTimeoutMillis: options.idleTimeoutMillis || 30000,
-    connectionTimeoutMillis: options.connectionTimeoutMillis || 2000,
+    connectionTimeoutMillis: options.connectionTimeoutMillis || 10000, // Increased from 2000ms to 10000ms
+  };
+  
+  // Log connection details (without password) for debugging
+  console.log('Database connection config:', {
+    host: config.host,
+    port: config.port,
+    database: config.database,
+    user: config.user,
+    connectionTimeoutMillis: config.connectionTimeoutMillis,
   });
+  
+  return new Pool(config);
 }
 
 /**
@@ -31,9 +42,16 @@ function createDbPool(options = {}) {
 function testConnection(pool) {
   pool.query('SELECT NOW()', (err, res) => {
     if (err) {
-      console.error('Database connection error:', err);
+      console.error('Database connection error:', err.message);
+      console.error('Error code:', err.code);
+      console.error('Error details:', {
+        host: err.address,
+        port: err.port,
+        database: pool.options?.database,
+      });
     } else {
       console.log('Database connected successfully');
+      console.log('Database time:', res.rows[0].now);
     }
   });
 }

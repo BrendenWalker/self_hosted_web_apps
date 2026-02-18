@@ -2,14 +2,20 @@ FROM node:18-alpine
 
 WORKDIR /app
 
+# Copy common folder first (shared code)
+COPY common ./common
+
 # Copy package files
-COPY backend/package*.json ./
+COPY vehiclehub/backend/package*.json ./
 
 # Install dependencies
 RUN npm install --production
 
-# Copy application files
-COPY backend/ .
+# Copy application files (preserving structure so ../../common works)
+COPY vehiclehub/backend ./vehiclehub/backend
+
+# Set working directory to backend for running server
+WORKDIR /app/vehiclehub/backend
 
 # Expose port
 EXPOSE 80

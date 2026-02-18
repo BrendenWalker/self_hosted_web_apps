@@ -1,8 +1,57 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
+import { getUpcomingServices } from '../api/api';
 import './HomePage.css';
 
 function HomePage() {
+  const [upcomingServices, setUpcomingServices] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+
+  useEffect(() => {
+    loadUpcomingServices();
+  }, []);
+
+  const loadUpcomingServices = async () => {
+    try {
+      setLoading(true);
+      const response = await getUpcomingServices(30);
+      setUpcomingServices(response.data || []);
+      setError(null);
+    } catch (err) {
+      setError('Failed to load upcoming services');
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const formatDate = (dateString) => {
+    if (!dateString) return 'N/A';
+    const date = new Date(dateString);
+    return date.toLocaleDateString('en-US', { 
+      year: 'numeric', 
+      month: 'short', 
+      day: 'numeric' 
+    });
+  };
+
+  const isOverdue = (dateString) => {
+    if (!dateString) return false;
+    return new Date(dateString) < new Date();
+  };
+
+  const getDaysUntilDue = (dateString) => {
+    if (!dateString) return null;
+    const dueDate = new Date(dateString);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    dueDate.setHours(0, 0, 0, 0);
+    const diffTime = dueDate - today;
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    return diffDays;
+  };
+
   return (
     <div className="home-page">
       <section className="home-hero">
@@ -30,6 +79,63 @@ function HomePage() {
             </p>
           </Link>
         </div>
+      </section>
+
+      <section className="home-upcoming-services">
+        <h2>Upcoming Services (Next 30 Days)</h2>
+        {loading && <p className="loading-message">Loading upcoming services...</p>}
+        {error && <p className="error-message">{error}</p>}
+        {!loading && !error && (
+          <>
+            {upcomingServices.length === 0 ? (
+              <p className="no-services-message">
+                No upcoming services in the next 30 days. All caught up!
+              </p>
+            ) : (
+              <div className="upcoming-services-list">
+                {upcomingServices.map((service) => {
+                  const daysUntil = getDaysUntilDue(service.nextdate);
+                  const overdue = isOverdue(service.nextdate);
+                  return (
+                    <Link
+                      key={`${service.vehicleid}-${service.serviceid}`}
+                      to={`/vehicles/${service.vehicleid}`}
+                      className={`upcoming-service-card ${overdue ? 'overdue' : ''}`}
+                    >
+                      <div className="service-card-header">
+                        <h3>{service.service_name}</h3>
+                        <span className={`service-badge ${overdue ? 'badge-overdue' : 'badge-upcoming'}`}>
+                          {overdue ? 'Overdue' : 'Due Soon'}
+                        </span>
+                      </div>
+                      <div className="service-card-details">
+                        <p className="service-vehicle">
+                          <strong>Vehicle:</strong> {service.vehicle_name}
+                        </p>
+                        <p className="service-date">
+                          <strong>Due Date:</strong>{' '}
+                          <span className={overdue ? 'date-overdue' : ''}>
+                            {formatDate(service.nextdate)}
+                          </span>
+                          {daysUntil !== null && (
+                            <span className="days-until">
+                              {' '}({overdue ? `${Math.abs(daysUntil)} days ago` : `${daysUntil} days`})
+                            </span>
+                          )}
+                        </p>
+                        {service.nextmiles && (
+                          <p className="service-miles">
+                            <strong>Due at:</strong> {service.nextmiles.toLocaleString()} miles
+                          </p>
+                        )}
+                      </div>
+                    </Link>
+                  );
+                })}
+              </div>
+            )}
+          </>
+        )}
       </section>
 
       <section className="home-details">

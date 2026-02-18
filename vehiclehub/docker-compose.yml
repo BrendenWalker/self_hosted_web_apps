@@ -3,8 +3,8 @@ version: '3.8'
 services:
   backend:
     build:
-      context: .
-      dockerfile: ./backend/Dockerfile
+      context: ..
+      dockerfile: vehiclehub/backend/Dockerfile
     container_name: vehiclehub-backend
     ports:
       - "8090:80"
@@ -12,19 +12,21 @@ services:
       - .env
     environment:
       - PORT=80
-      - DB_HOST=${DB_HOST:-postgres}
+      - DB_HOST=${DB_HOST:-host.docker.internal}
       - DB_PORT=${DB_PORT:-5432}
       - DB_NAME=${DB_NAME:-vehiclehub}
       - DB_USER=${DB_USER:-postgres}
       - DB_PASSWORD=${DB_PASSWORD:-postgres}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     networks:
       - vehiclehub-network
     restart: unless-stopped
 
   frontend:
     build:
-      context: .
-      dockerfile: ./frontend/Dockerfile
+      context: ..
+      dockerfile: vehiclehub/frontend/Dockerfile
     container_name: vehiclehub-frontend
     ports:
       - "8091:80"
