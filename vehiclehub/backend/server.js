@@ -362,10 +362,14 @@ app.put('/api/service-log/:id', async (req, res) => {
 // Delete service log entry
 app.delete('/api/service-log/:id', async (req, res) => {
   try {
-    const result = await pool.query('DELETE FROM service_log WHERE id = $1 RETURNING *', [req.params.id]);
-    if (result.rows.length === 0) {
+    // Get the entry before deleting to know which vehicle/service to recalculate
+    const entryResult = await pool.query('SELECT vehicleid, serviceid FROM service_log WHERE id = $1', [req.params.id]);
+    if (entryResult.rows.length === 0) {
       return res.status(404).json({ error: 'Service log entry not found' });
     }
+    
+    // Delete the entry (trigger will recalculate nextdate/nextmiles)
+    const result = await pool.query('DELETE FROM service_log WHERE id = $1 RETURNING *', [req.params.id]);
     res.json({ message: 'Service log entry deleted successfully' });
   } catch (error) {
     console.error('Error deleting service log entry:', error);
@@ -374,6 +378,17 @@ app.delete('/api/service-log/:id', async (req, res) => {
 });
 
 // ==================== DASHBOARD/SUMMARY ====================
+
+// Recalculate all service intervals from service log history
+app.post('/api/recalculate-intervals', async (req, res) => {
+  try {
+    await pool.query('SELECT recalculate_all_service_intervals()');
+    res.json({ message: 'All service intervals recalculated successfully' });
+  } catch (error) {
+    console.error('Error recalculating service intervals:', error);
+    res.status(500).json({ error: 'Failed to recalculate service intervals' });
+  }
+});
 
 // Get upcoming services (services due soon)
 app.get('/api/upcoming-services', async (req, res) => {

@@ -179,14 +179,10 @@ jobs:
 
       - name: Set build context
         run: |
-          # Kitchenhub uses backend/ as context, vehiclehub uses project root
-          if [ "${{ env.PROJECT_SUBFOLDER }}" = "kitchenhub" ]; then
-            BACKEND_CONTEXT="./${{ env.PROJECT_SUBFOLDER }}/backend"
-            FRONTEND_CONTEXT="./${{ env.PROJECT_SUBFOLDER }}/frontend"
-          else
-            BACKEND_CONTEXT="./${{ env.PROJECT_SUBFOLDER }}"
-            FRONTEND_CONTEXT="./${{ env.PROJECT_SUBFOLDER }}"
-          fi
+          # Both projects now use monorepo root as context (to access common folder)
+          # The Dockerfiles use paths like vehiclehub/backend/ or kitchenhub/backend/
+          BACKEND_CONTEXT="."
+          FRONTEND_CONTEXT="."
           echo "BACKEND_CONTEXT=${BACKEND_CONTEXT}" >> $GITHUB_ENV
           echo "FRONTEND_CONTEXT=${FRONTEND_CONTEXT}" >> $GITHUB_ENV
 
