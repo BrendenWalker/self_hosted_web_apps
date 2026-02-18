@@ -65,12 +65,18 @@ BEGIN
     -- Only update if interval settings exist
     IF v_months IS NOT NULL OR v_miles IS NOT NULL THEN
         -- Calculate next service date and miles based on the logged service
-        IF v_months IS NOT NULL THEN
+        -- If months is 0 or NULL, nextdate should be NULL (mileage-only service)
+        IF v_months IS NOT NULL AND v_months > 0 THEN
             v_nextdate := NEW.servicedate + (v_months || ' months')::INTERVAL;
+        ELSE
+            v_nextdate := NULL;
         END IF;
         
-        IF v_miles IS NOT NULL AND NEW.servicemiles IS NOT NULL THEN
+        -- If miles is 0 or NULL, nextmiles should be NULL (date-only service)
+        IF v_miles IS NOT NULL AND v_miles > 0 AND NEW.servicemiles IS NOT NULL THEN
             v_nextmiles := NEW.servicemiles + v_miles;
+        ELSE
+            v_nextmiles := NULL;
         END IF;
         
         -- Update the service_intervals table
@@ -111,13 +117,15 @@ BEGIN
         
         -- If there's a previous log entry, calculate from it
         IF v_latest_log.servicedate IS NOT NULL THEN
-            IF v_months IS NOT NULL THEN
+            -- If months is 0 or NULL, nextdate should be NULL (mileage-only service)
+            IF v_months IS NOT NULL AND v_months > 0 THEN
                 v_nextdate := v_latest_log.servicedate + (v_months || ' months')::INTERVAL;
             ELSE
                 v_nextdate := NULL;
             END IF;
             
-            IF v_miles IS NOT NULL AND v_latest_log.servicemiles IS NOT NULL THEN
+            -- If miles is 0 or NULL, nextmiles should be NULL (date-only service)
+            IF v_miles IS NOT NULL AND v_miles > 0 AND v_latest_log.servicemiles IS NOT NULL THEN
                 v_nextmiles := v_latest_log.servicemiles + v_miles;
             ELSE
                 v_nextmiles := NULL;
@@ -175,13 +183,15 @@ BEGIN
         
         -- Calculate next service date and miles from most recent log entry
         IF v_latest_log.servicedate IS NOT NULL THEN
-            IF v_interval.months IS NOT NULL THEN
+            -- If months is 0 or NULL, nextdate should be NULL (mileage-only service)
+            IF v_interval.months IS NOT NULL AND v_interval.months > 0 THEN
                 v_nextdate := v_latest_log.servicedate + (v_interval.months || ' months')::INTERVAL;
             ELSE
                 v_nextdate := NULL;
             END IF;
             
-            IF v_interval.miles IS NOT NULL AND v_latest_log.servicemiles IS NOT NULL THEN
+            -- If miles is 0 or NULL, nextmiles should be NULL (date-only service)
+            IF v_interval.miles IS NOT NULL AND v_interval.miles > 0 AND v_latest_log.servicemiles IS NOT NULL THEN
                 v_nextmiles := v_latest_log.servicemiles + v_interval.miles;
             ELSE
                 v_nextmiles := NULL;
