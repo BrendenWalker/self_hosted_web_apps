@@ -51,7 +51,7 @@ jobs:
 
   build-and-push:
     needs: validate-pr
-    if: always() && (needs.validate-pr.result == 'success' || needs.validate-pr.result == 'skipped')
+    if: always() && (github.event_name == 'pull_request' || (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')))
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
