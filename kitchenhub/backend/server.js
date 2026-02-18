@@ -1,6 +1,6 @@
 const express = require('express');
 const cors = require('cors');
-const { Pool } = require('pg');
+const { createDbPool, testConnection } = require('../../common/database/db-config');
 require('dotenv').config();
 
 const app = express();
@@ -14,25 +14,12 @@ app.use(cors());
 app.use(express.json());
 
 // PostgreSQL connection pool
-const pool = new Pool({
-  host: process.env.DB_HOST || 'localhost',
-  port: process.env.DB_PORT || 5432,
+const pool = createDbPool({
   database: process.env.DB_NAME || 'hausfrau',
-  user: process.env.DB_USER || 'postgres',
-  password: process.env.DB_PASSWORD || 'postgres',
-  max: 20,
-  idleTimeoutMillis: 30000,
-  connectionTimeoutMillis: 2000,
 });
 
 // Test database connection (non-blocking, doesn't affect readiness)
-pool.query('SELECT NOW()', (err, res) => {
-  if (err) {
-    console.error('Database connection error:', err);
-  } else {
-    console.log('Database connected successfully');
-  }
-});
+testConnection(pool);
 
 // ==================== STORES ====================
 
