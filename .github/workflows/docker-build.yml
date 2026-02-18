@@ -149,10 +149,10 @@ jobs:
           
           echo "BACKEND_TAG=${BACKEND_TAG}" >> $GITHUB_ENV
           echo "FRONTEND_TAG=${FRONTEND_TAG}" >> $GITHUB_ENV
-          [ -n "${BACKEND_TAG_VERSION:-}" ] && echo "BACKEND_TAG_VERSION=${BACKEND_TAG_VERSION}" >> $GITHUB_ENV
-          [ -n "${FRONTEND_TAG_VERSION:-}" ] && echo "FRONTEND_TAG_VERSION=${FRONTEND_TAG_VERSION}" >> $GITHUB_ENV
-          [ -n "${BACKEND_TAG_LATEST:-}" ] && echo "BACKEND_TAG_LATEST=${BACKEND_TAG_LATEST}" >> $GITHUB_ENV
-          [ -n "${FRONTEND_TAG_LATEST:-}" ] && echo "FRONTEND_TAG_LATEST=${FRONTEND_TAG_LATEST}" >> $GITHUB_ENV
+          if [ -n "${BACKEND_TAG_VERSION:-}" ]; then echo "BACKEND_TAG_VERSION=${BACKEND_TAG_VERSION}" >> $GITHUB_ENV; fi
+          if [ -n "${FRONTEND_TAG_VERSION:-}" ]; then echo "FRONTEND_TAG_VERSION=${FRONTEND_TAG_VERSION}" >> $GITHUB_ENV; fi
+          if [ -n "${BACKEND_TAG_LATEST:-}" ]; then echo "BACKEND_TAG_LATEST=${BACKEND_TAG_LATEST}" >> $GITHUB_ENV; fi
+          if [ -n "${FRONTEND_TAG_LATEST:-}" ]; then echo "FRONTEND_TAG_LATEST=${FRONTEND_TAG_LATEST}" >> $GITHUB_ENV; fi
 
       - name: Build and push backend image
         uses: docker/build-push-action@v5
