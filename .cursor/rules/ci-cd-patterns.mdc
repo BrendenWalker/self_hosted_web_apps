@@ -1,0 +1,59 @@
+---
+globs: .github/workflows/**/*.yml
+description: CI/CD workflow patterns and conventions
+---
+
+# CI/CD Patterns
+
+## GitHub Actions Workflow
+
+The workflow uses a **matrix strategy** to build multiple services in parallel.
+
+### Trigger Conditions
+
+- **Version Tags**: Only builds on semver tags (e.g., `v1.0.0`, `v2.1.3-beta.1`)
+- **Pull Requests**: Builds but doesn't push (for testing)
+- **Path Filters**: Only triggers when files in service directories change
+
+### Build Process
+
+1. **Validate semver tag** (if version tag)
+2. **Set project configuration** - Determines which service to build
+3. **Set image names** - Uses project-specific or default names
+4. **Set build context** - Different contexts for different services
+5. **Build and push images** - Uses Docker Buildx with caching
+6. **Update Docker Hub descriptions** - Syncs markdown files to Docker Hub
+
+### Image Naming
+
+- Format: `{username}/{service}-{backend|frontend}:{tag}`
+- Defaults: `kitchenhub-backend`, `kitchenhub-frontend`, `vehiclehub-backend`, `vehiclehub-frontend`
+- Tags: `v1.0.0`, `1.0.0`, `latest` (for stable releases)
+
+### Semver Tagging Strategy
+
+- **Stable releases** (e.g., `v1.0.0`): Tags as `v1.0.0`, `1.0.0`, and `latest`
+- **Pre-releases** (e.g., `v1.0.0-beta.1`): Tags as `v1.0.0-beta.1` and `1.0.0-beta.1` (no `latest`)
+- **Pull requests**: Tags as `pr-{number}` (builds but doesn't push)
+
+### Build Contexts
+
+- **KitchenHub**: Context is `./kitchenhub/backend` or `./kitchenhub/frontend`
+- **VehicleHub**: Context is `./vehiclehub` (Dockerfile uses `backend/` paths)
+
+### Docker Hub Integration
+
+- Automatically updates repository descriptions from `{service}/docker-descriptions/*.md`
+- Uses Docker Hub API with JWT authentication
+- Handles missing description files gracefully
+
+### Secrets and Variables
+
+**Required Secrets:**
+- `DOCKER_HUB_USERNAME` - Docker Hub username
+- `DOCKER_HUB_TOKEN` - Docker Hub access token
+
+**Optional Variables:**
+- `{SERVICE}_BACKEND_IMAGE_NAME` - Override backend image name
+- `{SERVICE}_FRONTEND_IMAGE_NAME` - Override frontend image name
+- Generic `BACKEND_IMAGE_NAME` / `FRONTEND_IMAGE_NAME` apply to all services
