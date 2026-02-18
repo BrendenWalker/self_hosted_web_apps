@@ -1,0 +1,59 @@
+version: '3.8'
+
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: ./backend/Dockerfile
+    container_name: vehiclehub-backend
+    ports:
+      - "8090:80"
+    env_file:
+      - .env
+    environment:
+      - PORT=80
+      - DB_HOST=${DB_HOST:-postgres}
+      - DB_PORT=${DB_PORT:-5432}
+      - DB_NAME=${DB_NAME:-vehiclehub}
+      - DB_USER=${DB_USER:-postgres}
+      - DB_PASSWORD=${DB_PASSWORD:-postgres}
+    networks:
+      - vehiclehub-network
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: .
+      dockerfile: ./frontend/Dockerfile
+    container_name: vehiclehub-frontend
+    ports:
+      - "8091:80"
+    depends_on:
+      - backend
+    networks:
+      - vehiclehub-network
+    restart: unless-stopped
+
+  # Note: You mentioned you already have a PostgreSQL container
+  # This is optional - remove if you're using an existing one
+  # postgres:
+  #   image: postgres:15-alpine
+  #   container_name: vehiclehub-postgres
+  #   environment:
+  #     - POSTGRES_DB=${DB_NAME:-vehiclehub}
+  #     - POSTGRES_USER=${DB_USER:-postgres}
+  #     - POSTGRES_PASSWORD=${DB_PASSWORD:-postgres}
+  #   volumes:
+  #     - postgres-data:/var/lib/postgresql/data
+  #   ports:
+  #     - "5432:5432"
+  #   networks:
+  #     - vehiclehub-network
+  #   restart: unless-stopped
+
+networks:
+  vehiclehub-network:
+    driver: bridge
+
+# volumes:
+#   postgres-data:

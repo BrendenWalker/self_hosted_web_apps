@@ -1,0 +1,108 @@
+.vehicle-detail-page {
+  width: 100%;
+}
+
+.detail-sections {
+  display: grid;
+  gap: 2rem;
+}
+
+.detail-section {
+  background: white;
+  padding: 1.5rem;
+  border-radius: 8px;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1.5rem;
+}
+
+.section-header h2 {
+  color: #2c3e50;
+  margin: 0;
+}
+
+.form-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 1rem;
+}
+
+.intervals-list,
+.log-list {
+  display: grid;
+  gap: 1rem;
+}
+
+.interval-card,
+.log-card {
+  border: 1px solid #eee;
+  border-radius: 4px;
+  padding: 1rem;
+}
+
+.interval-header,
+.log-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.5rem;
+}
+
+.interval-header h3,
+.log-header h3 {
+  color: #2c3e50;
+  margin: 0;
+  font-size: 1.1rem;
+}
+
+.log-date {
+  color: #666;
+  font-size: 0.9rem;
+}
+
+.interval-details,
+.log-details {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.interval-field,
+.log-field {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.interval-field label,
+.log-label {
+  font-weight: 500;
+  color: #666;
+  min-width: 80px;
+}
+
+.interval-field span,
+.log-field span {
+  color: #333;
+}
+
+.empty-message {
+  text-align: center;
+  padding: 2rem;
+  color: #666;
+}
+
+@media (max-width: 768px) {
+  .section-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 1rem;
+  }
+
+  .form-row {
+    grid-template-columns: 1fr;
+  }
+}

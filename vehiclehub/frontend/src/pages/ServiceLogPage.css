@@ -1,0 +1,68 @@
+.service-log-page {
+  width: 100%;
+}
+
+.service-log-list {
+  display: grid;
+  gap: 1rem;
+}
+
+.log-entry-card {
+  background: white;
+  padding: 1.5rem;
+  border-radius: 8px;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.log-entry-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 1rem;
+  padding-bottom: 1rem;
+  border-bottom: 1px solid #eee;
+}
+
+.log-entry-header h3 {
+  color: #2c3e50;
+  margin: 0 0 0.5rem 0;
+  font-size: 1.2rem;
+}
+
+.vehicle-link {
+  color: #3498db;
+  text-decoration: none;
+  font-size: 0.9rem;
+}
+
+.vehicle-link:hover {
+  text-decoration: underline;
+}
+
+.log-entry-date {
+  color: #666;
+  font-size: 0.9rem;
+  white-space: nowrap;
+}
+
+.log-entry-details {
+  display: grid;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+}
+
+.log-entry-field {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.log-entry-label {
+  font-weight: 500;
+  color: #666;
+  min-width: 80px;
+}
+
+.log-entry-actions {
+  display: flex;
+  justify-content: flex-end;
+}
