@@ -8,7 +8,6 @@ on:
   pull_request:
     branches:
       - main
-      - master
     paths:
       - 'kitchenhub/**'
       - 'vehiclehub/**'
@@ -70,16 +69,16 @@ jobs:
           username: ${{ secrets.DOCKER_HUB_USERNAME }}
           password: ${{ secrets.DOCKER_HUB_TOKEN }}
 
-      - name: Ensure tag commit is on main (or master)
+      - name: Ensure tag commit is on main
         if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
         run: |
-          # Fetch main and master so we can check ancestry
-          git fetch origin main master || true
+          # Fetch main so we can check ancestry
+          git fetch origin main || true
           
           TAG_COMMIT="$(git rev-parse HEAD)"
           echo "Tag commit: ${TAG_COMMIT}"
           
-          ALLOWED_BRANCHES=("origin/main" "origin/master")
+          ALLOWED_BRANCHES=("origin/main")
           FOUND_ALLOWED_BRANCH=0
           
           for BRANCH in "${ALLOWED_BRANCHES[@]}"; do
@@ -98,7 +97,7 @@ jobs:
           done
           
           if [ "${FOUND_ALLOWED_BRANCH}" -ne 1 ]; then
-            echo "Error: Release tags must point to commits reachable from 'main' or 'master'."
+            echo "Error: Release tags must point to commits reachable from 'main'."
             echo "Please only create release tags on the mainline branch."
             exit 1
           fi
