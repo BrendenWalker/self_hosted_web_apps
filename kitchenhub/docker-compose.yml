@@ -3,8 +3,8 @@ version: '3.8'
 services:
   backend:
     build:
-      context: ./backend
-      dockerfile: Dockerfile
+      context: ..
+      dockerfile: kitchenhub/backend/Dockerfile
     container_name: kitchenhub-backend
     ports:
       - "8080:80"
@@ -25,8 +25,8 @@ services:
 
   frontend:
     build:
-      context: ./frontend
-      dockerfile: Dockerfile
+      context: ..
+      dockerfile: kitchenhub/frontend/Dockerfile
     container_name: kitchenhub-frontend
     ports:
       - "8081:80"
