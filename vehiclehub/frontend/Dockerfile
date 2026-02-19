@@ -1,5 +1,9 @@
 FROM node:18-alpine AS build
 
+# Version injected at build (e.g. from CI tag or pr-N); Vite inlines VITE_* at build time
+ARG VERSION=dev
+ENV VITE_VERSION=$VERSION
+
 WORKDIR /app
 
 # Copy package files
