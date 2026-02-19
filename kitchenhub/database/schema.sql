@@ -1,7 +1,7 @@
 -- KitchenHub: single schema file (common + main app + recipe)
 -- Run once per database: psql -U postgres -d hausfrau -f kitchenhub/database/schema.sql
 
--- ========== COMMON ==========
+-- Department table
 CREATE SCHEMA IF NOT EXISTS common;
 
 CREATE TABLE IF NOT EXISTS common.department (

@@ -385,6 +385,56 @@
   gap: 0.75rem;
 }
 
+.quantity-control {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  border-radius: 4px;
+  overflow: hidden;
+  border: 1px solid #ddd;
+}
+
+.quantity-control .quantity-input {
+  width: 3rem;
+  margin: 0;
+  border: none;
+  border-left: 1px solid #ddd;
+  border-right: 1px solid #ddd;
+  border-radius: 0;
+}
+
+.quantity-control .quantity-input:focus {
+  outline: none;
+  z-index: 1;
+}
+
+.btn-quantity {
+  min-width: 2.25rem;
+  height: 2.25rem;
+  padding: 0 0.5rem;
+  border: none;
+  background: #f5f5f5;
+  color: #2c3e50;
+  font-size: 1.25rem;
+  line-height: 1;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.quantity-control .btn-quantity:first-child {
+  border-right: 1px solid #ddd;
+}
+
+.quantity-control .btn-quantity:last-child {
+  border-left: 1px solid #ddd;
+}
+
+.btn-quantity:hover {
+  background: #e8e8e8;
+}
+
 .quantity-input {
   width: 80px;
   padding: 0.5rem;

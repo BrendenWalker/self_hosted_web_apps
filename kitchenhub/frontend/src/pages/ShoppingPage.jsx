@@ -21,7 +21,6 @@ function ShoppingPage() {
   const [showPurchased, setShowPurchased] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
-  const shoppingListRequestRef = useRef({ storeId: null, showPurchased: false });
 
   useEffect(() => {
     loadStores();
@@ -91,13 +90,26 @@ function ShoppingPage() {
   };
 
   const handleTogglePurchased = async (itemName, currentPurchased) => {
+    // When marking as purchased, show confirmation first
+    if (!currentPurchased) {
+      const item = shoppingList.find(i => i.name === itemName) || purchasedItems.find(i => i.name === itemName);
+      if (item) {
+        setConfirmPurchase({ name: item.name, quantity: item.quantity || '1' });
+        return;
+      }
+    }
+    await doMarkPurchased(itemName, !currentPurchased);
+  };
+
+  const doMarkPurchased = async (itemName, purchased) => {
     try {
-      const newPurchased = !currentPurchased;
-      await markPurchased(itemName, newPurchased);
+      await markPurchased(itemName, purchased);
       await loadShoppingList();
+      setConfirmPurchase(null);
     } catch (err) {
       setError('Failed to update item');
       console.error(err);
+      setConfirmPurchase(null);
     }
   };
 
@@ -176,14 +188,9 @@ function ShoppingPage() {
                           checked={item.purchased === 1}
                           onChange={() => handleTogglePurchased(item.name, item.purchased === 1)}
                         />
+                        <span className="item-quantity">{item.quantity || '1'} ×</span>
                         <span className="item-name">{item.name}</span>
                       </label>
-                      {item.description && (
-                        <span className="item-description">{item.description}</span>
-                      )}
-                      {item.quantity && (
-                        <span className="item-quantity">{item.quantity}</span>
-                      )}
                     </div>
                   ))}
                 </div>
@@ -206,14 +213,9 @@ function ShoppingPage() {
                         checked={true}
                         onChange={() => handleTogglePurchased(item.name, true)}
                       />
+                      <span className="item-quantity">{item.quantity || '1'} ×</span>
                       <span className="item-name">{item.name}</span>
                     </label>
-                    {item.description && (
-                      <span className="item-description">{item.description}</span>
-                    )}
-                    {item.quantity && (
-                      <span className="item-quantity">{item.quantity}</span>
-                    )}
                   </div>
                 ))}
               </div>
@@ -224,6 +226,24 @@ function ShoppingPage() {
 
       {!validStoreId && !loading && (
         <div className="empty-message">Please select a store to view your shopping list</div>
+      )}
+
+      {confirmPurchase && (
+        <div className="purchase-confirm-overlay" role="dialog" aria-modal="true" aria-labelledby="purchase-confirm-title">
+          <div className="purchase-confirm-modal">
+            <h2 id="purchase-confirm-title" className="purchase-confirm-title">
+              Purchased {confirmPurchase.quantity} × {confirmPurchase.name}?
+            </h2>
+            <div className="purchase-confirm-actions">
+              <button type="button" className="btn btn-primary" onClick={() => doMarkPurchased(confirmPurchase.name, true)}>
+                Yes
+              </button>
+              <button type="button" className="btn btn-secondary" onClick={() => setConfirmPurchase(null)}>
+                No
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
