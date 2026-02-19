@@ -24,18 +24,15 @@ A modern, dockerized web application for managing shopping lists with store layo
 
 ### Database Setup
 
-1. Connect to your PostgreSQL database
-2. Run the schema migration:
+1. Connect to your PostgreSQL database.
+2. Run the schema (one file: common + main app + recipe):
 
 ```bash
-psql -U postgres -d hausfrau -f database/schema.sql
+# From repo root
+psql -U postgres -d hausfrau -f kitchenhub/database/schema.sql
 ```
 
-Or if using a different database name:
-
-```bash
-psql -U your_user -d your_database -f database/schema.sql
-```
+Use your DB name if different: `psql -U your_user -d your_database -f kitchenhub/database/schema.sql`
 
 3. (Optional) Migrate data from Firebird database:
 
