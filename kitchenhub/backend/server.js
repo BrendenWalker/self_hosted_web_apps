@@ -311,9 +311,39 @@ app.delete('/api/items/:id', async (req, res) => {
 
 // ==================== SHOPPING LIST ====================
 
+const ONE_DAY_MS = 24 * 60 * 60 * 1000;
+
+const SETTING_LAST_PURCHASED_CLEANUP = 'shopping_list_last_cleanup_at';
+
+/** If last cleanup was 24+ hours ago (or never), delete purchased items and update timestamp. */
+async function runPurchasedCleanupIfDue(pool) {
+  const client = await pool.connect();
+  try {
+    const row = await client.query(
+      'SELECT value FROM config.settings WHERE key = $1',
+      [SETTING_LAST_PURCHASED_CLEANUP]
+    );
+    const value = row.rows[0]?.value;
+    const lastAt = value ? new Date(value) : null;
+    const now = Date.now();
+    if (lastAt !== null && !isNaN(lastAt.getTime()) && (now - lastAt.getTime()) < ONE_DAY_MS) {
+      return;
+    }
+    await client.query('DELETE FROM shopping_list WHERE purchased = 1');
+    await client.query(
+      `INSERT INTO config.settings (key, value) VALUES ($1, $2)
+       ON CONFLICT (key) DO UPDATE SET value = $2`,
+      [SETTING_LAST_PURCHASED_CLEANUP, new Date().toISOString()]
+    );
+  } finally {
+    client.release();
+  }
+}
+
 // Get shopping list for a store (ordered by store layout)
 app.get('/api/shopping-list/:storeId', async (req, res) => {
   try {
+    await runPurchasedCleanupIfDue(pool);
     const { showPurchased } = req.query;
     let query = `
       SELECT 
@@ -351,6 +381,7 @@ app.get('/api/shopping-list/:storeId', async (req, res) => {
 // Get all shopping list items (for management page)
 app.get('/api/shopping-list', async (req, res) => {
   try {
+    await runPurchasedCleanupIfDue(pool);
     const result = await pool.query(
       `SELECT sl.*, d.name as department_name, i.name as item_name
        FROM shopping_list sl

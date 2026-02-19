@@ -110,7 +110,5 @@ For production behind HAProxy:
 
 1. Both frontend and backend should serve on port 80
 2. HAProxy should handle TLS termination
-3. Configure HAProxy to route:
-   - `/api/*` → backend container
-   - `/*` → frontend container
+3. Configure HAProxy to route `/api` to the backend and everything else to the frontend (see `haproxy-kitchenhub.cfg` in this directory for backends and ACLs).
 4. Update frontend `vite.config.js` or build-time environment variable `VITE_API_URL` to point to your API endpoint

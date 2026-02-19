@@ -51,6 +51,14 @@ CREATE INDEX IF NOT EXISTS idx_shopping_list_dept ON shopping_list(department_id
 CREATE INDEX IF NOT EXISTS idx_shopping_list_itemid ON shopping_list(item_id);
 CREATE INDEX IF NOT EXISTS idx_shopping_list_purchased ON shopping_list(purchased);
 
+-- ========== CONFIG ==========
+CREATE SCHEMA IF NOT EXISTS config;
+
+CREATE TABLE IF NOT EXISTS config.settings (
+    key VARCHAR(255) NOT NULL PRIMARY KEY,
+    value TEXT
+);
+
 -- ========== RECIPE ==========
 CREATE SCHEMA IF NOT EXISTS recipe;
 
