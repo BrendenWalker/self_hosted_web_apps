@@ -103,7 +103,7 @@ app.get('/api/stores/:storeId/zones', async (req, res) => {
     const result = await pool.query(
       `SELECT sz.*, d.name as department_name 
        FROM storezones sz 
-       JOIN department d ON sz.departmentid = d.id 
+       JOIN common.department d ON sz.departmentid = d.id 
        WHERE sz.storeid = $1 
        ORDER BY sz.zonesequence, d.name`,
       [req.params.storeId]
@@ -201,7 +201,7 @@ app.delete('/api/stores/:storeId/zones/:zoneSequence/:departmentId', async (req,
 // Get all departments
 app.get('/api/departments', async (req, res) => {
   try {
-    const result = await pool.query('SELECT * FROM department ORDER BY name');
+    const result = await pool.query('SELECT * FROM common.department ORDER BY name');
     res.json(result.rows);
   } catch (error) {
     console.error('Error fetching departments:', error);
@@ -214,7 +214,7 @@ app.post('/api/departments', async (req, res) => {
   try {
     const { name } = req.body;
     const result = await pool.query(
-      'INSERT INTO department (name) VALUES ($1) RETURNING *',
+      'INSERT INTO common.department (name) VALUES ($1) RETURNING *',
       [name]
     );
     res.status(201).json(result.rows[0]);
@@ -232,7 +232,7 @@ app.get('/api/items', async (req, res) => {
     const result = await pool.query(
       `SELECT i.*, d.name as department_name 
        FROM items i 
-       LEFT JOIN department d ON i.department = d.id 
+       LEFT JOIN common.department d ON i.department = d.id 
        ORDER BY d.name, i.name`
     );
     res.json(result.rows);
@@ -248,7 +248,7 @@ app.get('/api/items/:id', async (req, res) => {
     const result = await pool.query(
       `SELECT i.*, d.name as department_name 
        FROM items i 
-       LEFT JOIN department d ON i.department = d.id 
+       LEFT JOIN common.department d ON i.department = d.id 
        WHERE i.id = $1`,
       [req.params.id]
     );
@@ -328,7 +328,7 @@ app.get('/api/shopping-list/:storeId', async (req, res) => {
         d.name as department_name
       FROM shopping_list sl
       LEFT JOIN storezones sz ON sz.departmentid = sl.department_id AND sz.storeid = $1
-      LEFT JOIN department d ON sl.department_id = d.id
+      LEFT JOIN common.department d ON sl.department_id = d.id
     `;
     
     const params = [req.params.storeId];
@@ -354,7 +354,7 @@ app.get('/api/shopping-list', async (req, res) => {
     const result = await pool.query(
       `SELECT sl.*, d.name as department_name, i.name as item_name
        FROM shopping_list sl
-       LEFT JOIN department d ON sl.department_id = d.id
+       LEFT JOIN common.department d ON sl.department_id = d.id
        LEFT JOIN items i ON sl.item_id = i.id
        ORDER BY sl.name`
     );
