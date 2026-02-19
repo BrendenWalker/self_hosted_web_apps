@@ -1,5 +1,9 @@
 FROM node:18-alpine
 
+# Version injected at build (e.g. from CI tag or pr-N)
+ARG VERSION=dev
+ENV VERSION=$VERSION
+
 WORKDIR /app
 
 # Copy common folder first (shared code)

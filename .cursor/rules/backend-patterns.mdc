@@ -41,13 +41,19 @@ All services must implement `/api/health`:
 - Returns **503** when app is not ready
 - **DO NOT** query the database in health checks
 - Sets `isReady = true` when server starts listening
+- Include **version** in the JSON response (from `process.env.VERSION`) so the frontend can display backend version; VERSION is injected at Docker build time via build-arg
 
 ```javascript
 app.get('/api/health', (req, res) => {
+  const payload = {
+    status: isReady ? 'ready' : 'not ready',
+    timestamp: new Date().toISOString(),
+    version: process.env.VERSION || 'dev'
+  };
   if (isReady) {
-    res.status(200).json({ status: 'ready', timestamp: new Date().toISOString() });
+    res.status(200).json(payload);
   } else {
-    res.status(503).json({ status: 'not ready', timestamp: new Date().toISOString() });
+    res.status(503).json(payload);
   }
 });
 
@@ -80,6 +86,7 @@ app.listen(port, () => {
 ### Environment Variables
 
 - `PORT` - Server port (default: 80)
+- `VERSION` - Injected at Docker build time (build-arg); used in `/api/health` for version display (default: dev)
 - `DB_HOST` - PostgreSQL host
 - `DB_PORT` - PostgreSQL port (default: 5432)
 - `DB_NAME` - Database name

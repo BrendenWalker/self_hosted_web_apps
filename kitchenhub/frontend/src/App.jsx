@@ -4,6 +4,7 @@ import HomePage from './pages/HomePage';
 import ShoppingPage from './pages/ShoppingPage';
 import ShoppingListPage from './pages/ShoppingListPage';
 import StorePage from './pages/StorePage';
+import VersionFooter from './components/VersionFooter';
 import './App.css';
 
 function App() {
@@ -30,6 +31,7 @@ function App() {
             <Route path="*" element={<HomePage />} />
           </Routes>
         </main>
+        <VersionFooter />
       </div>
     </Router>
   );

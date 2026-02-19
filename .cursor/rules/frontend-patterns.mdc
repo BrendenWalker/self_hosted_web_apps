@@ -64,7 +64,14 @@ export default api;
 ### Environment Variables
 
 - `VITE_API_URL` - API base URL (defaults to `/api` for production proxy)
-- Set via `.env` file (not committed to git)
+- `VITE_VERSION` - Injected at Docker build time (same as backend VERSION); use `import.meta.env.VITE_VERSION` for frontend version display (default: dev when not set)
+- Set via `.env` file (not committed to git) or Docker build-arg for VITE_VERSION
+
+### Version Display
+
+- Add a **VersionFooter** (or similar) component that shows Frontend and Backend versions.
+- Frontend version: `import.meta.env.VITE_VERSION ?? 'dev'` (baked in at build time).
+- Backend version: fetch from `GET /api/health` and display `response.version`. Show a fallback (e.g. "—" or "…") while loading or on error.
 
 ### Production Build
 

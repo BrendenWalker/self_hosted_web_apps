@@ -21,8 +21,10 @@ The workflow uses a **matrix strategy** to build multiple services in parallel.
 2. **Set project configuration** - Determines which service to build
 3. **Set image names** - Uses project-specific or default names
 4. **Set build context** - Different contexts for different services
-5. **Build and push images** - Uses Docker Buildx with caching
+5. **Build and push images** - Uses Docker Buildx with caching; passes **VERSION** as build-arg (tag version or `pr-{number}` for PRs) so backend and frontend can display version in-app
 6. **Update Docker Hub descriptions** - Syncs markdown files to Docker Hub
+
+**Version build-arg**: For tag builds, `VERSION` is set from the tag (e.g. `1.0.0`). For PR builds, `VERSION` is set to `pr-{PR_NUMBER}` in the "Set image names and tags" step. Both backend and frontend Docker builds receive `VERSION` so the running containers expose the same version in health and UI.
 
 ### Image Naming
 
