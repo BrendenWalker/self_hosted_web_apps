@@ -1,10 +1,21 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { getStores, getShoppingList, markPurchased } from '../api/api';
+import { getStores, getShoppingList, getAllShoppingList, markPurchased } from '../api/api';
 import './ShoppingPage.css';
+
+const STORE_STORAGE_KEY = 'kitchenhub-shopping-store';
+const ALL_STORES_VALUE = 'all';
 
 function ShoppingPage() {
   const [stores, setStores] = useState([]);
-  const [selectedStoreId, setSelectedStoreId] = useState(null);
+  const [selectedStoreId, setSelectedStoreId] = useState(() => {
+    try {
+      const saved = localStorage.getItem(STORE_STORAGE_KEY);
+      if (saved === ALL_STORES_VALUE) return ALL_STORES_VALUE;
+      const n = parseInt(saved, 10);
+      if (!Number.isNaN(n) && n >= 1) return n;
+    } catch (_) {}
+    return null;
+  });
   const [shoppingList, setShoppingList] = useState([]);
   const [purchasedItems, setPurchasedItems] = useState([]);
   const [showPurchased, setShowPurchased] = useState(false);
@@ -16,8 +27,11 @@ function ShoppingPage() {
     loadStores();
   }, []);
 
-  // Only fetch when we have a valid store id (positive integer); avoids /api/shopping-list/-1 or NaN
-  const validStoreId = selectedStoreId != null && !Number.isNaN(Number(selectedStoreId)) && Number(selectedStoreId) >= 1;
+  // Valid: "All" (no store) or a numeric store id >= 1
+  const isAllStores = selectedStoreId === ALL_STORES_VALUE;
+  const validStoreId =
+    selectedStoreId != null &&
+    (isAllStores || (!Number.isNaN(Number(selectedStoreId)) && Number(selectedStoreId) >= 1));
 
   useEffect(() => {
     if (!validStoreId) return;
@@ -25,12 +39,24 @@ function ShoppingPage() {
     loadShoppingList();
   }, [selectedStoreId, showPurchased, validStoreId]);
 
+  const persistStoreSelection = (value) => {
+    try {
+      if (value == null) localStorage.removeItem(STORE_STORAGE_KEY);
+      else localStorage.setItem(STORE_STORAGE_KEY, String(value));
+    } catch (_) {}
+  };
+
   const loadStores = async () => {
     try {
       const response = await getStores();
       setStores(response.data);
-      if (response.data.length > 0 && !selectedStoreId) {
-        setSelectedStoreId(response.data[0].id);
+      const current = selectedStoreId;
+      const currentIsValid =
+        current === ALL_STORES_VALUE ||
+        (typeof current === 'number' && !Number.isNaN(current) && current >= 1 && response.data.some((s) => s.id === current));
+      if (!currentIsValid) {
+        setSelectedStoreId(ALL_STORES_VALUE);
+        persistStoreSelection(ALL_STORES_VALUE);
       }
     } catch (err) {
       setError('Failed to load stores');
@@ -45,12 +71,29 @@ function ShoppingPage() {
     setLoading(true);
     setError(null);
     try {
-      const response = await getShoppingList(storeId, show);
+      let items;
+      if (storeId === ALL_STORES_VALUE) {
+        const response = await getAllShoppingList();
+        const { storeId: currentStoreId, showPurchased: currentShow } = shoppingListRequestRef.current;
+        if (currentStoreId !== storeId || currentShow !== show) return;
+        items = (response.data || []).map((row) => ({
+          name: row.name ?? row.item_name,
+          description: row.description ?? null,
+          quantity: row.quantity ?? null,
+          purchased: row.purchased ?? 0,
+          zone: 'General',
+          zone_seq: 0,
+        }));
+      } else {
+        const response = await getShoppingList(storeId, show);
+        const { storeId: currentStoreId, showPurchased: currentShow } = shoppingListRequestRef.current;
+        if (currentStoreId !== storeId || currentShow !== show) return;
+        items = response.data || [];
+      }
       const { storeId: currentStoreId, showPurchased: currentShow } = shoppingListRequestRef.current;
       if (currentStoreId !== storeId || currentShow !== show) return;
-      const items = response.data;
-      const purchased = items.filter(item => item.purchased === 1);
-      const unpurchased = items.filter(item => !item.purchased || item.purchased === 0);
+      const purchased = items.filter((item) => item.purchased === 1);
+      const unpurchased = items.filter((item) => !item.purchased || item.purchased === 0);
       setPurchasedItems(purchased);
       setShoppingList(unpurchased);
     } catch (err) {
@@ -98,14 +141,23 @@ function ShoppingPage() {
           <label htmlFor="store-select">Store:</label>
           <select
             id="store-select"
-            value={selectedStoreId || ''}
+            value={selectedStoreId ?? ''}
             onChange={(e) => {
               const v = e.target.value;
-              setSelectedStoreId(v === '' ? null : parseInt(v, 10));
+              if (v === '' || v === ALL_STORES_VALUE) {
+                setSelectedStoreId(v === '' ? null : ALL_STORES_VALUE);
+                persistStoreSelection(v === '' ? null : ALL_STORES_VALUE);
+              } else {
+                const id = parseInt(v, 10);
+                if (!Number.isNaN(id)) {
+                  setSelectedStoreId(id);
+                  persistStoreSelection(id);
+                }
+              }
             }}
             className="store-select"
           >
-            <option value="">Select a store...</option>
+            <option value={ALL_STORES_VALUE}>All</option>
             {stores.map(store => (
               <option key={store.id} value={store.id}>{store.name}</option>
             ))}
