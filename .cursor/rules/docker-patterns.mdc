@@ -9,8 +9,15 @@ description: Docker and containerization patterns
 
 ### Backend Dockerfile
 
+- **Version injection**: Accept `ARG VERSION=dev` and set `ENV VERSION=$VERSION` so the app can read it at runtime (e.g. in `/api/health`). CI passes the Docker tag version or `pr-{number}` as build-arg.
+
 ```dockerfile
 FROM node:18-alpine
+
+# Version injected at build (e.g. from CI tag or pr-N)
+ARG VERSION=dev
+ENV VERSION=$VERSION
+
 WORKDIR /app
 
 # Copy package files
@@ -32,9 +39,16 @@ CMD ["node", "server.js"]
 
 ### Frontend Dockerfile
 
+- **Version injection**: In the build stage, accept `ARG VERSION=dev` and set `ENV VITE_VERSION=$VERSION` before `RUN npm run build` so Vite inlines the version for the client (e.g. `import.meta.env.VITE_VERSION`). CI passes the same version build-arg as the backend.
+
 ```dockerfile
 # Build stage
 FROM node:18-alpine as build
+
+# Version injected at build; Vite inlines VITE_* at build time
+ARG VERSION=dev
+ENV VITE_VERSION=$VERSION
+
 WORKDIR /app
 COPY package*.json ./
 RUN npm install
@@ -76,3 +90,4 @@ Backend services must implement `/api/health` endpoint for container health chec
 - Returns 200 when ready
 - Returns 503 when not ready
 - Does not query database
+- Response must include `version` (from `process.env.VERSION`) so the frontend can display backend version

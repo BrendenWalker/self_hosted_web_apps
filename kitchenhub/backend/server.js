@@ -566,16 +566,15 @@ app.delete('/api/shopping-list/:name', async (req, res) => {
 
 // Health check endpoint (does not hit database)
 app.get('/api/health', (req, res) => {
+  const payload = {
+    status: isReady ? 'ready' : 'not ready',
+    timestamp: new Date().toISOString(),
+    version: process.env.VERSION || 'dev'
+  };
   if (isReady) {
-    res.status(200).json({ 
-      status: 'ready', 
-      timestamp: new Date().toISOString() 
-    });
+    res.status(200).json(payload);
   } else {
-    res.status(503).json({ 
-      status: 'not ready', 
-      timestamp: new Date().toISOString() 
-    });
+    res.status(503).json(payload);
   }
 });
 

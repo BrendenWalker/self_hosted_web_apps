@@ -137,6 +137,10 @@ jobs:
           GITHUB_REF_NAME: ${{ github.ref_name }}
           GITHUB_EVENT_NUMBER: ${{ github.event.number }}
         run: |
+          # VERSION is set by "Determine target service from tag" for tag builds; set for PR builds so images get version in-app
+          if [ "${GITHUB_EVENT_NAME}" = "pull_request" ]; then
+            echo "VERSION=pr-${GITHUB_EVENT_NUMBER}" >> $GITHUB_ENV
+          fi
           # Set image names (use project-specific variables or defaults)
           PROJECT_VAR_PREFIX=$(echo "${{ env.PROJECT_SUBFOLDER }}" | tr '[:lower:]' '[:upper:]')
           
@@ -226,6 +230,8 @@ jobs:
           file: ./${{ env.PROJECT_SUBFOLDER }}/backend/Dockerfile
           push: ${{ github.event_name != 'pull_request' }}
           tags: ${{ env.BACKEND_TAGS }}
+          build-args: |
+            VERSION=${{ env.VERSION }}
           cache-from: type=registry,ref=${{ env.BACKEND_IMAGE }}:buildcache
           cache-to: type=registry,ref=${{ env.BACKEND_IMAGE }}:buildcache,mode=max
 
@@ -237,6 +243,8 @@ jobs:
           file: ./${{ env.PROJECT_SUBFOLDER }}/frontend/Dockerfile
           push: ${{ github.event_name != 'pull_request' }}
           tags: ${{ env.FRONTEND_TAGS }}
+          build-args: |
+            VERSION=${{ env.VERSION }}
           cache-from: type=registry,ref=${{ env.FRONTEND_IMAGE }}:buildcache
           cache-to: type=registry,ref=${{ env.FRONTEND_IMAGE }}:buildcache,mode=max
 
