@@ -3,8 +3,8 @@ name: Build and Publish Docker Images
 on:
   push:
     tags:
-      - 'kitchenhub/v*'   # e.g., kitchenhub/v1.0.0
-      - 'vehiclehub/v*'   # e.g., vehiclehub/v1.0.0
+      - 'kitchenhub/*'   # e.g., kitchenhub/1.0.0 (X.X.X only, no v prefix)
+      - 'vehiclehub/*'   # e.g., vehiclehub/1.0.0
   pull_request:
     branches:
       - main
@@ -29,21 +29,21 @@ jobs:
           PR_TITLE="${{ github.event.pull_request.title }}"
           
           # Check if PR title or body mentions version
-          if echo "$PR_TITLE $PR_BODY" | grep -qiE '(version|v[0-9]+\.[0-9]+\.[0-9]+|semver|release)'; then
+          if echo "$PR_TITLE $PR_BODY" | grep -qiE '(version|[0-9]+\.[0-9]+\.[0-9]+|semver|release)'; then
             echo "✓ PR contains version information"
             exit 0
           fi
           
           # Check if there are version tags in the branch
           echo "Checking for version tags in branch..."
-          if git tag --merged HEAD | grep -qE '^v[0-9]+\.[0-9]+\.[0-9]+'; then
+          if git tag --merged HEAD | grep -qE '^[a-z]+/[0-9]+\.[0-9]+\.[0-9]+'; then
             echo "✓ Found version tags in branch history"
             exit 0
           fi
           
           echo "::warning::PR does not appear to include version information"
           echo "::notice::For releases, please include version information in the PR title or description"
-          echo "::notice::Example: 'Release v1.0.0' or 'Version bump to 1.0.0'"
+          echo "::notice::Example: 'Release 1.0.0' or 'Version bump to 1.0.0'"
           # Don't fail, just warn
           exit 0
 
@@ -69,37 +69,17 @@ jobs:
           username: ${{ secrets.DOCKER_HUB_USERNAME }}
           password: ${{ secrets.DOCKER_HUB_TOKEN }}
 
-      - name: Ensure tag commit is on main
+      - name: Check if tag is on main branch
         if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
         run: |
-          # Fetch main so we can check ancestry
           git fetch origin main || true
-          
           TAG_COMMIT="$(git rev-parse HEAD)"
-          echo "Tag commit: ${TAG_COMMIT}"
-          
-          ALLOWED_BRANCHES=("origin/main")
-          FOUND_ALLOWED_BRANCH=0
-          
-          for BRANCH in "${ALLOWED_BRANCHES[@]}"; do
-            if git show-ref --verify --quiet "refs/remotes/${BRANCH}"; then
-              echo "Checking if tag commit is reachable from ${BRANCH}..."
-              if git merge-base --is-ancestor "${TAG_COMMIT}" "${BRANCH}"; then
-                echo "✓ Tag commit is reachable from ${BRANCH}"
-                FOUND_ALLOWED_BRANCH=1
-                break
-              else
-                echo "Tag commit is NOT reachable from ${BRANCH}"
-              fi
-            else
-              echo "Remote branch ${BRANCH} not found (skipping)"
-            fi
-          done
-          
-          if [ "${FOUND_ALLOWED_BRANCH}" -ne 1 ]; then
-            echo "Error: Release tags must point to commits reachable from 'main'."
-            echo "Please only create release tags on the mainline branch."
-            exit 1
+          if git show-ref --verify --quiet refs/remotes/origin/main && git merge-base --is-ancestor "${TAG_COMMIT}" origin/main 2>/dev/null; then
+            echo "IS_MAIN_BRANCH=true" >> $GITHUB_ENV
+            echo "Tag commit is on main - image will be tagged as 'latest' (if stable)"
+          else
+            echo "IS_MAIN_BRANCH=false" >> $GITHUB_ENV
+            echo "Tag commit is not on main - image will be tagged as 'beta' (floating pre-release)"
           fi
 
       - name: Determine target service from tag
@@ -107,30 +87,27 @@ jobs:
         run: |
           TAG_REF="${{ github.ref_name }}"
           
-          # Expect format: <service>/v<version>, e.g. kitchenhub/v1.2.3
-          if [[ "$TAG_REF" != */v* ]]; then
-            echo "Error: Tag '$TAG_REF' must be in the form '<service>/v<version>' (e.g., kitchenhub/v1.2.3)"
+          # Expect format: <service>/<version> with X.X.X (no v prefix), e.g. kitchenhub/1.2.3
+          if [[ "$TAG_REF" != */* ]] || [[ "$TAG_REF" == *"/v"* ]]; then
+            echo "Error: Tag '$TAG_REF' must be in the form '<service>/<version>' (e.g., kitchenhub/1.2.3). Use X.X.X only, no 'v' prefix."
             exit 1
           fi
           
           SERVICE="${TAG_REF%%/*}"
-          TAG_NAME="${TAG_REF#*/}"  # e.g., v1.2.3
+          VERSION="${TAG_REF#*/}"
           
           if [ "$SERVICE" != "kitchenhub" ] && [ "$SERVICE" != "vehiclehub" ]; then
             echo "Error: Unsupported service '$SERVICE' in tag. Expected 'kitchenhub' or 'vehiclehub'."
             exit 1
           fi
           
-          VERSION="${TAG_NAME#v}"
-          
           # Validate semver format (major.minor.patch with optional pre-release/build)
           if ! echo "$VERSION" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*)?(\+[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*)?$'; then
-            echo "Error: Version '$VERSION' from tag '$TAG_REF' does not follow semver format (e.g., v1.0.0, v2.1.3-beta.1)"
+            echo "Error: Version '$VERSION' from tag '$TAG_REF' does not follow semver format (e.g., 1.0.0, 2.1.3-beta.1)"
             exit 1
           fi
           
           echo "TARGET_SERVICE=${SERVICE}" >> $GITHUB_ENV
-          echo "TAG_NAME=${TAG_NAME}" >> $GITHUB_ENV
           echo "VERSION=${VERSION}" >> $GITHUB_ENV
           echo "Resolved service '$SERVICE' and version '$VERSION' from tag '$TAG_REF'"
 
@@ -191,28 +168,25 @@ jobs:
             FRONTEND_TAG="${FRONTEND_IMAGE}:pr-${GITHUB_EVENT_NUMBER}"
             echo "Building for PR (will not push)"
           elif [ "${GITHUB_EVENT_NAME}" = "push" ] && [ "${GITHUB_REF_TYPE}" = "tag" ]; then
-            # Version tag: TAG_NAME and VERSION are set by the 'Determine target service from tag' step
-            TAG_NAME="${TAG_NAME}"
-            VERSION="${VERSION}"
+            # Version tag: VERSION is set by the 'Determine target service from tag' step (X.X.X format)
+            BACKEND_TAG="${BACKEND_IMAGE}:${VERSION}"
+            FRONTEND_TAG="${FRONTEND_IMAGE}:${VERSION}"
             
-            # Tag with full version tag (e.g., v1.0.0)
-            BACKEND_TAG="${BACKEND_IMAGE}:${TAG_NAME}"
-            FRONTEND_TAG="${FRONTEND_IMAGE}:${TAG_NAME}"
-            
-            # Also tag with version without 'v' prefix (e.g., 1.0.0)
-            BACKEND_TAG_VERSION="${BACKEND_IMAGE}:${VERSION}"
-            FRONTEND_TAG_VERSION="${FRONTEND_IMAGE}:${VERSION}"
-            
-            # Tag as latest only for stable releases (no pre-release identifiers)
-            if [[ ! "$VERSION" =~ - ]]; then
+            # On main + stable: also tag as 'latest'. On other branches: tag as 'beta' (floating pre-release).
+            IS_MAIN="${{ env.IS_MAIN_BRANCH }}"
+            if [ "${IS_MAIN}" = "true" ] && [[ ! "$VERSION" =~ - ]]; then
               BACKEND_TAG_LATEST="${BACKEND_IMAGE}:latest"
               FRONTEND_TAG_LATEST="${FRONTEND_IMAGE}:latest"
-              echo "Stable release detected - will also tag as 'latest'"
+              echo "Tag on main, stable release - will also tag as 'latest'"
+            elif [ "${IS_MAIN}" = "false" ]; then
+              BACKEND_TAG_BETA="${BACKEND_IMAGE}:beta"
+              FRONTEND_TAG_BETA="${FRONTEND_IMAGE}:beta"
+              echo "Tag not on main - will also tag as 'beta' (floating pre-release)"
             else
-              echo "Pre-release detected - will not tag as 'latest'"
+              echo "Pre-release on main - will not tag as 'latest'"
             fi
             
-            echo "Building version: ${TAG_NAME}"
+            echo "Building version: ${VERSION}"
           else
             echo "Error: Unexpected event type. Only version tags and pull requests are supported."
             exit 1
@@ -220,10 +194,19 @@ jobs:
           
           echo "BACKEND_TAG=${BACKEND_TAG}" >> $GITHUB_ENV
           echo "FRONTEND_TAG=${FRONTEND_TAG}" >> $GITHUB_ENV
-          if [ -n "${BACKEND_TAG_VERSION:-}" ]; then echo "BACKEND_TAG_VERSION=${BACKEND_TAG_VERSION}" >> $GITHUB_ENV; fi
-          if [ -n "${FRONTEND_TAG_VERSION:-}" ]; then echo "FRONTEND_TAG_VERSION=${FRONTEND_TAG_VERSION}" >> $GITHUB_ENV; fi
-          if [ -n "${BACKEND_TAG_LATEST:-}" ]; then echo "BACKEND_TAG_LATEST=${BACKEND_TAG_LATEST}" >> $GITHUB_ENV; fi
-          if [ -n "${FRONTEND_TAG_LATEST:-}" ]; then echo "FRONTEND_TAG_LATEST=${FRONTEND_TAG_LATEST}" >> $GITHUB_ENV; fi
+          # Build tag list for build step (avoid empty lines for optional tags)
+          BACKEND_TAGS="${BACKEND_TAG}"
+          [ -n "${BACKEND_TAG_LATEST:-}" ] && BACKEND_TAGS="${BACKEND_TAGS}"$'\n'"${BACKEND_TAG_LATEST}"
+          [ -n "${BACKEND_TAG_BETA:-}" ] && BACKEND_TAGS="${BACKEND_TAGS}"$'\n'"${BACKEND_TAG_BETA}"
+          FRONTEND_TAGS="${FRONTEND_TAG}"
+          [ -n "${FRONTEND_TAG_LATEST:-}" ] && FRONTEND_TAGS="${FRONTEND_TAGS}"$'\n'"${FRONTEND_TAG_LATEST}"
+          [ -n "${FRONTEND_TAG_BETA:-}" ] && FRONTEND_TAGS="${FRONTEND_TAGS}"$'\n'"${FRONTEND_TAG_BETA}"
+          echo "BACKEND_TAGS<<EOF" >> $GITHUB_ENV
+          echo "$BACKEND_TAGS" >> $GITHUB_ENV
+          echo "EOF" >> $GITHUB_ENV
+          echo "FRONTEND_TAGS<<EOF" >> $GITHUB_ENV
+          echo "$FRONTEND_TAGS" >> $GITHUB_ENV
+          echo "EOF" >> $GITHUB_ENV
 
       - name: Set build context
         if: github.event_name == 'pull_request' || env.TARGET_SERVICE == '' || matrix.project == env.TARGET_SERVICE
@@ -242,10 +225,7 @@ jobs:
           context: ${{ env.BACKEND_CONTEXT }}
           file: ./${{ env.PROJECT_SUBFOLDER }}/backend/Dockerfile
           push: ${{ github.event_name != 'pull_request' }}
-          tags: |
-            ${{ env.BACKEND_TAG }}
-            ${{ env.BACKEND_TAG_VERSION }}
-            ${{ env.BACKEND_TAG_LATEST }}
+          tags: ${{ env.BACKEND_TAGS }}
           cache-from: type=registry,ref=${{ env.BACKEND_IMAGE }}:buildcache
           cache-to: type=registry,ref=${{ env.BACKEND_IMAGE }}:buildcache,mode=max
 
@@ -256,10 +236,7 @@ jobs:
           context: ${{ env.FRONTEND_CONTEXT }}
           file: ./${{ env.PROJECT_SUBFOLDER }}/frontend/Dockerfile
           push: ${{ github.event_name != 'pull_request' }}
-          tags: |
-            ${{ env.FRONTEND_TAG }}
-            ${{ env.FRONTEND_TAG_VERSION }}
-            ${{ env.FRONTEND_TAG_LATEST }}
+          tags: ${{ env.FRONTEND_TAGS }}
           cache-from: type=registry,ref=${{ env.FRONTEND_IMAGE }}:buildcache
           cache-to: type=registry,ref=${{ env.FRONTEND_IMAGE }}:buildcache,mode=max
 
