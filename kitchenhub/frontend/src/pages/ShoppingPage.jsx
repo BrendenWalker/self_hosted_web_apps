@@ -15,11 +15,14 @@ function ShoppingPage() {
     loadStores();
   }, []);
 
+  // Only fetch when we have a valid store id (positive integer); avoids /api/shopping-list/-1 or NaN
+  const validStoreId = selectedStoreId != null && !Number.isNaN(Number(selectedStoreId)) && Number(selectedStoreId) >= 1;
+
   useEffect(() => {
-    if (selectedStoreId) {
+    if (validStoreId) {
       loadShoppingList();
     }
-  }, [selectedStoreId, showPurchased]);
+  }, [selectedStoreId, showPurchased, validStoreId]);
 
   const loadStores = async () => {
     try {
@@ -35,6 +38,7 @@ function ShoppingPage() {
   };
 
   const loadShoppingList = async () => {
+    if (!validStoreId) return;
     setLoading(true);
     setError(null);
     try {
@@ -88,7 +92,10 @@ function ShoppingPage() {
           <select
             id="store-select"
             value={selectedStoreId || ''}
-            onChange={(e) => setSelectedStoreId(parseInt(e.target.value))}
+            onChange={(e) => {
+              const v = e.target.value;
+              setSelectedStoreId(v === '' ? null : parseInt(v, 10));
+            }}
             className="store-select"
           >
             <option value="">Select a store...</option>
@@ -111,7 +118,7 @@ function ShoppingPage() {
 
       {loading && <div className="loading">Loading...</div>}
 
-      {!loading && selectedStoreId && (
+      {!loading && validStoreId && (
         <>
           <div className="shopping-list-container">
             {sortedZones.length === 0 && !showPurchased && (
@@ -179,7 +186,7 @@ function ShoppingPage() {
         </>
       )}
 
-      {!selectedStoreId && !loading && (
+      {!validStoreId && !loading && (
         <div className="empty-message">Please select a store to view your shopping list</div>
       )}
     </div>
