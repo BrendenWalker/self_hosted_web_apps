@@ -1,11 +1,6 @@
 -- PostgreSQL Schema for Shopping List System
 -- Migrated from Firebird
-
--- Department table
-CREATE TABLE IF NOT EXISTS department (
-    id SERIAL PRIMARY KEY,
-    name VARCHAR(80) NOT NULL UNIQUE
-);
+-- Requires common schema: run common-schema.sql first (provides common.department)
 
 -- Store table
 CREATE TABLE IF NOT EXISTS store (
@@ -19,7 +14,7 @@ CREATE TABLE IF NOT EXISTS storezones (
     storeid INTEGER NOT NULL REFERENCES store(id) ON DELETE CASCADE,
     zonesequence INTEGER NOT NULL,
     zonename VARCHAR(80) NOT NULL,
-    departmentid INTEGER NOT NULL REFERENCES department(id) ON DELETE CASCADE,
+    departmentid INTEGER NOT NULL REFERENCES common.department(id) ON DELETE CASCADE,
     modified TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (storeid, zonesequence, departmentid)
 );
@@ -31,7 +26,7 @@ CREATE INDEX IF NOT EXISTS idx_storezones_deptid ON storezones(departmentid);
 CREATE TABLE IF NOT EXISTS items (
     id SERIAL PRIMARY KEY,
     name VARCHAR(80) NOT NULL UNIQUE,
-    department INTEGER REFERENCES department(id),
+    department INTEGER REFERENCES common.department(id),
     qty REAL DEFAULT 0,
     changed INTEGER DEFAULT 0
 );
@@ -42,7 +37,7 @@ CREATE INDEX IF NOT EXISTS idx_items_changed ON items(changed);
 -- Shopping list table
 CREATE TABLE IF NOT EXISTS shopping_list (
     name VARCHAR(80) NOT NULL PRIMARY KEY,
-    department_id INTEGER REFERENCES department(id),
+    department_id INTEGER REFERENCES common.department(id),
     description VARCHAR(80),
     quantity VARCHAR(80),
     purchased INTEGER DEFAULT 0,
