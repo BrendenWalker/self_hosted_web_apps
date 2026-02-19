@@ -32,11 +32,12 @@ function isAllStore(id) {
 
 // ==================== STORES ====================
 
-// Get all stores (synthetic "All" first, then DB stores)
+// Get all stores (synthetic "All" first, then DB stores; exclude DB rows named "All" so only one All exists)
 app.get('/api/stores', async (req, res) => {
   try {
     const result = await pool.query('SELECT * FROM store ORDER BY name');
-    res.json([ALL_STORE, ...result.rows]);
+    const rows = (result.rows || []).filter((r) => r.name !== 'All');
+    res.json([ALL_STORE, ...rows]);
   } catch (error) {
     console.error('Error fetching stores:', error);
     res.status(500).json({ error: 'Failed to fetch stores' });
