@@ -30,25 +30,24 @@ Configure the following variables in your GitHub repository settings (Settings â
 
 ### Image Tagging Strategy
 
-The workflow uses **semver-based versioning** for releases:
+The workflow uses **semver-based versioning** for releases. Use version tags in the form **`<service>/<version>`** with **X.X.X only** (no `v` prefix):
 
-- **Version Tags** (e.g., `v1.0.0`): Builds and pushes with multiple tags:
-  - `v1.0.0` - Full version tag
-  - `1.0.0` - Version without 'v' prefix
-  - `latest` - Only for stable releases (not pre-releases like `v1.0.0-beta.1`)
-- **Pull Requests**: Builds but doesn't push (tagged as `pr-{number}` for testing)
+- **Version tags** (e.g., `vehiclehub/1.0.0`): Builds on any branch. Image is always tagged with the version (e.g. `1.0.0`).
+  - **Tag on main** (stable): Also tagged as `latest`. Pre-releases on main (e.g. `1.0.0-beta.1`) are not tagged as `latest`.
+  - **Tag on any other branch**: Also tagged as `beta` (floating pre-release tag).
+- **Pull Requests**: Builds but doesn't push (tagged as `pr-{number}` for testing).
 
 **Creating a Release:**
 ```bash
-git tag v1.0.0
-git push origin v1.0.0
+git tag vehiclehub/1.0.0
+git push origin vehiclehub/1.0.0
 ```
 
 Example image names:
-- `derpmhichurp/vehiclehub-backend:latest` (stable releases only)
-- `derpmhichurp/vehiclehub-backend:v1.0.0`
+- `derpmhichurp/vehiclehub-backend:latest` (only when tag is on main and stable)
+- `derpmhichurp/vehiclehub-backend:beta` (when tag is on a branch other than main)
 - `derpmhichurp/vehiclehub-backend:1.0.0`
-- `derpmhichurp/vehiclehub-backend:v1.0.0-beta.1` (pre-release, no `latest` tag)
+- `derpmhichurp/vehiclehub-backend:1.0.0-beta.1` (pre-release)
 
 ## Portainer Stack Deployment
 
