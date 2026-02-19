@@ -34,8 +34,12 @@ function ShoppingListPage() {
       setItems(itemsRes.data);
       setDepartments(deptRes.data);
     } catch (err) {
-      setError('Failed to load data');
-      console.error(err);
+      const status = err.response?.status;
+      const data = err.response?.data;
+      const msg = data?.message || data?.error || err.message || 'Unknown error';
+      const detail = status ? ` (${status}: ${msg})` : ` (${msg})`;
+      setError('Failed to load data' + detail);
+      console.error('ShoppingListPage loadData failed:', { status, message: msg, err });
     } finally {
       setLoading(false);
     }

@@ -205,7 +205,7 @@ app.get('/api/departments', async (req, res) => {
     res.json(result.rows);
   } catch (error) {
     console.error('Error fetching departments:', error);
-    res.status(500).json({ error: 'Failed to fetch departments' });
+    res.status(500).json({ error: 'Failed to fetch departments', message: error.message });
   }
 });
 
@@ -220,7 +220,7 @@ app.post('/api/departments', async (req, res) => {
     res.status(201).json(result.rows[0]);
   } catch (error) {
     console.error('Error creating department:', error);
-    res.status(500).json({ error: 'Failed to create department' });
+    res.status(500).json({ error: 'Failed to create department', message: error.message });
   }
 });
 
@@ -238,7 +238,7 @@ app.get('/api/items', async (req, res) => {
     res.json(result.rows);
   } catch (error) {
     console.error('Error fetching items:', error);
-    res.status(500).json({ error: 'Failed to fetch items' });
+    res.status(500).json({ error: 'Failed to fetch items', message: error.message });
   }
 });
 
@@ -344,7 +344,7 @@ app.get('/api/shopping-list/:storeId', async (req, res) => {
     res.json(result.rows);
   } catch (error) {
     console.error('Error fetching shopping list:', error);
-    res.status(500).json({ error: 'Failed to fetch shopping list' });
+    res.status(500).json({ error: 'Failed to fetch shopping list', message: error.message });
   }
 });
 
@@ -361,7 +361,7 @@ app.get('/api/shopping-list', async (req, res) => {
     res.json(result.rows);
   } catch (error) {
     console.error('Error fetching shopping list:', error);
-    res.status(500).json({ error: 'Failed to fetch shopping list' });
+    res.status(500).json({ error: 'Failed to fetch shopping list', message: error.message });
   }
 });
 
