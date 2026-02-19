@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
   getStores,
   createStore,
@@ -29,6 +29,7 @@ function StorePage() {
     departmentIds: [],
   });
   const [selectedZoneSequence, setSelectedZoneSequence] = useState(null);
+  const selectedStoreIdRef = useRef(null);
 
   useEffect(() => {
     loadStores();
@@ -36,6 +37,7 @@ function StorePage() {
   }, []);
 
   useEffect(() => {
+    selectedStoreIdRef.current = selectedStore?.id ?? null;
     if (selectedStore) {
       loadZones();
     } else {
@@ -79,9 +81,12 @@ function StorePage() {
 
   const loadZones = async () => {
     if (!selectedStore) return;
+    const storeId = selectedStore.id;
     setLoading(true);
+    setError(null);
     try {
-      const response = await getStoreZones(selectedStore.id);
+      const response = await getStoreZones(storeId);
+      if (selectedStoreIdRef.current !== storeId) return;
       const nextZones = response.data || [];
       setZones(nextZones);
 
@@ -95,10 +100,11 @@ function StorePage() {
         return seqs[0];
       });
     } catch (err) {
+      if (selectedStoreIdRef.current !== storeId) return;
       setError('Failed to load store zones');
       console.error(err);
     } finally {
-      setLoading(false);
+      if (selectedStoreIdRef.current === storeId) setLoading(false);
     }
   };
 

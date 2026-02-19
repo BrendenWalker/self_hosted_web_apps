@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { getStores, getShoppingList, markPurchased } from '../api/api';
 import './ShoppingPage.css';
 
@@ -10,6 +10,7 @@ function ShoppingPage() {
   const [showPurchased, setShowPurchased] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const shoppingListRequestRef = useRef({ storeId: null, showPurchased: false });
 
   useEffect(() => {
     loadStores();
@@ -19,9 +20,9 @@ function ShoppingPage() {
   const validStoreId = selectedStoreId != null && !Number.isNaN(Number(selectedStoreId)) && Number(selectedStoreId) >= 1;
 
   useEffect(() => {
-    if (validStoreId) {
-      loadShoppingList();
-    }
+    if (!validStoreId) return;
+    shoppingListRequestRef.current = { storeId: selectedStoreId, showPurchased };
+    loadShoppingList();
   }, [selectedStoreId, showPurchased, validStoreId]);
 
   const loadStores = async () => {
@@ -39,21 +40,27 @@ function ShoppingPage() {
 
   const loadShoppingList = async () => {
     if (!validStoreId) return;
+    const storeId = selectedStoreId;
+    const show = showPurchased;
     setLoading(true);
     setError(null);
     try {
-      const response = await getShoppingList(selectedStoreId, showPurchased);
+      const response = await getShoppingList(storeId, show);
+      const { storeId: currentStoreId, showPurchased: currentShow } = shoppingListRequestRef.current;
+      if (currentStoreId !== storeId || currentShow !== show) return;
       const items = response.data;
       const purchased = items.filter(item => item.purchased === 1);
       const unpurchased = items.filter(item => !item.purchased || item.purchased === 0);
-      
       setPurchasedItems(purchased);
       setShoppingList(unpurchased);
     } catch (err) {
+      const { storeId: currentStoreId, showPurchased: currentShow } = shoppingListRequestRef.current;
+      if (currentStoreId !== storeId || currentShow !== show) return;
       setError('Failed to load shopping list');
       console.error(err);
     } finally {
-      setLoading(false);
+      const { storeId: currentStoreId, showPurchased: currentShow } = shoppingListRequestRef.current;
+      if (currentStoreId === storeId && currentShow === show) setLoading(false);
     }
   };
 

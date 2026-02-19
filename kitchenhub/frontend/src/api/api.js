@@ -9,6 +9,23 @@ const api = axios.create({
   },
 });
 
+// Retry once on transient failures (e.g. load balancer hit wrong server)
+const RETRY_STATUSES = [404, 502, 503, 504];
+api.interceptors.response.use(
+  (res) => res,
+  async (err) => {
+    const config = err.config;
+    if (!config || config.__retried) return Promise.reject(err);
+    const status = err.response?.status;
+    if (status && RETRY_STATUSES.includes(status)) {
+      config.__retried = true;
+      await new Promise((r) => setTimeout(r, 300));
+      return api.request(config);
+    }
+    return Promise.reject(err);
+  }
+);
+
 // Stores
 export const getStores = () => api.get('/stores');
 export const getStore = (id) => api.get(`/stores/${id}`);
