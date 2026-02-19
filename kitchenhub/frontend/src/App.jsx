@@ -16,8 +16,8 @@ function App() {
             <Link to="/" className="nav-logo">KitchenHub</Link>
             <div className="nav-links">
               <Link to="/" className="nav-link">Home</Link>
-              <Link to="/shopping" className="nav-link">Shopping</Link>
-              <Link to="/list" className="nav-link">Modify List</Link>
+              <Link to="/shopping" className="nav-link">In-Store</Link>
+              <Link to="/list" className="nav-link">Shopping List</Link>
               <Link to="/stores" className="nav-link">Stores</Link>
             </div>
           </div>

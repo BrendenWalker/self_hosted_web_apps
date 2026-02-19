@@ -9,7 +9,7 @@ function ShoppingListPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [itemFilter, setItemFilter] = useState('');
-  const [activeTab, setActiveTab] = useState('items'); // 'items' or 'shopping-list'
+  const [activeTab, setActiveTab] = useState('shopping-list'); // 'items' or 'shopping-list'
   const [showItemForm, setShowItemForm] = useState(false);
   const [editingItem, setEditingItem] = useState(null);
   const [itemForm, setItemForm] = useState({
@@ -93,12 +93,23 @@ function ShoppingListPage() {
 
   const handleUpdateQuantity = async (itemName, newQuantity) => {
     try {
-      await updateShoppingListItem(itemName, { quantity: newQuantity });
+      await updateShoppingListItem(itemName, { quantity: String(newQuantity) });
       await loadData();
     } catch (err) {
       setError('Failed to update quantity');
       console.error(err);
     }
+  };
+
+  const handleIncrementQuantity = (item) => {
+    const current = parseInt(item.quantity, 10) || 1;
+    handleUpdateQuantity(item.name, current + 1);
+  };
+
+  const handleDecrementQuantity = (item) => {
+    const current = parseInt(item.quantity, 10) || 1;
+    if (current <= 1) return;
+    handleUpdateQuantity(item.name, current - 1);
   };
 
   const handleItemDoubleClick = (item) => {
@@ -188,10 +199,13 @@ function ShoppingListPage() {
 
   const sortedDepartments = Object.keys(itemsByDepartment).sort();
 
+  // On your list: exclude purchased items
+  const unpurchasedList = shoppingList.filter(item => !item.purchased || item.purchased === 0);
+
   return (
     <div className="shopping-list-page">
       <div className="page-header">
-        <h1>Modify Shopping List</h1>
+        <h1>Shopping List</h1>
         <div className="header-actions">
           <button
             className="btn btn-primary"
@@ -204,13 +218,13 @@ function ShoppingListPage() {
               className={`tab-button ${activeTab === 'items' ? 'active' : ''}`}
               onClick={() => setActiveTab('items')}
             >
-              All Items
+              All items
             </button>
             <button
               className={`tab-button ${activeTab === 'shopping-list' ? 'active' : ''}`}
               onClick={() => setActiveTab('shopping-list')}
             >
-              Shopping List ({shoppingList.length})
+              On your list ({unpurchasedList.length})
             </button>
           </div>
         </div>
@@ -395,18 +409,26 @@ function ShoppingListPage() {
       {activeTab === 'shopping-list' && (
         <>
           <div className="shopping-list-section">
+            <div className="shopping-list-toolbar">
+              <button
+                className="btn btn-primary"
+                onClick={() => setActiveTab('items')}
+              >
+                Add items
+              </button>
+            </div>
             {loading && <div className="loading">Loading...</div>}
 
             {!loading && (
               <div className="shopping-list-items">
-                {shoppingList.length === 0 ? (
+                {unpurchasedList.length === 0 ? (
                   <div className="empty-message">No items in shopping list</div>
                 ) : (
-                  shoppingList.map(item => (
+                  unpurchasedList.map(item => (
                     <div key={item.name} className="list-item">
                       <div className="list-item-main">
                         <div className="list-item-name">{item.name}</div>
-                        {item.description && (
+                        {item.description && item.description !== item.name && (
                           <div className="list-item-desc">{item.description}</div>
                         )}
                         {item.department_name && (
@@ -414,13 +436,31 @@ function ShoppingListPage() {
                         )}
                       </div>
                       <div className="list-item-actions">
-                        <input
-                          type="text"
-                          value={item.quantity || ''}
-                          onChange={(e) => handleUpdateQuantity(item.name, e.target.value)}
-                          className="quantity-input"
-                          placeholder="Qty"
-                        />
+                        <div className="quantity-control">
+                          <button
+                            type="button"
+                            className="btn btn-quantity"
+                            onClick={() => handleDecrementQuantity(item)}
+                            aria-label="Decrease quantity"
+                          >
+                            −
+                          </button>
+                          <input
+                            type="text"
+                            value={item.quantity || ''}
+                            onChange={(e) => handleUpdateQuantity(item.name, e.target.value)}
+                            className="quantity-input"
+                            placeholder="Qty"
+                          />
+                          <button
+                            type="button"
+                            className="btn btn-quantity"
+                            onClick={() => handleIncrementQuantity(item)}
+                            aria-label="Increase quantity"
+                          >
+                            +
+                          </button>
+                        </div>
                         <button
                           className="btn btn-danger btn-sm"
                           onClick={() => handleRemoveFromShoppingList(item.name)}
