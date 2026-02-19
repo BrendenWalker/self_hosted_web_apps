@@ -5,6 +5,7 @@ import VehiclesPage from './pages/VehiclesPage';
 import VehicleDetailPage from './pages/VehicleDetailPage';
 import ServiceTypesPage from './pages/ServiceTypesPage';
 import ServiceLogPage from './pages/ServiceLogPage';
+import VersionFooter from './components/VersionFooter';
 import './App.css';
 
 function App() {
@@ -32,6 +33,7 @@ function App() {
             <Route path="*" element={<HomePage />} />
           </Routes>
         </main>
+        <VersionFooter />
       </div>
     </Router>
   );
