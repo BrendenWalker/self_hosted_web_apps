@@ -34,7 +34,15 @@ psql -U postgres -d hausfrau -f kitchenhub/database/schema.sql
 
 Use your DB name if different: `psql -U your_user -d your_database -f kitchenhub/database/schema.sql`
 
-3. (Optional) Migrate data from Firebird database:
+3. (Optional) Run migrations if upgrading an existing database:
+
+   - **Remove legacy "All" store**: If you had a store named "All" in the database, you can remove it (the app now uses a synthetic "All" store with id -1). Run once:
+
+   ```bash
+   psql -U postgres -d hausfrau -f kitchenhub/database/migrations/001-remove-all-store.sql
+   ```
+
+4. (Optional) Migrate data from Firebird database:
 
 If you have an existing Firebird database, use the automated migration script:
 

@@ -48,21 +48,24 @@ function StorePage() {
     }
   }, [selectedStore]);
 
+  // Store editor only shows editable stores (exclude synthetic All)
+  const editableStores = useMemo(
+    () => (stores || []).filter((s) => s.id !== ALL_STORE_ID),
+    [stores]
+  );
+
   const loadStores = async () => {
     setLoading(true);
     try {
       const response = await getStores();
       const nextStores = response.data || [];
       setStores(nextStores);
+      const editable = nextStores.filter((s) => s.id !== ALL_STORE_ID);
 
-      // Auto-select a store so the zone editor is visible.
-      // Preserve selection if possible; otherwise choose the first store.
+      // Auto-select first editable store (no "Select a store" placeholder).
       setSelectedStore((prev) => {
-        if (prev) {
-          const stillExists = nextStores.find((s) => s.id === prev.id);
-          return stillExists || nextStores[0] || null;
-        }
-        return nextStores[0] || null;
+        if (prev && editable.some((s) => s.id === prev.id)) return prev;
+        return editable[0] || null;
       });
     } catch (err) {
       setError('Failed to load stores');
@@ -355,23 +358,24 @@ function StorePage() {
         <div className="store-toolbar">
           <select
             className="store-dropdown"
-            value={selectedStore?.id ?? ''}
+            value={selectedStore?.id ?? editableStores[0]?.id ?? ''}
             onChange={(e) => {
               const id = e.target.value ? parseInt(e.target.value, 10) : null;
-              const store = stores.find((s) => s.id === id) || null;
+              const store = editableStores.find((s) => s.id === id) || null;
               setSelectedStore(store);
             }}
-            disabled={loading || stores.length === 0}
+            disabled={loading || editableStores.length === 0}
             aria-label="Select store"
           >
-            <option value="">
-              {stores.length === 0 ? 'No stores' : 'Select a store…'}
-            </option>
-            {stores.map((store) => (
-              <option key={store.id} value={store.id}>
-                {store.name}
-              </option>
-            ))}
+            {editableStores.length === 0 ? (
+              <option value="">No stores</option>
+            ) : (
+              editableStores.map((store) => (
+                <option key={store.id} value={store.id}>
+                  {store.name}
+                </option>
+              ))
+            )}
           </select>
           <button
             type="button"
