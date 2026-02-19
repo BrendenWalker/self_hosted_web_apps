@@ -21,13 +21,22 @@ const pool = createDbPool({
 // Test database connection (non-blocking, doesn't affect readiness)
 testConnection(pool);
 
+// Virtual "All" store: id -1, not in DB, not editable, all departments in General zone
+const ALL_STORE_ID = -1;
+const ALL_STORE = { id: ALL_STORE_ID, name: 'All', modified: null };
+
+function isAllStore(id) {
+  const n = parseInt(id, 10);
+  return n === ALL_STORE_ID;
+}
+
 // ==================== STORES ====================
 
-// Get all stores
+// Get all stores (synthetic "All" first, then DB stores)
 app.get('/api/stores', async (req, res) => {
   try {
     const result = await pool.query('SELECT * FROM store ORDER BY name');
-    res.json(result.rows);
+    res.json([ALL_STORE, ...result.rows]);
   } catch (error) {
     console.error('Error fetching stores:', error);
     res.status(500).json({ error: 'Failed to fetch stores' });
@@ -37,6 +46,9 @@ app.get('/api/stores', async (req, res) => {
 // Get single store
 app.get('/api/stores/:id', async (req, res) => {
   try {
+    if (isAllStore(req.params.id)) {
+      return res.json(ALL_STORE);
+    }
     const result = await pool.query('SELECT * FROM store WHERE id = $1', [req.params.id]);
     if (result.rows.length === 0) {
       return res.status(404).json({ error: 'Store not found' });
@@ -65,6 +77,9 @@ app.post('/api/stores', async (req, res) => {
 
 // Update store
 app.put('/api/stores/:id', async (req, res) => {
+  if (isAllStore(req.params.id)) {
+    return res.status(403).json({ error: 'The All store cannot be modified' });
+  }
   try {
     const { name } = req.body;
     const result = await pool.query(
@@ -83,6 +98,9 @@ app.put('/api/stores/:id', async (req, res) => {
 
 // Delete store
 app.delete('/api/stores/:id', async (req, res) => {
+  if (isAllStore(req.params.id)) {
+    return res.status(403).json({ error: 'The All store cannot be deleted' });
+  }
   try {
     const result = await pool.query('DELETE FROM store WHERE id = $1 RETURNING *', [req.params.id]);
     if (result.rows.length === 0) {
@@ -97,9 +115,22 @@ app.delete('/api/stores/:id', async (req, res) => {
 
 // ==================== STORE ZONES ====================
 
-// Get zones for a store
+// Get zones for a store (All store: synthetic single zone "General" with all departments)
 app.get('/api/stores/:storeId/zones', async (req, res) => {
   try {
+    if (isAllStore(req.params.storeId)) {
+      const depts = await pool.query(
+        'SELECT id as departmentid, name as department_name FROM common.department ORDER BY name'
+      );
+      const synthetic = depts.rows.map((d) => ({
+        storeid: ALL_STORE_ID,
+        zonesequence: 1,
+        zonename: 'General',
+        departmentid: d.departmentid,
+        department_name: d.department_name,
+      }));
+      return res.json(synthetic);
+    }
     const result = await pool.query(
       `SELECT sz.*, d.name as department_name 
        FROM storezones sz 
@@ -117,25 +148,52 @@ app.get('/api/stores/:storeId/zones', async (req, res) => {
 
 // Create/Update store zone
 app.post('/api/stores/:storeId/zones', async (req, res) => {
+  if (isAllStore(req.params.storeId)) {
+    return res.status(403).json({ error: 'The All store cannot be modified' });
+  }
   try {
-    const { zonesequence, zonename, departmentid } = req.body;
+    const storeId = parseInt(req.params.storeId, 10);
+    if (Number.isNaN(storeId) || storeId < 1) {
+      return res.status(400).json({ error: 'Invalid store id' });
+    }
+    const { zonesequence: rawSeq, zonename, departmentid: rawDeptId } = req.body;
+    const zonesequence = typeof rawSeq === 'number' ? rawSeq : parseInt(rawSeq, 10);
+    const departmentid = typeof rawDeptId === 'number' ? rawDeptId : parseInt(rawDeptId, 10);
+    if (Number.isNaN(zonesequence) || zonesequence < 1) {
+      return res.status(400).json({ error: 'Invalid zonesequence' });
+    }
+    if (Number.isNaN(departmentid) || departmentid < 1) {
+      return res.status(400).json({ error: 'Invalid department id' });
+    }
+    const zonenameSafe = zonename != null && String(zonename).trim() !== '' ? String(zonename).trim() : 'General';
     const result = await pool.query(
       `INSERT INTO storezones (storeid, zonesequence, zonename, departmentid) 
        VALUES ($1, $2, $3, $4) 
        ON CONFLICT (storeid, zonesequence, departmentid) 
        DO UPDATE SET zonename = $3, modified = CURRENT_TIMESTAMP 
        RETURNING *`,
-      [req.params.storeId, zonesequence, zonename, departmentid]
+      [storeId, zonesequence, zonenameSafe, departmentid]
     );
     res.status(201).json(result.rows[0]);
   } catch (error) {
     console.error('Error creating store zone:', error);
-    res.status(500).json({ error: 'Failed to create store zone' });
+    const code = error.code;
+    const message = error.message || 'Failed to create store zone';
+    if (code === '23503') {
+      return res.status(400).json({ error: 'Store or department not found', detail: message });
+    }
+    if (code === '23505') {
+      return res.status(409).json({ error: 'Department already assigned to this zone', detail: message });
+    }
+    res.status(500).json({ error: 'Failed to create store zone', detail: message });
   }
 });
 
 // Swap the order of two zone sequences for a store
 app.post('/api/stores/:storeId/zones/swap', async (req, res) => {
+  if (isAllStore(req.params.storeId)) {
+    return res.status(403).json({ error: 'The All store cannot be modified' });
+  }
   const client = await pool.connect();
   try {
     const { seqA, seqB } = req.body;
@@ -181,6 +239,9 @@ app.post('/api/stores/:storeId/zones/swap', async (req, res) => {
 
 // Delete store zone
 app.delete('/api/stores/:storeId/zones/:zoneSequence/:departmentId', async (req, res) => {
+  if (isAllStore(req.params.storeId)) {
+    return res.status(403).json({ error: 'The All store cannot be modified' });
+  }
   try {
     const result = await pool.query(
       'DELETE FROM storezones WHERE storeid = $1 AND zonesequence = $2 AND departmentid = $3 RETURNING *',
@@ -340,11 +401,27 @@ async function runPurchasedCleanupIfDue(pool) {
   }
 }
 
-// Get shopping list for a store (ordered by store layout)
+// Get shopping list for a store (All store -1: all items in General zone, no storezones)
 app.get('/api/shopping-list/:storeId', async (req, res) => {
   try {
     await runPurchasedCleanupIfDue(pool);
     const { showPurchased } = req.query;
+    if (isAllStore(req.params.storeId)) {
+      let query = `
+        SELECT sl.name, sl.description, sl.quantity, sl.purchased,
+               sl.department_id, sl.item_id,
+               'General' as zone, 0 as zone_seq,
+               d.name as department_name
+        FROM shopping_list sl
+        LEFT JOIN common.department d ON sl.department_id = d.id
+      `;
+      if (showPurchased !== 'true') {
+        query += ` WHERE (sl.purchased IS NULL OR sl.purchased = 0)`;
+      }
+      query += ' ORDER BY sl.name';
+      const result = await pool.query(query);
+      return res.json(result.rows);
+    }
     let query = `
       SELECT 
         sl.name,

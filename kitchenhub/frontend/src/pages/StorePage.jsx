@@ -12,6 +12,8 @@ import {
 } from '../api/api';
 import './StorePage.css';
 
+const ALL_STORE_ID = -1;
+
 function StorePage() {
   const [stores, setStores] = useState([]);
   const [selectedStore, setSelectedStore] = useState(null);
@@ -150,6 +152,7 @@ function StorePage() {
   };
 
   const handleDeleteStore = async (storeId) => {
+    if (storeId === ALL_STORE_ID) return;
     if (!window.confirm('Are you sure you want to delete this store? This will also delete all zones.')) {
       return;
     }
@@ -170,8 +173,8 @@ function StorePage() {
 
   const handleCreateZone = async (e) => {
     e.preventDefault();
-    if (!selectedStore) {
-      setError('Please select a store first');
+    if (!selectedStore || isAllStore) {
+      if (!selectedStore) setError('Please select a store first');
       return;
     }
     if (!newZone.zonename.trim()) {
@@ -211,7 +214,7 @@ function StorePage() {
   };
 
   const handleDeleteZone = async (zoneSequence) => {
-    if (!selectedStore) return;
+    if (!selectedStore || isAllStore) return;
     if (!window.confirm('Are you sure you want to delete this zone and all of its departments?')) {
       return;
     }
@@ -230,7 +233,7 @@ function StorePage() {
   };
 
   const handleMoveZone = async (zoneSequence, direction) => {
-    if (!selectedStore) return;
+    if (!selectedStore || isAllStore) return;
 
     const zoneGroups = groupedZones;
     const index = zoneGroups.findIndex((z) => z.zonesequence === zoneSequence);
@@ -253,11 +256,14 @@ function StorePage() {
     }
   };
 
+  const isAllStore = selectedStore?.id === ALL_STORE_ID;
+
   const handleAddDepartmentToZone = async (departmentId) => {
     if (!selectedStore || selectedZoneSequence == null) {
       setError('Please select a zone first');
       return;
     }
+    if (isAllStore) return;
 
     const zone = groupedZones.find((z) => z.zonesequence === selectedZoneSequence);
     if (!zone) return;
@@ -265,19 +271,21 @@ function StorePage() {
     try {
       await createStoreZone(selectedStore.id, {
         zonesequence: zone.zonesequence,
-        zonename: zone.zonename,
-        departmentid: departmentId,
+        zonename: zone.zonename || 'General',
+        departmentid: Number(departmentId),
       });
       await loadZones();
       setError(null);
     } catch (err) {
-      setError('Failed to assign department to zone');
+      const msg = err.response?.data?.error ?? 'Failed to assign department to zone';
+      const detail = err.response?.data?.detail;
+      setError(detail ? `${msg}: ${detail}` : msg);
       console.error(err);
     }
   };
 
   const handleRemoveDepartmentFromZone = async (departmentId) => {
-    if (!selectedStore || selectedZoneSequence == null) return;
+    if (!selectedStore || selectedZoneSequence == null || isAllStore) return;
 
     try {
       await deleteStoreZone(selectedStore.id, selectedZoneSequence, departmentId);
@@ -368,13 +376,14 @@ function StorePage() {
           <button
             type="button"
             className="btn btn-secondary btn-sm"
-            disabled={!selectedStore}
+            disabled={!selectedStore || isAllStore}
             onClick={() => {
-              if (selectedStore) {
+              if (selectedStore && !isAllStore) {
                 setEditingStore(selectedStore);
                 setShowStoreForm(true);
               }
             }}
+            title={isAllStore ? 'The All store cannot be renamed' : undefined}
           >
             Rename
           </button>
@@ -382,8 +391,8 @@ function StorePage() {
             type="button"
             className="icon-btn danger"
             aria-label="Delete store"
-            title="Delete store"
-            disabled={!selectedStore}
+            title={isAllStore ? 'The All store cannot be deleted' : 'Delete store'}
+            disabled={!selectedStore || isAllStore}
             onClick={() => selectedStore && handleDeleteStore(selectedStore.id)}
           >
             <TrashIcon />
@@ -440,24 +449,31 @@ function StorePage() {
 
       {selectedStore && (
           <div className="zones-section">
+            {isAllStore && (
+              <div className="empty-message small" style={{ marginBottom: '1rem' }}>
+                The <strong>All</strong> store is read-only. All departments are shown in the General zone; no storezones entries are used.
+              </div>
+            )}
             <div className="zones-header">
               <h2>Store Layout: {selectedStore.name}</h2>
-              <button
-                className="btn btn-primary"
-                onClick={() => {
-                  setShowZoneForm(!showZoneForm);
-                  setNewZone({
-                    zonesequence: nextZoneSequenceDefault,
-                    zonename: '',
-                    departmentIds: [],
-                  });
-                }}
-              >
-                {showZoneForm ? 'Cancel' : '+ Add Zone'}
-              </button>
+              {!isAllStore && (
+                <button
+                  className="btn btn-primary"
+                  onClick={() => {
+                    setShowZoneForm(!showZoneForm);
+                    setNewZone({
+                      zonesequence: nextZoneSequenceDefault,
+                      zonename: '',
+                      departmentIds: [],
+                    });
+                  }}
+                >
+                  {showZoneForm ? 'Cancel' : '+ Add Zone'}
+                </button>
+              )}
             </div>
 
-            {showZoneForm && (
+            {showZoneForm && !isAllStore && (
               <div className="zone-form">
                 <h3>Add Zone</h3>
                 <form onSubmit={handleCreateZone}>
@@ -562,7 +578,7 @@ function StorePage() {
                             type="button"
                             className="icon-btn"
                             aria-label="Move zone up"
-                            disabled={groupedZones[0]?.zonesequence === zone.zonesequence}
+                            disabled={isAllStore || groupedZones[0]?.zonesequence === zone.zonesequence}
                             onClick={(e) => {
                               e.stopPropagation();
                               setSelectedZoneSequence(zone.zonesequence);
@@ -578,7 +594,7 @@ function StorePage() {
                             type="button"
                             className="icon-btn"
                             aria-label="Move zone down"
-                            disabled={groupedZones[groupedZones.length - 1]?.zonesequence === zone.zonesequence}
+                            disabled={isAllStore || groupedZones[groupedZones.length - 1]?.zonesequence === zone.zonesequence}
                             onClick={(e) => {
                               e.stopPropagation();
                               setSelectedZoneSequence(zone.zonesequence);
@@ -594,6 +610,7 @@ function StorePage() {
                             type="button"
                             className="icon-btn danger"
                             aria-label="Delete zone"
+                            disabled={isAllStore}
                             onClick={(e) => {
                               e.stopPropagation();
                               setSelectedZoneSequence(zone.zonesequence);
@@ -628,6 +645,7 @@ function StorePage() {
                               <span>{dept.name}</span>
                               <button
                                 className="btn btn-danger btn-sm"
+                                disabled={isAllStore}
                                 onClick={() =>
                                   handleRemoveDepartmentFromZone(dept.id)
                                 }
@@ -653,7 +671,7 @@ function StorePage() {
                             <span>{dept.name}</span>
                             <button
                               className="btn btn-primary btn-sm"
-                              disabled={!selectedZone}
+                              disabled={!selectedZone || isAllStore}
                               onClick={() =>
                                 handleAddDepartmentToZone(dept.id)
                               }
