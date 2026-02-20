@@ -114,6 +114,29 @@ npm install
 npm run dev
 ```
 
+### Testing
+
+Backend and frontend both have automated tests (no database required for backend tests; DB is mocked).
+
+```bash
+# Backend (Jest + supertest)
+cd backend
+npm install
+npm test
+
+# Frontend (Vitest + React Testing Library)
+cd frontend
+npm install
+npm test
+```
+
+**In CI (GitHub Actions):**
+
+- **Test details** are reported back to GitHub: the workflow runs with coverage and JUnit output, then **Publish Test Results** shows pass/fail per test in the Actions run and on the Checks tab.
+- **Coverage** is collected (backend: Jest `--coverage`; frontend: Vitest `@vitest/coverage-v8`) and printed in the job log. To see coverage in the log, run `npm run test:ci` locally.
+
+CI runs these tests on pull requests when `kitchenhub/**` changes.
+
 ## API Endpoints
 
 ### Stores
