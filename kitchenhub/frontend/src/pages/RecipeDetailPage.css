@@ -1,0 +1,289 @@
+.recipe-detail-page {
+  width: 100%;
+}
+
+.recipe-detail-breadcrumb {
+  margin-bottom: 1rem;
+  font-size: 0.9rem;
+  color: #666;
+}
+
+.recipe-detail-breadcrumb a {
+  color: #3498db;
+  text-decoration: none;
+}
+
+.recipe-detail-breadcrumb a:hover {
+  text-decoration: underline;
+}
+
+.breadcrumb-sep {
+  margin: 0 0.35rem;
+}
+
+.recipe-detail-error-banner {
+  background: #fee;
+  color: #c00;
+  padding: 0.75rem 1rem;
+  border-radius: 4px;
+  margin-bottom: 1rem;
+}
+
+.recipe-detail-loading,
+.recipe-detail-error {
+  padding: 1rem 0;
+  color: #555;
+}
+
+.recipe-detail-error .btn {
+  margin-top: 0.75rem;
+}
+
+.recipe-detail-card {
+  background: white;
+  border-radius: 8px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  padding: 1.5rem 2rem;
+  margin-bottom: 1.5rem;
+}
+
+.recipe-detail-header {
+  margin-bottom: 1.25rem;
+}
+
+.recipe-detail-header h1 {
+  margin: 0 0 0.35rem 0;
+  color: #2c3e50;
+  font-size: 1.75rem;
+}
+
+.recipe-meta {
+  margin: 0 0 0.75rem 0;
+  color: #666;
+  font-size: 0.95rem;
+}
+
+.recipe-detail-actions {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.recipe-detail-form .form-row {
+  margin-bottom: 1rem;
+}
+
+.recipe-detail-form label {
+  display: block;
+  font-size: 0.9rem;
+  color: #555;
+  margin-bottom: 0.25rem;
+}
+
+.recipe-detail-form input[type="text"],
+.recipe-detail-form input[type="number"],
+.recipe-detail-form select,
+.recipe-detail-form textarea {
+  width: 100%;
+  max-width: 400px;
+  padding: 0.5rem 0.6rem;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  font-size: 0.95rem;
+}
+
+.recipe-detail-form textarea {
+  min-height: 120px;
+  resize: vertical;
+}
+
+.recipe-detail-form .form-row.inline {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+}
+
+.recipe-detail-form .form-group {
+  flex: 0 1 auto;
+}
+
+.recipe-detail-form .form-group input,
+.recipe-detail-form .form-group select {
+  width: 100%;
+  min-width: 100px;
+}
+
+.form-actions {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 1.25rem;
+}
+
+.btn-secondary {
+  background: #ecf0f1;
+  color: #2c3e50;
+}
+
+.btn-secondary:hover {
+  background: #dfe6e9;
+}
+
+.btn-danger {
+  background: #e74c3c;
+  color: white;
+}
+
+.btn-danger:hover {
+  background: #c0392b;
+}
+
+.recipe-instructions {
+  margin: 1.5rem 0;
+}
+
+.recipe-instructions h2 {
+  margin: 0 0 0.5rem 0;
+  font-size: 1.15rem;
+  color: #2c3e50;
+}
+
+.recipe-instructions-text {
+  margin: 0;
+  white-space: pre-wrap;
+  font-family: inherit;
+  font-size: 0.95rem;
+  color: #444;
+  line-height: 1.5;
+}
+
+.recipe-ingredients-section {
+  margin-top: 1.5rem;
+}
+
+.recipe-ingredients-section h2 {
+  margin: 0 0 0.5rem 0;
+  font-size: 1.15rem;
+  color: #2c3e50;
+}
+
+.recipe-ingredients-list {
+  list-style: none;
+  margin: 0 0 1.5rem 0;
+  padding: 0;
+}
+
+.recipe-ingredient-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.5rem;
+  padding: 0.4rem 0;
+  border-bottom: 1px solid #eee;
+}
+
+.recipe-ingredient-row:last-child {
+  border-bottom: none;
+}
+
+.ingredient-line {
+  flex: 1 1 auto;
+}
+
+.ingredient-optional {
+  color: #7f8c8d;
+  font-style: italic;
+}
+
+.ingredient-comment {
+  color: #666;
+  font-size: 0.9rem;
+}
+
+.ingredient-shopping-measure {
+  font-size: 0.8rem;
+  color: #7f8c8d;
+  background: #f8f9fa;
+  padding: 0.2rem 0.5rem;
+  border-radius: 4px;
+}
+
+.btn-remove-ingredient {
+  background: none;
+  border: none;
+  color: #999;
+  cursor: pointer;
+  font-size: 1.25rem;
+  line-height: 1;
+  padding: 0 0.25rem;
+}
+
+.btn-remove-ingredient:hover {
+  color: #e74c3c;
+}
+
+.recipe-no-ingredients {
+  color: #666;
+  margin: 0 0 1rem 0;
+  font-style: italic;
+}
+
+.add-ingredient-form {
+  margin-top: 1rem;
+  padding-top: 1rem;
+  border-top: 1px solid #eee;
+}
+
+.add-ingredient-form h3 {
+  margin: 0 0 0.75rem 0;
+  font-size: 1rem;
+  color: #555;
+}
+
+.add-ingredient-fields {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.add-ingredient-fields select,
+.add-ingredient-fields input {
+  padding: 0.4rem 0.5rem;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  font-size: 0.9rem;
+}
+
+.add-ingredient-fields select:first-child {
+  min-width: 180px;
+}
+
+.qty-input {
+  width: 70px;
+}
+
+.comment-input {
+  width: 120px;
+}
+
+.optional-checkbox {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.9rem;
+  color: #555;
+  cursor: pointer;
+}
+
+@media (max-width: 640px) {
+  .add-ingredient-fields {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .add-ingredient-fields select:first-child,
+  .qty-input,
+  .comment-input {
+    width: 100%;
+    min-width: 0;
+  }
+}

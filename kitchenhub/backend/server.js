@@ -564,6 +564,220 @@ app.delete('/api/shopping-list/:name', async (req, res) => {
   }
 });
 
+// ==================== RECIPE CATEGORIES ====================
+
+app.get('/api/recipe-categories', async (req, res) => {
+  try {
+    const result = await pool.query('SELECT * FROM recipe.recipe_category ORDER BY name');
+    res.json(result.rows);
+  } catch (error) {
+    console.error('Error fetching recipe categories:', error);
+    res.status(500).json({ error: 'Failed to fetch recipe categories' });
+  }
+});
+
+// ==================== INGREDIENT MEASUREMENTS ====================
+
+app.get('/api/ingredient-measurements', async (req, res) => {
+  try {
+    const result = await pool.query('SELECT * FROM recipe.ingredient_measurement ORDER BY name');
+    res.json(result.rows);
+  } catch (error) {
+    console.error('Error fetching ingredient measurements:', error);
+    res.status(500).json({ error: 'Failed to fetch ingredient measurements' });
+  }
+});
+
+// ==================== INGREDIENTS (recipe catalog) ====================
+
+app.get('/api/ingredients', async (req, res) => {
+  try {
+    const result = await pool.query(
+      `SELECT i.id, i.name, i.details, i.measurement_id, i.department_id, i.shopping_measure, i.shopping_measure_grams,
+              d.name as department_name, m.name as measurement_name
+       FROM recipe.ingredients i
+       LEFT JOIN common.department d ON i.department_id = d.id
+       LEFT JOIN recipe.ingredient_measurement m ON i.measurement_id = m.id
+       ORDER BY i.name, i.details`
+    );
+    res.json(result.rows);
+  } catch (error) {
+    console.error('Error fetching ingredients:', error);
+    res.status(500).json({ error: 'Failed to fetch ingredients' });
+  }
+});
+
+// ==================== RECIPES ====================
+
+app.get('/api/recipes', async (req, res) => {
+  try {
+    const { category_id } = req.query;
+    let query = `
+      SELECT r.id, r.name, r.servings, r.category_id, r.instructions, r.created, r.modified,
+             c.name as category_name
+      FROM recipe.recipe r
+      JOIN recipe.recipe_category c ON r.category_id = c.id
+    `;
+    const params = [];
+    if (category_id != null && category_id !== '') {
+      params.push(category_id);
+      query += ` WHERE r.category_id = $${params.length}`;
+    }
+    query += ' ORDER BY r.name';
+    const result = await pool.query(query, params);
+    res.json(result.rows);
+  } catch (error) {
+    console.error('Error fetching recipes:', error);
+    res.status(500).json({ error: 'Failed to fetch recipes' });
+  }
+});
+
+app.get('/api/recipes/:id', async (req, res) => {
+  try {
+    const recipeResult = await pool.query(
+      `SELECT r.id, r.name, r.servings, r.category_id, r.instructions, r.created, r.modified,
+              c.name as category_name
+       FROM recipe.recipe r
+       JOIN recipe.recipe_category c ON r.category_id = c.id
+       WHERE r.id = $1`,
+      [req.params.id]
+    );
+    if (recipeResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Recipe not found' });
+    }
+    const recipe = recipeResult.rows[0];
+
+    const ingResult = await pool.query(
+      `SELECT ri.ingredient_id, ri.qty, ri.measurement_id, ri.comment, ri.is_optional,
+              i.name as ingredient_name, i.details as ingredient_details, i.shopping_measure,
+              m.name as measurement_name
+       FROM recipe.recipe_ingredients ri
+       JOIN recipe.ingredients i ON ri.ingredient_id = i.id
+       LEFT JOIN recipe.ingredient_measurement m ON ri.measurement_id = m.id
+       WHERE ri.recipe_id = $1
+       ORDER BY i.name`,
+      [req.params.id]
+    );
+    recipe.ingredients = ingResult.rows;
+    res.json(recipe);
+  } catch (error) {
+    console.error('Error fetching recipe:', error);
+    res.status(500).json({ error: 'Failed to fetch recipe' });
+  }
+});
+
+app.post('/api/recipes', async (req, res) => {
+  try {
+    const { name, servings, category_id, instructions } = req.body;
+    const result = await pool.query(
+      `INSERT INTO recipe.recipe (name, servings, category_id, instructions)
+       VALUES ($1, $2, $3, $4) RETURNING *`,
+      [name, servings || 1, category_id, instructions || null]
+    );
+    res.status(201).json(result.rows[0]);
+  } catch (error) {
+    console.error('Error creating recipe:', error);
+    if (error.code === '23503') {
+      return res.status(400).json({ error: 'Invalid category_id' });
+    }
+    if (error.code === '23505') {
+      return res.status(409).json({ error: 'Recipe name already exists' });
+    }
+    res.status(500).json({ error: 'Failed to create recipe' });
+  }
+});
+
+app.put('/api/recipes/:id', async (req, res) => {
+  try {
+    const { name, servings, category_id, instructions } = req.body;
+    const result = await pool.query(
+      `UPDATE recipe.recipe SET name = $1, servings = $2, category_id = $3, instructions = $4, modified = CURRENT_TIMESTAMP
+       WHERE id = $5 RETURNING *`,
+      [name, servings, category_id, instructions || null, req.params.id]
+    );
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Recipe not found' });
+    }
+    res.json(result.rows[0]);
+  } catch (error) {
+    console.error('Error updating recipe:', error);
+    if (error.code === '23505') {
+      return res.status(409).json({ error: 'Recipe name already exists' });
+    }
+    res.status(500).json({ error: 'Failed to update recipe' });
+  }
+});
+
+app.delete('/api/recipes/:id', async (req, res) => {
+  try {
+    const result = await pool.query('DELETE FROM recipe.recipe WHERE id = $1 RETURNING *', [req.params.id]);
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Recipe not found' });
+    }
+    res.json({ message: 'Recipe deleted successfully' });
+  } catch (error) {
+    console.error('Error deleting recipe:', error);
+    res.status(500).json({ error: 'Failed to delete recipe' });
+  }
+});
+
+// Recipe ingredients: add one
+app.post('/api/recipes/:id/ingredients', async (req, res) => {
+  try {
+    const { ingredient_id, qty, measurement_id, comment, is_optional } = req.body;
+    const result = await pool.query(
+      `INSERT INTO recipe.recipe_ingredients (recipe_id, ingredient_id, qty, measurement_id, comment, is_optional)
+       VALUES ($1, $2, $3, $4, $5, $6)
+       ON CONFLICT (recipe_id, ingredient_id) DO UPDATE SET qty = $3, measurement_id = $4, comment = $5, is_optional = $6
+       RETURNING recipe_id, ingredient_id, qty, measurement_id, comment, is_optional`,
+      [req.params.id, ingredient_id, qty ?? null, measurement_id ?? null, comment ?? null, Boolean(is_optional)]
+    );
+    res.status(201).json(result.rows[0]);
+  } catch (error) {
+    console.error('Error adding recipe ingredient:', error);
+    if (error.code === '23503') {
+      return res.status(400).json({ error: 'Recipe or ingredient not found' });
+    }
+    res.status(500).json({ error: 'Failed to add recipe ingredient' });
+  }
+});
+
+// Recipe ingredients: update one
+app.put('/api/recipes/:id/ingredients/:ingredientId', async (req, res) => {
+  try {
+    const { qty, measurement_id, comment, is_optional } = req.body;
+    const result = await pool.query(
+      `UPDATE recipe.recipe_ingredients SET qty = $1, measurement_id = $2, comment = $3, is_optional = $4
+       WHERE recipe_id = $5 AND ingredient_id = $6 RETURNING *`,
+      [qty ?? null, measurement_id ?? null, comment ?? null, Boolean(is_optional), req.params.id, req.params.ingredientId]
+    );
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Recipe ingredient not found' });
+    }
+    res.json(result.rows[0]);
+  } catch (error) {
+    console.error('Error updating recipe ingredient:', error);
+    res.status(500).json({ error: 'Failed to update recipe ingredient' });
+  }
+});
+
+// Recipe ingredients: remove one
+app.delete('/api/recipes/:id/ingredients/:ingredientId', async (req, res) => {
+  try {
+    const result = await pool.query(
+      'DELETE FROM recipe.recipe_ingredients WHERE recipe_id = $1 AND ingredient_id = $2 RETURNING *',
+      [req.params.id, req.params.ingredientId]
+    );
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Recipe ingredient not found' });
+    }
+    res.json({ message: 'Recipe ingredient removed' });
+  } catch (error) {
+    console.error('Error removing recipe ingredient:', error);
+    res.status(500).json({ error: 'Failed to remove recipe ingredient' });
+  }
+});
+
 // Health check endpoint (does not hit database)
 app.get('/api/health', (req, res) => {
   const payload = {
