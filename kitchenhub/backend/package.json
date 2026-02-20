@@ -28,6 +28,7 @@
   "jest": {
     "testEnvironment": "node",
     "testMatch": ["**/*.test.js"],
-    "reporters": ["default", "jest-junit"]
+    "reporters": ["default", "jest-junit"],
+    "coverageReporters": ["text", "text-summary", "json-summary"]
   }
 }
