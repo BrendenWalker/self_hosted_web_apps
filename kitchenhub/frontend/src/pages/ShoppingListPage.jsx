@@ -92,8 +92,10 @@ function ShoppingListPage() {
   };
 
   const handleUpdateQuantity = async (itemName, newQuantity) => {
+    const num = parseInt(String(newQuantity), 10);
+    const quantity = (Number.isNaN(num) || num < 1) ? 1 : num;
     try {
-      await updateShoppingListItem(itemName, { quantity: String(newQuantity) });
+      await updateShoppingListItem(itemName, { quantity: String(quantity) });
       await loadData();
     } catch (err) {
       setError('Failed to update quantity');
