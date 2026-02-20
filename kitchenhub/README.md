@@ -133,7 +133,7 @@ npm test
 **In CI (GitHub Actions):**
 
 - **Test details** are reported back to GitHub: the workflow runs with coverage and JUnit output, then **Publish Test Results** shows pass/fail per test in the Actions run and on the Checks tab.
-- **Coverage** is collected (backend: Jest `--coverage`; frontend: Vitest `@vitest/coverage-v8`) and printed in the job log. To see coverage in the log, run `npm run test:ci` locally.
+- **Coverage** is collected (backend: Jest; frontend: Vitest) and written to a **Code coverage** section in the job summary. Open a workflow run → **test** job → **Coverage summary** step to see tables for backend and frontend (lines, statements, functions, branches). Full coverage output is also in the **Run backend tests** / **Run frontend tests** step logs.
 
 CI runs these tests on pull requests when `kitchenhub/**` changes.
 

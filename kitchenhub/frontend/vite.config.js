@@ -10,7 +10,7 @@ export default defineConfig({
     reporters: process.env.CI ? ['default', ['junit', { outputFile: 'test-results/junit.xml' }]] : 'default',
     coverage: {
       provider: 'v8',
-      reporter: ['text', 'text-summary'],
+      reporter: ['text', 'text-summary', 'json-summary'],
       reportsDirectory: 'coverage',
     },
   },

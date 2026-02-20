@@ -64,6 +64,28 @@ jobs:
           check_name: Test results (${{ matrix.project }})
           comment_mode: off
 
+      - name: Coverage summary
+        if: always() && !cancelled()
+        run: |
+          echo '## Code coverage' >> $GITHUB_STEP_SUMMARY
+          for dir in ${{ matrix.project }}/backend ${{ matrix.project }}/frontend; do
+            name=$(basename "$(dirname "$dir")")-$(basename "$dir")
+            path="$dir/coverage/coverage-summary.json"
+            if [ -f "$path" ]; then
+              node -e "
+            const c = require('./$path');
+            const tot = c.total;
+            if (tot) {
+              console.log('### ' + '$name'.replace(/-/g, ' ') + '\n');
+              console.log('| | Coverage |');
+              console.log('|---|---------|');
+              ['lines', 'statements', 'functions', 'branches'].forEach(k => tot[k] && console.log('|' + k + '|' + tot[k].pct + '%|'));
+              console.log('');
+            }
+          "
+            fi
+          done >> $GITHUB_STEP_SUMMARY
+
   validate-pr:
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
