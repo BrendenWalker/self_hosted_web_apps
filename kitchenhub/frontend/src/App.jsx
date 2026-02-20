@@ -4,6 +4,8 @@ import HomePage from './pages/HomePage';
 import ShoppingPage from './pages/ShoppingPage';
 import ShoppingListPage from './pages/ShoppingListPage';
 import StorePage from './pages/StorePage';
+import RecipesPage from './pages/RecipesPage';
+import RecipeDetailPage from './pages/RecipeDetailPage';
 import VersionFooter from './components/VersionFooter';
 import './App.css';
 
@@ -17,6 +19,7 @@ function App() {
               <Link to="/" className="nav-link">Home</Link>
               <Link to="/shopping" className="nav-link">In-Store</Link>
               <Link to="/list" className="nav-link">Shopping List</Link>
+              <Link to="/recipes" className="nav-link">Recipes</Link>
               <Link to="/stores" className="nav-link">Stores</Link>
             </div>
           </div>
@@ -26,6 +29,8 @@ function App() {
             <Route path="/" element={<HomePage />} />
             <Route path="/shopping" element={<ShoppingPage />} />
             <Route path="/list" element={<ShoppingListPage />} />
+            <Route path="/recipes" element={<RecipesPage />} />
+            <Route path="/recipes/:id" element={<RecipeDetailPage />} />
             <Route path="/stores" element={<StorePage />} />
             <Route path="*" element={<HomePage />} />
           </Routes>

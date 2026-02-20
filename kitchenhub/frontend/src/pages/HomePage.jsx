@@ -23,6 +23,12 @@ function HomePage() {
               View your shopping list and manage the full catalog of items, adjusting quantities and adding new items as needed.
             </p>
           </Link>
+          <Link to="/recipes" className="home-card">
+            <h2>Recipes</h2>
+            <p>
+              Browse recipes by category, view ingredients with quantities and optional notes, and see shopping measures for future list building.
+            </p>
+          </Link>
           <Link to="/stores" className="home-card">
             <h2>Stores & Layouts</h2>
             <p>

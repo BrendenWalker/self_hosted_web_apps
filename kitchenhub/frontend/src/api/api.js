@@ -64,4 +64,29 @@ export const markPurchased = (name, purchased) =>
 export const removeFromShoppingList = (name) =>
   api.delete(`/shopping-list/${encodeURIComponent(name)}`);
 
+// Recipe categories
+export const getRecipeCategories = () => api.get('/recipe-categories');
+
+// Ingredient measurements (for recipe ingredient dropdowns)
+export const getIngredientMeasurements = () => api.get('/ingredient-measurements');
+
+// Ingredients catalog (for adding to recipes; includes shopping_measure for future shopping list)
+export const getIngredients = () => api.get('/ingredients');
+
+// Recipes
+export const getRecipes = (categoryId) =>
+  api.get('/recipes', categoryId != null ? { params: { category_id: categoryId } } : undefined);
+export const getRecipe = (id) => api.get(`/recipes/${id}`);
+export const createRecipe = (data) => api.post('/recipes', data);
+export const updateRecipe = (id, data) => api.put(`/recipes/${id}`, data);
+export const deleteRecipe = (id) => api.delete(`/recipes/${id}`);
+
+// Recipe ingredients
+export const addRecipeIngredient = (recipeId, data) =>
+  api.post(`/recipes/${recipeId}/ingredients`, data);
+export const updateRecipeIngredient = (recipeId, ingredientId, data) =>
+  api.put(`/recipes/${recipeId}/ingredients/${ingredientId}`, data);
+export const removeRecipeIngredient = (recipeId, ingredientId) =>
+  api.delete(`/recipes/${recipeId}/ingredients/${ingredientId}`);
+
 export default api;

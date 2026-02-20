@@ -1,11 +1,12 @@
 # KitchenHub
 
-A modern, dockerized web application for managing shopping lists with store layout organization. Migrated from the original Firebird/Delphi system to PostgreSQL and React. Future plans include meal planning and recipe management.
+A modern, dockerized web application for managing shopping lists with store layout organization. Migrated from the original Firebird/Delphi system to PostgreSQL and React. Future plans include meal planning and adding recipe ingredients to the shopping list.
 
 ## Features
 
 - **Shopping Page**: View shopping list organized by store layout/zones, mark items as purchased
 - **Shopping List Management**: Add/remove items, manage quantities
+- **Recipes**: Browse recipes by category, view ingredients (quantity, measurement, optional flag, comments), and see each ingredient’s shopping measure for future list building
 - **Store Management**: Create stores and configure store zones (layout) for organizing shopping lists
 
 ## Architecture
@@ -40,6 +41,12 @@ Use your DB name if different: `psql -U your_user -d your_database -f kitchenhub
 
    ```bash
    psql -U postgres -d hausfrau -f kitchenhub/database/migrations/001-remove-all-store.sql
+   ```
+
+   - **Recipe ingredient optional flag**: If your `recipe.recipe_ingredients` table has the old `option` column (SMALLINT, 1 = optional), run once to replace it with a native `is_optional` BOOLEAN (required for the Recipes feature):
+
+   ```bash
+   psql -U postgres -d hausfrau -f kitchenhub/database/migrations/002-recipe-ingredient-is-optional.sql
    ```
 
 4. (Optional) Migrate data from Firebird database:
@@ -170,6 +177,19 @@ CI runs these tests on pull requests when `kitchenhub/**` changes.
 - `PATCH /api/shopping-list/:name/purchased` - Mark item as purchased/unpurchased
 - `DELETE /api/shopping-list/:name` - Remove item from shopping list
 
+### Recipes
+- `GET /api/recipe-categories` - Get all recipe categories
+- `GET /api/ingredient-measurements` - Get measurement units (tbsp, cup, etc.)
+- `GET /api/ingredients` - Get ingredients catalog (includes shopping_measure for future list building)
+- `GET /api/recipes` - Get all recipes (optional query: `?category_id=`)
+- `GET /api/recipes/:id` - Get recipe with ingredients (each has quantity, measurement, comment, is_optional, shopping_measure)
+- `POST /api/recipes` - Create recipe
+- `PUT /api/recipes/:id` - Update recipe
+- `DELETE /api/recipes/:id` - Delete recipe
+- `POST /api/recipes/:id/ingredients` - Add ingredient to recipe
+- `PUT /api/recipes/:id/ingredients/:ingredientId` - Update recipe ingredient
+- `DELETE /api/recipes/:id/ingredients/:ingredientId` - Remove ingredient from recipe
+
 ## Usage
 
 1. **Set up Stores**: Go to the Stores page and create stores
@@ -186,8 +206,8 @@ CI runs these tests on pull requests when `kitchenhub/**` changes.
 
 ## Future Enhancements
 
-- **Meal Planning**: Plan meals and automatically generate shopping lists
-- **Recipe Management**: Store and manage recipes with ingredient lists
+- **Add recipe ingredients to shopping list**: Use each ingredient’s `shopping_measure` (e.g. “quart container”) when adding required ingredients to the list
+- **Meal Planning**: Plan meals and automatically generate shopping lists (mealplanner schema exists)
 - User authentication and multi-user support
 - Shopping history and analytics
 - Mobile app (PWA)

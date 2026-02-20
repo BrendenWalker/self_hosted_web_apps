@@ -111,7 +111,7 @@ CREATE TABLE IF NOT EXISTS recipe.recipe_ingredients (
     qty NUMERIC(10, 2),
     measurement_id INTEGER REFERENCES recipe.ingredient_measurement(id) ON DELETE SET NULL,
     comment VARCHAR(255),
-    option SMALLINT,
+    is_optional BOOLEAN DEFAULT false NOT NULL,
     PRIMARY KEY (recipe_id, ingredient_id)
 );
 CREATE INDEX IF NOT EXISTS idx_recipe_ingredients_recipe ON recipe.recipe_ingredients(recipe_id);
