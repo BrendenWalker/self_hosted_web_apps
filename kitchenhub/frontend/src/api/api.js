@@ -57,9 +57,11 @@ export const getShoppingList = (storeId, showPurchased = false) =>
   api.get(`/shopping-list/${storeId}`, { params: { showPurchased } });
 export const getAllShoppingList = () => api.get('/shopping-list');
 export const addToShoppingList = (data) => api.post('/shopping-list', data);
-export const updateShoppingListItem = (name, data) => api.put(`/shopping-list/${name}`, data);
-export const markPurchased = (name, purchased) => 
-  api.patch(`/shopping-list/${name}/purchased`, { purchased });
-export const removeFromShoppingList = (name) => api.delete(`/shopping-list/${name}`);
+export const updateShoppingListItem = (name, data) =>
+  api.put(`/shopping-list/${encodeURIComponent(name)}`, data);
+export const markPurchased = (name, purchased) =>
+  api.patch(`/shopping-list/${encodeURIComponent(name)}/purchased`, { purchased });
+export const removeFromShoppingList = (name) =>
+  api.delete(`/shopping-list/${encodeURIComponent(name)}`);
 
 export default api;
