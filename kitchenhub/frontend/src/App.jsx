@@ -1,5 +1,5 @@
 import React from 'react';
-import { BrowserRouter as Router, Routes, Route, Link } from 'react-router-dom';
+import { Routes, Route, Link } from 'react-router-dom';
 import HomePage from './pages/HomePage';
 import ShoppingPage from './pages/ShoppingPage';
 import ShoppingListPage from './pages/ShoppingListPage';
@@ -9,8 +9,7 @@ import './App.css';
 
 function App() {
   return (
-    <Router>
-      <div className="app">
+    <div className="app">
         <nav className="navbar">
           <div className="nav-container">
             <Link to="/" className="nav-logo">KitchenHub</Link>
@@ -33,7 +32,6 @@ function App() {
         </main>
         <VersionFooter />
       </div>
-    </Router>
   );
 }
 
