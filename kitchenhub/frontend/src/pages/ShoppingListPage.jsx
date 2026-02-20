@@ -54,64 +54,88 @@ function ShoppingListPage() {
   };
 
   const handleAddToShoppingList = async (item) => {
-    try {
-      const existingItem = getShoppingListItem(item.name);
-      let newQuantity = '1';
-      
-      if (existingItem) {
-        // Increment quantity if item already exists
-        const currentQty = parseInt(existingItem.quantity) || 1;
-        newQuantity = String(currentQty + 1);
+    const existingItem = getShoppingListItem(item.name);
+    if (existingItem) {
+      const currentQty = parseInt(existingItem.quantity) || 1;
+      const newQuantity = String(currentQty + 1);
+      setShoppingList((prev) =>
+        prev.map((i) => (i.name === item.name ? { ...i, quantity: newQuantity } : i))
+      );
+      try {
         await updateShoppingListItem(item.name, { quantity: newQuantity });
-      } else {
-        // Add new item to shopping list
-        const shoppingListItem = {
-          name: item.name,
-          description: item.name,
-          quantity: '1',
-          department_id: item.department || null,
-          item_id: item.id
-        };
-        await addToShoppingList(shoppingListItem);
+      } catch (err) {
+        setError('Failed to add item to shopping list');
+        console.error(err);
+        await loadData();
       }
-      await loadData();
+      return;
+    }
+    const newEntry = {
+      name: item.name,
+      description: item.name,
+      quantity: '1',
+      department_id: item.department || null,
+      item_id: item.id,
+      department_name: departments.find((d) => d.id === item.department)?.name || null,
+      purchased: 0,
+    };
+    setShoppingList((prev) => [...prev, newEntry]);
+    try {
+      await addToShoppingList(newEntry);
     } catch (err) {
       setError('Failed to add item to shopping list');
       console.error(err);
+      await loadData();
     }
   };
 
   const handleRemoveFromShoppingList = async (itemName) => {
+    setShoppingList((prev) => prev.filter((i) => i.name !== itemName));
     try {
       await removeFromShoppingList(itemName);
-      await loadData();
     } catch (err) {
       setError('Failed to remove item from shopping list');
       console.error(err);
+      await loadData();
     }
   };
 
   const handleUpdateQuantity = async (itemName, newQuantity) => {
     const num = parseInt(String(newQuantity), 10);
-    const quantity = (Number.isNaN(num) || num < 1) ? 1 : num;
+    if (num === 0) {
+      await handleRemoveFromShoppingList(itemName);
+      return;
+    }
+    if (Number.isNaN(num) || num < 1) return;
+    setShoppingList((prev) =>
+      prev.map((i) => (i.name === itemName ? { ...i, quantity: String(num) } : i))
+    );
     try {
-      await updateShoppingListItem(itemName, { quantity: String(quantity) });
-      await loadData();
+      await updateShoppingListItem(itemName, { quantity: String(num) });
     } catch (err) {
       setError('Failed to update quantity');
       console.error(err);
+      await loadData();
     }
   };
 
   const handleIncrementQuantity = (item) => {
     const current = parseInt(item.quantity, 10) || 1;
-    handleUpdateQuantity(item.name, current + 1);
+    const next = current + 1;
+    setShoppingList((prev) =>
+      prev.map((i) => (i.name === item.name ? { ...i, quantity: String(next) } : i))
+    );
+    handleUpdateQuantity(item.name, next);
   };
 
-  const handleDecrementQuantity = (item) => {
-    const current = parseInt(item.quantity, 10) || 1;
-    if (current <= 1) return;
-    handleUpdateQuantity(item.name, current - 1);
+  const handleDecrementQuantity = (item, quantityFromButton) => {
+    const parsed = parseInt(String(quantityFromButton ?? item.quantity ?? 1), 10);
+    if (Number.isNaN(parsed) || parsed < 1) return;
+    const next = parsed - 1;
+    setShoppingList((prev) =>
+      prev.map((i) => (i.name === item.name ? { ...i, quantity: String(next) } : i))
+    );
+    handleUpdateQuantity(item.name, next);
   };
 
   const handleItemDoubleClick = (item) => {
@@ -335,66 +359,76 @@ function ShoppingListPage() {
                           >
                             <div className="item-info">
                               <div className="item-name">{item.name}</div>
-                              {shoppingListItem && (
-                                <div className="item-quantity-badge">
-                                  Qty: {shoppingListItem.quantity || '1'}
-                                </div>
-                              )}
                             </div>
                             <div className="item-actions">
-                              {inList && (
-                                <input
-                                  type="text"
-                                  value={shoppingListItem.quantity || '1'}
-                                  onChange={(e) => handleUpdateQuantity(item.name, e.target.value)}
-                                  className="quantity-input-small"
-                                  placeholder="Qty"
-                                  onClick={(e) => e.stopPropagation()}
-                                  onDoubleClick={(e) => e.stopPropagation()}
-                                />
-                              )}
-                              <button
-                                className="btn btn-edit"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleEditItem(item);
-                                }}
-                                title="Edit item"
-                              >
-                                ✎
-                              </button>
-                              <button
-                                className="btn btn-add"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleAddToShoppingList(item);
-                                }}
-                                title={inList ? "Add another (increment quantity)" : "Add to shopping list"}
-                              >
-                                +
-                              </button>
-                              {inList && (
+                              <div className="quantity-control">
                                 <button
-                                  className="btn btn-remove"
+                                  type="button"
+                                  className="btn btn-quantity"
+                                  disabled={!inList}
+                                  data-quantity={String(shoppingListItem?.quantity ?? 1)}
                                   onClick={(e) => {
                                     e.stopPropagation();
-                                    handleRemoveFromShoppingList(item.name);
+                                    if (!inList) return;
+                                    const q = e.currentTarget.getAttribute('data-quantity');
+                                    handleDecrementQuantity(
+                                      { name: item.name, quantity: shoppingListItem?.quantity },
+                                      q
+                                    );
                                   }}
-                                  title="Remove from shopping list"
+                                  aria-label="Decrease quantity"
+                                  title={inList ? "Decrease quantity (remove when 1)" : "Add to list first"}
                                 >
                                   −
                                 </button>
-                              )}
-                              <button
-                                className="btn btn-delete"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleDeleteItem(item.id, item.name);
-                                }}
-                                title="Delete item"
-                              >
-                                ×
-                              </button>
+                                <input
+                                  type="text"
+                                  className="quantity-input"
+                                  value={inList ? (shoppingListItem?.quantity || '') : '0'}
+                                  onChange={(e) => inList && handleUpdateQuantity(item.name, e.target.value)}
+                                  onClick={(e) => e.stopPropagation()}
+                                  onDoubleClick={(e) => e.stopPropagation()}
+                                  placeholder="Qty"
+                                  readOnly={!inList}
+                                  aria-label="Quantity"
+                                />
+                                <button
+                                  type="button"
+                                  className="btn btn-quantity"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleAddToShoppingList(item);
+                                  }}
+                                  aria-label="Increase quantity"
+                                  title={inList ? "Add another (increment quantity)" : "Add to shopping list"}
+                                >
+                                  +
+                                </button>
+                              </div>
+                              <div className="item-actions-meta">
+                                <button
+                                  type="button"
+                                  className="btn btn-edit"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleEditItem(item);
+                                  }}
+                                  title="Edit item"
+                                >
+                                  ✎
+                                </button>
+                                <button
+                                  type="button"
+                                  className="btn btn-delete"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleDeleteItem(item.id, item.name);
+                                  }}
+                                  title="Delete item"
+                                >
+                                  ×
+                                </button>
+                              </div>
                             </div>
                           </div>
                         );
@@ -442,16 +476,21 @@ function ShoppingListPage() {
                           <button
                             type="button"
                             className="btn btn-quantity"
-                            onClick={() => handleDecrementQuantity(item)}
+                            data-quantity={String(item.quantity ?? 1)}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              const q = e.currentTarget.getAttribute('data-quantity');
+                              handleDecrementQuantity(item, q);
+                            }}
                             aria-label="Decrease quantity"
                           >
                             −
                           </button>
                           <input
                             type="text"
+                            className="quantity-input"
                             value={item.quantity || ''}
                             onChange={(e) => handleUpdateQuantity(item.name, e.target.value)}
-                            className="quantity-input"
                             placeholder="Qty"
                           />
                           <button
