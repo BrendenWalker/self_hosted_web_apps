@@ -14,6 +14,56 @@ on:
       - '.github/workflows/docker-build.yml'
 
 jobs:
+  test:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      checks: write   # required for publish-unit-test-result-action to create check runs
+    strategy:
+      matrix:
+        project: [kitchenhub]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install backend dependencies (${{ matrix.project }})
+        run: npm install
+        working-directory: ${{ matrix.project }}/backend
+
+      - name: Run backend tests (${{ matrix.project }})
+        env:
+          JEST_JUNIT_OUTPUT_DIR: test-results
+          JEST_JUNIT_OUTPUT_NAME: junit.xml
+        run: |
+          mkdir -p test-results
+          npm run test:ci
+        working-directory: ${{ matrix.project }}/backend
+
+      - name: Install frontend dependencies (${{ matrix.project }})
+        run: npm install
+        working-directory: ${{ matrix.project }}/frontend
+
+      - name: Run frontend tests (${{ matrix.project }})
+        run: |
+          mkdir -p test-results
+          npm run test:ci
+        working-directory: ${{ matrix.project }}/frontend
+
+      - name: Publish test results to GitHub
+        if: always() && !cancelled()
+        uses: EnricoMi/publish-unit-test-result-action@v2
+        with:
+          files: |
+            ${{ matrix.project }}/backend/test-results/junit.xml
+            ${{ matrix.project }}/frontend/test-results/junit.xml
+          check_name: Test results (${{ matrix.project }})
+          comment_mode: off
+
   validate-pr:
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
