@@ -6,6 +6,7 @@ const STORE_STORAGE_KEY = 'kitchenhub-shopping-store';
 const ALL_STORE_ID = -1;
 
 function ShoppingPage() {
+  const shoppingListRequestRef = useRef(null);
   const [stores, setStores] = useState([]);
   const [selectedStoreId, setSelectedStoreId] = useState(() => {
     try {
@@ -21,6 +22,7 @@ function ShoppingPage() {
   const [showPurchased, setShowPurchased] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [confirmPurchase, setConfirmPurchase] = useState(null);
 
   useEffect(() => {
     loadStores();
