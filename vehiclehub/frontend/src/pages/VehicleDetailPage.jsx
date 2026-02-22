@@ -39,8 +39,8 @@ function VehicleDetailPage() {
     ? serviceLog.filter(entry => String(entry.serviceid) === String(filterServiceTypeId))
     : serviceLog)].sort((a, b) => new Date(b.servicedate) - new Date(a.servicedate));
 
-  // For Log Service: only show types that have an interval for this vehicle, or id < 0
-  const serviceTypesForLog = serviceTypes.filter(
+  // Only show types configured for this vehicle's intervals, or id < 0 (used for Log form and filter)
+  const serviceTypesForVehicle = serviceTypes.filter(
     st => st.id < 0 || intervals.some(iv => iv.serviceid === st.id)
   );
 
@@ -192,7 +192,7 @@ function VehicleDetailPage() {
                     required
                   >
                     <option value="">Select service type</option>
-                    {serviceTypesForLog.map(st => (
+                    {serviceTypesForVehicle.map(st => (
                       <option key={st.id} value={st.id}>{st.name}</option>
                     ))}
                   </select>
@@ -254,7 +254,7 @@ function VehicleDetailPage() {
                   onChange={(e) => setFilterServiceTypeId(e.target.value)}
                 >
                   <option value="">All service types</option>
-                  {serviceTypes.map(st => (
+                  {serviceTypesForVehicle.map(st => (
                     <option key={st.id} value={st.id}>{st.name}</option>
                   ))}
                 </select>
