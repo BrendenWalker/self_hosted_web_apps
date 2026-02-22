@@ -185,7 +185,8 @@ function ShoppingListPage() {
       setEditingItem(null);
       await loadData();
     } catch (err) {
-      setError(`Failed to ${editingItem ? 'update' : 'create'} item`);
+      const detail = err.response?.data?.detail || err.response?.data?.error;
+      setError(detail ? `${detail}` : `Failed to ${editingItem ? 'update' : 'create'} item`);
       console.error(err);
     }
   };

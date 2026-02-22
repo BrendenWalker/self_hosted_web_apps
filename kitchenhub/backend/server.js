@@ -335,7 +335,12 @@ app.post('/api/items', async (req, res) => {
     res.status(201).json(result.rows[0]);
   } catch (error) {
     console.error('Error creating item:', error);
-    res.status(500).json({ error: 'Failed to create item' });
+    const isDuplicate = error.code === '23505'; // PostgreSQL unique_violation
+    const detail = isDuplicate
+      ? 'An item with this name already exists'
+      : (error.message || 'Unknown error');
+    const status = isDuplicate ? 409 : 500;
+    res.status(status).json({ error: 'Failed to create item', detail });
   }
 });
 
@@ -353,7 +358,12 @@ app.put('/api/items/:id', async (req, res) => {
     res.json(result.rows[0]);
   } catch (error) {
     console.error('Error updating item:', error);
-    res.status(500).json({ error: 'Failed to update item' });
+    const isDuplicate = error.code === '23505';
+    const detail = isDuplicate
+      ? 'An item with this name already exists'
+      : (error.message || 'Unknown error');
+    const status = isDuplicate ? 409 : 500;
+    res.status(status).json({ error: 'Failed to update item', detail });
   }
 });
 
