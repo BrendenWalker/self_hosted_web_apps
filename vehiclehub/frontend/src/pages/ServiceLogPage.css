@@ -2,6 +2,82 @@
   width: 100%;
 }
 
+.service-log-filters {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 1.25rem;
+}
+
+.service-log-filters label {
+  font-weight: 500;
+  color: #2c3e50;
+}
+
+.service-log-filters select {
+  padding: 0.5rem 2rem 0.5rem 0.75rem;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  font-size: 1rem;
+  min-width: 200px;
+}
+
+.service-log-grid-wrapper {
+  overflow-x: auto;
+}
+
+.service-log-grid {
+  width: 100%;
+  border-collapse: collapse;
+  background: white;
+  border-radius: 8px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.service-log-grid th,
+.service-log-grid td {
+  padding: 0.75rem 1rem;
+  text-align: left;
+  border-bottom: 1px solid #eee;
+}
+
+.service-log-grid th {
+  background: #f8f9fa;
+  font-weight: 600;
+  color: #2c3e50;
+}
+
+.service-log-grid tbody tr:hover {
+  background: #f8f9fa;
+}
+
+.service-log-grid td .service-name {
+  display: block;
+  font-weight: 500;
+  color: #2c3e50;
+}
+
+.service-log-grid .vehicle-link {
+  display: block;
+  font-size: 0.85rem;
+  color: #3498db;
+  text-decoration: none;
+  margin-top: 0.25rem;
+}
+
+.service-log-grid .vehicle-link:hover {
+  text-decoration: underline;
+}
+
+.empty-filter-message {
+  padding: 2rem;
+  text-align: center;
+  color: #666;
+  background: white;
+  border-radius: 8px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
 .service-log-list {
   display: grid;
   gap: 1rem;

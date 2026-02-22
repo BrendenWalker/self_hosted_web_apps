@@ -30,7 +30,10 @@ app.get('/api/vehicles', async (req, res) => {
     res.json(result.rows);
   } catch (error) {
     console.error('Error fetching vehicles:', error);
-    res.status(500).json({ error: 'Failed to fetch vehicles' });
+    if (error.code === '42P01') {
+      return res.status(503).json({ error: 'Vehicle table does not exist. Run database/schema.sql on your vehiclehub database (see README).' });
+    }
+    res.status(500).json({ error: error.message || 'Failed to fetch vehicles' });
   }
 });
 
@@ -132,19 +135,45 @@ app.get('/api/service-types/:id', async (req, res) => {
 
 // Create service type
 app.post('/api/service-types', async (req, res) => {
+  const { name } = req.body;
+  const trimmedName = typeof name === 'string' ? name.trim() : '';
+  console.log('Create service type: req.body=', JSON.stringify(req.body), 'trimmedName=', JSON.stringify(trimmedName));
   try {
-    const { name } = req.body;
+    if (!trimmedName) {
+      return res.status(400).json({ error: 'Service type name is required' });
+    }
+    // Case-insensitive duplicate check; show existing name so user can verify
+    const existing = await pool.query(
+      'SELECT name FROM servicetype WHERE LOWER(TRIM(name)) = LOWER(TRIM($1)) LIMIT 1',
+      [trimmedName]
+    );
+    if (existing.rows.length > 0) {
+      console.log('Create service type: duplicate found existing=', existing.rows[0].name);
+      return res.status(409).json({
+        error: `A service type with this name already exists: "${existing.rows[0].name}"`,
+        received: trimmedName,
+        existing: existing.rows[0].name,
+      });
+    }
     const result = await pool.query(
       'INSERT INTO servicetype (name) VALUES ($1) RETURNING *',
-      [name]
+      [trimmedName]
     );
     res.status(201).json(result.rows[0]);
   } catch (error) {
     console.error('Error creating service type:', error);
-    if (error.code === '23505') { // Unique violation
-      res.status(409).json({ error: 'Service type with this name already exists' });
+    console.error('Create service type: name received=', JSON.stringify(name), 'trimmedName=', JSON.stringify(trimmedName));
+    if (error.code === '23505') { // Unique violation (e.g. race with same name)
+      res.status(409).json({
+        error: `A service type with this name already exists. Name received by backend: "${trimmedName || '(empty)'}". Names are matched ignoring case and leading/trailing spaces.`,
+        received: trimmedName,
+      });
+    } else if (error.code === '42P01') {
+      res.status(503).json({ error: 'Service type table does not exist. Run database/schema.sql on your vehiclehub database (see README).' });
+    } else if (error.code === '23502') {
+      res.status(400).json({ error: 'Service type name is required' });
     } else {
-      res.status(500).json({ error: 'Failed to create service type' });
+      res.status(500).json({ error: error.message || 'Failed to create service type' });
     }
   }
 });
@@ -153,9 +182,23 @@ app.post('/api/service-types', async (req, res) => {
 app.put('/api/service-types/:id', async (req, res) => {
   try {
     const { name } = req.body;
+    const trimmedName = typeof name === 'string' ? name.trim() : '';
+    if (!trimmedName) {
+      return res.status(400).json({ error: 'Service type name is required' });
+    }
+    // Case-insensitive duplicate check (exclude current row)
+    const existing = await pool.query(
+      'SELECT name FROM servicetype WHERE LOWER(TRIM(name)) = LOWER(TRIM($1)) AND id != $2 LIMIT 1',
+      [trimmedName, req.params.id]
+    );
+    if (existing.rows.length > 0) {
+      return res.status(409).json({
+        error: `A service type with this name already exists: "${existing.rows[0].name}"`,
+      });
+    }
     const result = await pool.query(
       'UPDATE servicetype SET name = $1, modified = CURRENT_TIMESTAMP WHERE id = $2 RETURNING *',
-      [name, req.params.id]
+      [trimmedName, req.params.id]
     );
     if (result.rows.length === 0) {
       return res.status(404).json({ error: 'Service type not found' });
@@ -164,7 +207,7 @@ app.put('/api/service-types/:id', async (req, res) => {
   } catch (error) {
     console.error('Error updating service type:', error);
     if (error.code === '23505') { // Unique violation
-      res.status(409).json({ error: 'Service type with this name already exists' });
+      res.status(409).json({ error: 'A service type with this name already exists. Names are matched ignoring case and leading/trailing spaces.' });
     } else {
       res.status(500).json({ error: 'Failed to update service type' });
     }
