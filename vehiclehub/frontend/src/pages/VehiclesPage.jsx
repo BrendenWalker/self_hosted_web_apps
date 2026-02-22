@@ -24,7 +24,8 @@ function VehiclesPage() {
       setVehicles(response.data || []);
       setError(null);
     } catch (err) {
-      setError('Failed to load vehicles');
+      const msg = err.response?.data?.error || err.message || 'Failed to load vehicles';
+      setError(msg);
       console.error(err);
     } finally {
       setLoading(false);

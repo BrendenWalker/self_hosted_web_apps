@@ -25,7 +25,24 @@ function VehicleDetailPage() {
   const [showLogForm, setShowLogForm] = useState(false);
   const [editingInterval, setEditingInterval] = useState(null);
   const [newInterval, setNewInterval] = useState({ serviceid: '', months: '', miles: '', notes: '' });
-  const [newLogEntry, setNewLogEntry] = useState({ serviceid: '', servicedate: '', servicemiles: '', notes: '', qty: '' });
+  const defaultLogEntry = () => ({
+    serviceid: '',
+    servicedate: new Date().toISOString().slice(0, 10),
+    servicemiles: '',
+    notes: '',
+    qty: ''
+  });
+  const [newLogEntry, setNewLogEntry] = useState(defaultLogEntry());
+  const [filterServiceTypeId, setFilterServiceTypeId] = useState('');
+
+  const filteredServiceLog = [...(filterServiceTypeId
+    ? serviceLog.filter(entry => String(entry.serviceid) === String(filterServiceTypeId))
+    : serviceLog)].sort((a, b) => new Date(b.servicedate) - new Date(a.servicedate));
+
+  // For Log Service: only show types that have an interval for this vehicle, or id < 0
+  const serviceTypesForLog = serviceTypes.filter(
+    st => st.id < 0 || intervals.some(iv => iv.serviceid === st.id)
+  );
 
   useEffect(() => {
     if (id) {
@@ -119,7 +136,7 @@ function VehicleDetailPage() {
         qty: newLogEntry.qty ? parseFloat(newLogEntry.qty) : null
       });
       await loadData(); // Reload to get updated intervals
-      setNewLogEntry({ serviceid: '', servicedate: '', servicemiles: '', notes: '', qty: '' });
+      setNewLogEntry(defaultLogEntry());
       setShowLogForm(false);
       setError(null);
     } catch (err) {
@@ -150,6 +167,128 @@ function VehicleDetailPage() {
       {error && <div className="error-message">{error}</div>}
 
       <div className="detail-sections">
+        <section className="detail-section">
+          <div className="section-header">
+            <h2>Service History</h2>
+            <button
+              className="btn btn-primary btn-sm"
+              onClick={() => {
+                setShowLogForm(!showLogForm);
+                setNewLogEntry(defaultLogEntry());
+              }}
+            >
+              {showLogForm ? 'Cancel' : '+ Log Service'}
+            </button>
+          </div>
+
+          {showLogForm && (
+            <div className="form-card">
+              <form onSubmit={handleCreateLogEntry}>
+                <div className="form-group">
+                  <label>Service Type *</label>
+                  <select
+                    value={newLogEntry.serviceid}
+                    onChange={(e) => setNewLogEntry({ ...newLogEntry, serviceid: e.target.value })}
+                    required
+                  >
+                    <option value="">Select service type</option>
+                    {serviceTypesForLog.map(st => (
+                      <option key={st.id} value={st.id}>{st.name}</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="form-row">
+                  <div className="form-group">
+                    <label>Service Date *</label>
+                    <input
+                      type="date"
+                      value={newLogEntry.servicedate}
+                      onChange={(e) => setNewLogEntry({ ...newLogEntry, servicedate: e.target.value })}
+                      required
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label>Miles</label>
+                    <input
+                      type="number"
+                      value={newLogEntry.servicemiles}
+                      onChange={(e) => setNewLogEntry({ ...newLogEntry, servicemiles: e.target.value })}
+                      placeholder="e.g., 50000"
+                    />
+                  </div>
+                </div>
+                <div className="form-group">
+                  <label>Quantity (e.g., gallons)</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={newLogEntry.qty}
+                    onChange={(e) => setNewLogEntry({ ...newLogEntry, qty: e.target.value })}
+                    placeholder="e.g., 5.0"
+                  />
+                </div>
+                <div className="form-group">
+                  <label>Notes</label>
+                  <textarea
+                    value={newLogEntry.notes}
+                    onChange={(e) => setNewLogEntry({ ...newLogEntry, notes: e.target.value })}
+                    rows="3"
+                  />
+                </div>
+                <div className="form-actions">
+                  <button type="submit" className="btn btn-primary">Log Service</button>
+                </div>
+              </form>
+            </div>
+          )}
+
+          {serviceLog.length === 0 ? (
+            <div className="empty-message">No service history</div>
+          ) : (
+            <>
+              <div className="log-filters">
+                <label htmlFor="vehicle-log-filter">Filter by service type</label>
+                <select
+                  id="vehicle-log-filter"
+                  value={filterServiceTypeId}
+                  onChange={(e) => setFilterServiceTypeId(e.target.value)}
+                >
+                  <option value="">All service types</option>
+                  {serviceTypes.map(st => (
+                    <option key={st.id} value={st.id}>{st.name}</option>
+                  ))}
+                </select>
+              </div>
+              {filteredServiceLog.length === 0 ? (
+                <div className="empty-message">No entries match the selected service type.</div>
+              ) : (
+                <div className="log-grid-wrapper">
+                  <table className="log-grid">
+                    <thead>
+                      <tr>
+                        <th>Service</th>
+                        <th>Miles</th>
+                        <th>Date</th>
+                        <th>Quantity</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {filteredServiceLog.map(entry => (
+                        <tr key={entry.id}>
+                          <td>{entry.service_name}</td>
+                          <td>{entry.servicemiles != null ? entry.servicemiles.toLocaleString() : '—'}</td>
+                          <td>{new Date(entry.servicedate).toLocaleDateString()}</td>
+                          <td>{entry.qty != null && entry.qty !== '' ? entry.qty : '—'}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </>
+          )}
+        </section>
+
         <section className="detail-section">
           <div className="section-header">
             <h2>Service Intervals</h2>
@@ -254,117 +393,6 @@ function VehicleDetailPage() {
                       <div className="interval-field">
                         <label>Notes:</label>
                         <span>{interval.notes}</span>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </section>
-
-        <section className="detail-section">
-          <div className="section-header">
-            <h2>Service History</h2>
-            <button
-              className="btn btn-primary btn-sm"
-              onClick={() => {
-                setShowLogForm(!showLogForm);
-                setNewLogEntry({ serviceid: '', servicedate: '', servicemiles: '', notes: '', qty: '' });
-              }}
-            >
-              {showLogForm ? 'Cancel' : '+ Log Service'}
-            </button>
-          </div>
-
-          {showLogForm && (
-            <div className="form-card">
-              <form onSubmit={handleCreateLogEntry}>
-                <div className="form-group">
-                  <label>Service Type *</label>
-                  <select
-                    value={newLogEntry.serviceid}
-                    onChange={(e) => setNewLogEntry({ ...newLogEntry, serviceid: e.target.value })}
-                    required
-                  >
-                    <option value="">Select service type</option>
-                    {serviceTypes.map(st => (
-                      <option key={st.id} value={st.id}>{st.name}</option>
-                    ))}
-                  </select>
-                </div>
-                <div className="form-row">
-                  <div className="form-group">
-                    <label>Service Date *</label>
-                    <input
-                      type="date"
-                      value={newLogEntry.servicedate}
-                      onChange={(e) => setNewLogEntry({ ...newLogEntry, servicedate: e.target.value })}
-                      required
-                    />
-                  </div>
-                  <div className="form-group">
-                    <label>Miles</label>
-                    <input
-                      type="number"
-                      value={newLogEntry.servicemiles}
-                      onChange={(e) => setNewLogEntry({ ...newLogEntry, servicemiles: e.target.value })}
-                      placeholder="e.g., 50000"
-                    />
-                  </div>
-                </div>
-                <div className="form-group">
-                  <label>Quantity (e.g., gallons)</label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    value={newLogEntry.qty}
-                    onChange={(e) => setNewLogEntry({ ...newLogEntry, qty: e.target.value })}
-                    placeholder="e.g., 5.0"
-                  />
-                </div>
-                <div className="form-group">
-                  <label>Notes</label>
-                  <textarea
-                    value={newLogEntry.notes}
-                    onChange={(e) => setNewLogEntry({ ...newLogEntry, notes: e.target.value })}
-                    rows="3"
-                  />
-                </div>
-                <div className="form-actions">
-                  <button type="submit" className="btn btn-primary">Log Service</button>
-                </div>
-              </form>
-            </div>
-          )}
-
-          {serviceLog.length === 0 ? (
-            <div className="empty-message">No service history</div>
-          ) : (
-            <div className="log-list">
-              {serviceLog.map(entry => (
-                <div key={entry.id} className="log-card">
-                  <div className="log-header">
-                    <h3>{entry.service_name}</h3>
-                    <span className="log-date">{new Date(entry.servicedate).toLocaleDateString()}</span>
-                  </div>
-                  <div className="log-details">
-                    {entry.servicemiles && (
-                      <div className="log-field">
-                        <span className="log-label">Miles:</span>
-                        <span>{entry.servicemiles.toLocaleString()}</span>
-                      </div>
-                    )}
-                    {entry.qty && (
-                      <div className="log-field">
-                        <span className="log-label">Quantity:</span>
-                        <span>{entry.qty}</span>
-                      </div>
-                    )}
-                    {entry.notes && (
-                      <div className="log-field">
-                        <span className="log-label">Notes:</span>
-                        <span>{entry.notes}</span>
                       </div>
                     )}
                   </div>
