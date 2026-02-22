@@ -24,6 +24,7 @@ function VehicleDetailPage() {
   const [showIntervalForm, setShowIntervalForm] = useState(false);
   const [showLogForm, setShowLogForm] = useState(false);
   const [editingInterval, setEditingInterval] = useState(null);
+  const [editIntervalForm, setEditIntervalForm] = useState({ months: '', miles: '', notes: '' });
   const [newInterval, setNewInterval] = useState({ serviceid: '', months: '', miles: '', notes: '' });
   const defaultLogEntry = () => ({
     serviceid: '',
@@ -100,14 +101,35 @@ function VehicleDetailPage() {
         nextdate: interval.nextdate,
         nextmiles: interval.nextmiles
       });
+      const updated = { ...response.data, service_name: interval.service_name };
       setIntervals(intervals.map(i => 
-        i.serviceid === interval.serviceid ? response.data : i
+        i.serviceid === interval.serviceid ? updated : i
       ));
+      setEditingInterval(null);
       setError(null);
     } catch (err) {
       setError('Failed to update service interval');
       console.error(err);
     }
+  };
+
+  const startEditInterval = (interval) => {
+    setEditingInterval(interval);
+    setEditIntervalForm({
+      months: interval.months ?? '',
+      miles: interval.miles ?? '',
+      notes: interval.notes ?? ''
+    });
+  };
+
+  const handleSaveIntervalEdit = async (e) => {
+    e.preventDefault();
+    await handleUpdateInterval({
+      ...editingInterval,
+      months: editIntervalForm.months ? parseInt(editIntervalForm.months, 10) : null,
+      miles: editIntervalForm.miles ? parseInt(editIntervalForm.miles, 10) : null,
+      notes: editIntervalForm.notes || null
+    });
   };
 
   const handleDeleteInterval = async (serviceId) => {
@@ -361,41 +383,93 @@ function VehicleDetailPage() {
             <div className="intervals-list">
               {intervals.map(interval => (
                 <div key={interval.serviceid} className="interval-card">
-                  <div className="interval-header">
-                    <h3>{interval.service_name}</h3>
-                    <button
-                      className="btn btn-danger btn-sm"
-                      onClick={() => handleDeleteInterval(interval.serviceid)}
-                    >
-                      Delete
-                    </button>
-                  </div>
-                  <div className="interval-details">
-                    <div className="interval-field">
-                      <label>Interval:</label>
-                      <span>
-                        {interval.months && `${interval.months} months`}
-                        {interval.months && interval.miles && ' or '}
-                        {interval.miles && `${interval.miles.toLocaleString()} miles`}
-                        {!interval.months && !interval.miles && 'Not set'}
-                      </span>
-                    </div>
-                    <div className="interval-field">
-                      <label>Next Due:</label>
-                      <span>
-                        {interval.nextdate && new Date(interval.nextdate).toLocaleDateString()}
-                        {interval.nextdate && interval.nextmiles && ' or '}
-                        {interval.nextmiles && `${interval.nextmiles.toLocaleString()} miles`}
-                        {!interval.nextdate && !interval.nextmiles && 'Not calculated'}
-                      </span>
-                    </div>
-                    {interval.notes && (
-                      <div className="interval-field">
-                        <label>Notes:</label>
-                        <span>{interval.notes}</span>
+                  {editingInterval?.serviceid === interval.serviceid ? (
+                    <form className="interval-edit-form" onSubmit={handleSaveIntervalEdit}>
+                      <div className="interval-header">
+                        <h3>{interval.service_name}</h3>
+                        <div className="interval-edit-actions">
+                          <button type="button" className="btn btn-secondary btn-sm" onClick={() => setEditingInterval(null)}>
+                            Cancel
+                          </button>
+                          <button type="submit" className="btn btn-primary btn-sm">Save</button>
+                        </div>
                       </div>
-                    )}
-                  </div>
+                      <div className="form-row">
+                        <div className="form-group">
+                          <label>Months</label>
+                          <input
+                            type="number"
+                            value={editIntervalForm.months}
+                            onChange={(e) => setEditIntervalForm({ ...editIntervalForm, months: e.target.value })}
+                            placeholder="e.g., 6"
+                          />
+                        </div>
+                        <div className="form-group">
+                          <label>Miles</label>
+                          <input
+                            type="number"
+                            value={editIntervalForm.miles}
+                            onChange={(e) => setEditIntervalForm({ ...editIntervalForm, miles: e.target.value })}
+                            placeholder="e.g., 5000"
+                          />
+                        </div>
+                      </div>
+                      <div className="form-group">
+                        <label>Notes</label>
+                        <textarea
+                          value={editIntervalForm.notes}
+                          onChange={(e) => setEditIntervalForm({ ...editIntervalForm, notes: e.target.value })}
+                          rows="3"
+                        />
+                      </div>
+                    </form>
+                  ) : (
+                    <>
+                      <div className="interval-header">
+                        <h3>{interval.service_name}</h3>
+                        <div className="interval-actions">
+                          <button
+                            className="btn btn-secondary btn-sm"
+                            onClick={() => startEditInterval(interval)}
+                          >
+                            Edit
+                          </button>
+                          <button
+                            className="btn btn-danger btn-sm"
+                            onClick={() => handleDeleteInterval(interval.serviceid)}
+                          >
+                            Delete
+                          </button>
+                        </div>
+                      </div>
+                      <div className="interval-details">
+                        <div className="interval-field">
+                          <label>Interval:</label>
+                          <span>
+                            {interval.months && `${interval.months} months`}
+                            {interval.months && interval.miles && ' or '}
+                            {interval.miles && `${interval.miles.toLocaleString()} miles`}
+                            {!interval.months && !interval.miles && 'Not set'}
+                          </span>
+                        </div>
+                        <div className="interval-field">
+                          <label>Next Due:</label>
+                          <span>
+                            {interval.nextdate && new Date(interval.nextdate).toLocaleDateString()}
+                            {interval.nextdate && interval.nextmiles && ' or '}
+                            {interval.nextmiles && `${interval.nextmiles.toLocaleString()} miles`}
+                            {!interval.nextdate && !interval.nextmiles && 'Not calculated'}
+                          </span>
+                        </div>
+                        {interval.notes && (
+                          <div className="interval-field">
+                            <label>Notes:</label>
+                            <span>{interval.notes}</span>
+                          </div>
+                        )}
+                      </div>
+                    </>
+                  )}
                 </div>
               ))}
             </div>

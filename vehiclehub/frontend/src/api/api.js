@@ -41,5 +41,6 @@ export const deleteServiceLogEntry = (id) => api.delete(`/service-log/${id}`);
 
 // Dashboard
 export const getUpcomingServices = (days = 30) => api.get('/upcoming-services', { params: { days } });
+export const recalculateIntervals = () => api.post('/recalculate-intervals');
 
 export default api;

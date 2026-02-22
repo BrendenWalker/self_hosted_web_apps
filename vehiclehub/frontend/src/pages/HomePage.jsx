@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { getUpcomingServices } from '../api/api';
+import { getUpcomingServices, recalculateIntervals } from '../api/api';
 import './HomePage.css';
 
 function HomePage() {
   const [upcomingServices, setUpcomingServices] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [recalculating, setRecalculating] = useState(false);
   const [error, setError] = useState(null);
 
   useEffect(() => {
@@ -23,6 +24,20 @@ function HomePage() {
       console.error(err);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleRecalculate = async () => {
+    try {
+      setRecalculating(true);
+      setError(null);
+      await recalculateIntervals();
+      await loadUpcomingServices();
+    } catch (err) {
+      setError('Failed to recalculate service intervals');
+      console.error(err);
+    } finally {
+      setRecalculating(false);
     }
   };
 
@@ -82,7 +97,17 @@ function HomePage() {
       </section>
 
       <section className="home-upcoming-services">
-        <h2>Upcoming Services (Next 30 Days)</h2>
+        <div className="home-upcoming-services-header">
+          <h2>Upcoming Services (Next 30 Days)</h2>
+          <button
+            type="button"
+            className="btn btn-secondary btn-sm"
+            onClick={handleRecalculate}
+            disabled={recalculating || loading}
+          >
+            {recalculating ? 'Recalculating…' : 'Recalculate'}
+          </button>
+        </div>
         {loading && <p className="loading-message">Loading upcoming services...</p>}
         {error && <p className="error-message">{error}</p>}
         {!loading && !error && (
