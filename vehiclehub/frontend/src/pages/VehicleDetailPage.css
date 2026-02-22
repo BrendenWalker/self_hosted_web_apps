@@ -106,6 +106,20 @@
   font-size: 1.1rem;
 }
 
+.interval-actions,
+.interval-edit-actions {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.interval-edit-form .form-group {
+  margin-bottom: 1rem;
+}
+
+.interval-edit-form .form-group:last-of-type {
+  margin-bottom: 0;
+}
+
 .log-date {
   color: #666;
   font-size: 0.9rem;
