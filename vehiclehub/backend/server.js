@@ -368,16 +368,37 @@ app.get('/api/service-log/:id', async (req, res) => {
 app.post('/api/service-log', async (req, res) => {
   try {
     const { vehicleid, serviceid, servicedate, servicemiles, notes, qty } = req.body;
+    const vehicleId = vehicleid != null ? parseInt(vehicleid, 10) : NaN;
+    const serviceId = serviceid != null ? parseInt(serviceid, 10) : NaN;
+    if (!Number.isInteger(vehicleId) || vehicleId < 1) {
+      return res.status(400).json({ error: 'Valid vehicle is required' });
+    }
+    if (!Number.isInteger(serviceId) || serviceId < 1) {
+      return res.status(400).json({ error: 'Service type is required' });
+    }
+    const serviceDate = servicedate != null ? String(servicedate).trim() : '';
+    if (!serviceDate || !/^\d{4}-\d{2}-\d{2}$/.test(serviceDate)) {
+      return res.status(400).json({ error: 'Valid service date is required (YYYY-MM-DD)' });
+    }
+    const servicemilesVal = servicemiles != null && servicemiles !== '' ? parseInt(servicemiles, 10) : null;
+    const qtyVal = qty != null && qty !== '' ? parseFloat(qty) : null;
+    const notesVal = notes != null ? String(notes).trim() : null;
+    const notesTruncated = notesVal != null && notesVal.length > 255 ? notesVal.slice(0, 255) : notesVal;
+
     const result = await pool.query(
       `INSERT INTO service_log (vehicleid, serviceid, servicedate, servicemiles, notes, qty)
        VALUES ($1, $2, $3, $4, $5, $6)
        RETURNING *`,
-      [vehicleid, serviceid, servicedate, servicemiles || null, notes || null, qty || null]
+      [vehicleId, serviceId, serviceDate, servicemilesVal, notesTruncated, qtyVal]
     );
     res.status(201).json(result.rows[0]);
   } catch (error) {
-    console.error('Error creating service log entry:', error);
-    res.status(500).json({ error: 'Failed to create service log entry' });
+    const detail = error.detail || error.message;
+    console.error('Error creating service log entry:', detail, error);
+    res.status(500).json({
+      error: 'Failed to create service log entry',
+      detail: detail
+    });
   }
 });
 
