@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { getStores, getShoppingList, markPurchased } from '../api/api';
+import { getStores, getShoppingList } from '../api/api';
+import { queuePurchaseUpdate, subscribePendingCount, flushPurchaseQueue } from '../utils/purchaseSync';
 import './ShoppingPage.css';
 
 const STORE_STORAGE_KEY = 'kitchenhub-shopping-store';
@@ -23,9 +24,30 @@ function ShoppingPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [confirmPurchase, setConfirmPurchase] = useState(null);
+  const [pendingSyncCount, setPendingSyncCount] = useState(0);
+  const [isOnline, setIsOnline] = useState(
+    typeof navigator !== 'undefined' ? navigator.onLine : true
+  );
 
   useEffect(() => {
     loadStores();
+  }, []);
+
+  useEffect(() => {
+    const unsub = subscribePendingCount(setPendingSyncCount);
+    return unsub;
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const onOnline = () => setIsOnline(true);
+    const onOffline = () => setIsOnline(false);
+    window.addEventListener('online', onOnline);
+    window.addEventListener('offline', onOffline);
+    return () => {
+      window.removeEventListener('online', onOnline);
+      window.removeEventListener('offline', onOffline);
+    };
   }, []);
 
   // Valid: All store (-1) or a numeric store id >= 1
@@ -38,6 +60,12 @@ function ShoppingPage() {
     shoppingListRequestRef.current = { storeId: selectedStoreId, showPurchased };
     loadShoppingList();
   }, [selectedStoreId, showPurchased, validStoreId]);
+
+  // After initial list load, flush any pending purchase updates from previous session (e.g. was offline)
+  useEffect(() => {
+    if (!validStoreId || loading) return;
+    flushPurchaseQueue();
+  }, [validStoreId, loading]);
 
   const persistStoreSelection = (value) => {
     try {
@@ -103,16 +131,24 @@ function ShoppingPage() {
     await doMarkPurchased(itemName, !currentPurchased);
   };
 
-  const doMarkPurchased = async (itemName, purchased) => {
-    try {
-      await markPurchased(itemName, purchased);
-      await loadShoppingList();
-      setConfirmPurchase(null);
-    } catch (err) {
-      setError('Failed to update item');
-      console.error(err);
-      setConfirmPurchase(null);
+  const doMarkPurchased = (itemName, purchased) => {
+    setConfirmPurchase(null);
+    // Optimistic update: apply immediately so UI doesn't wait on network
+    if (purchased) {
+      const item = shoppingList.find((i) => i.name === itemName);
+      if (item) {
+        setShoppingList((s) => s.filter((i) => i.name !== itemName));
+        setPurchasedItems((p) => [...p, { ...item, purchased: 1 }]);
+      }
+    } else {
+      const item = purchasedItems.find((i) => i.name === itemName);
+      if (item) {
+        setPurchasedItems((p) => p.filter((i) => i.name !== itemName));
+        setShoppingList((s) => [...s, { ...item, purchased: 0 }]);
+      }
     }
+    // Queue for background sync; persists to localStorage if offline
+    queuePurchaseUpdate(itemName, purchased);
   };
 
   const groupedByZone = shoppingList.reduce((acc, item) => {
@@ -165,6 +201,17 @@ function ShoppingPage() {
       </div>
 
       {error && <div className="error-message">{error}</div>}
+
+      {validStoreId && !loading && (
+        <div className="shopping-sync-status" aria-live="polite">
+          {!isOnline && (
+            <span className="sync-status offline">Offline – changes saved locally</span>
+          )}
+          {isOnline && pendingSyncCount > 0 && (
+            <span className="sync-status syncing">Syncing…</span>
+          )}
+        </div>
+      )}
 
       {loading && <div className="loading">Loading...</div>}
 
