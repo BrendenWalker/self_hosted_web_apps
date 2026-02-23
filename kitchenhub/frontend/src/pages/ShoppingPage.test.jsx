@@ -6,6 +6,14 @@ import * as api from '../api/api';
 import ShoppingPage from './ShoppingPage';
 
 vi.mock('../api/api');
+vi.mock('../utils/purchaseSync', () => ({
+  queuePurchaseUpdate: vi.fn(),
+  subscribePendingCount: vi.fn((cb) => {
+    cb(0);
+    return () => {};
+  }),
+  flushPurchaseQueue: vi.fn(),
+}));
 
 describe('ShoppingPage', () => {
   beforeEach(() => {
