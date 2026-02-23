@@ -148,12 +148,17 @@ function VehicleDetailPage() {
 
   const handleCreateLogEntry = async (e) => {
     e.preventDefault();
+    const serviceIdNum = newLogEntry.serviceid === '' ? NaN : parseInt(newLogEntry.serviceid, 10);
+    if (!Number.isInteger(serviceIdNum) || serviceIdNum < 1) {
+      setError('Please select a service type');
+      return;
+    }
     try {
       const response = await createServiceLogEntry({
-        vehicleid: parseInt(id),
-        serviceid: parseInt(newLogEntry.serviceid),
+        vehicleid: parseInt(id, 10),
+        serviceid: serviceIdNum,
         servicedate: newLogEntry.servicedate,
-        servicemiles: newLogEntry.servicemiles ? parseInt(newLogEntry.servicemiles) : null,
+        servicemiles: newLogEntry.servicemiles ? parseInt(newLogEntry.servicemiles, 10) : null,
         notes: newLogEntry.notes || null,
         qty: newLogEntry.qty ? parseFloat(newLogEntry.qty) : null
       });
@@ -162,7 +167,9 @@ function VehicleDetailPage() {
       setShowLogForm(false);
       setError(null);
     } catch (err) {
-      setError('Failed to create service log entry');
+      const msg = err.response?.data?.error || 'Failed to create service log entry';
+      const detail = err.response?.data?.detail;
+      setError(detail ? `${msg}: ${detail}` : msg);
       console.error(err);
     }
   };
