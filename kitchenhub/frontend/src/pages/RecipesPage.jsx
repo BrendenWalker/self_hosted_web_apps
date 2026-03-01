@@ -84,7 +84,7 @@ function RecipesPage() {
             <li key={r.id}>
               <Link to={`/recipes/${r.id}`} className="recipe-card">
                 <span className="recipe-card-name">{r.name}</span>
-                <span className="recipe-card-meta">{r.category_name} · {r.servings} servings</span>
+                <span className="recipe-card-meta">{r.category_names || 'Uncategorized'} · {r.servings} servings</span>
               </Link>
             </li>
           ))}

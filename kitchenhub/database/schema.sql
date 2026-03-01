@@ -72,14 +72,20 @@ CREATE TABLE IF NOT EXISTS recipe.recipe (
     id SERIAL PRIMARY KEY,
     name VARCHAR(80) NOT NULL UNIQUE,
     servings INTEGER NOT NULL,
-    category_id INTEGER NOT NULL REFERENCES recipe.recipe_category(id) ON DELETE CASCADE,
     instructions TEXT,
     image BYTEA,
     created TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     modified TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 CREATE INDEX IF NOT EXISTS idx_recipe_name ON recipe.recipe(name);
-CREATE INDEX IF NOT EXISTS idx_recipe_category ON recipe.recipe(category_id);
+
+CREATE TABLE IF NOT EXISTS recipe.recipe_category_members (
+    recipe_id INTEGER NOT NULL REFERENCES recipe.recipe(id) ON DELETE CASCADE,
+    category_id INTEGER NOT NULL REFERENCES recipe.recipe_category(id) ON DELETE CASCADE,
+    PRIMARY KEY (recipe_id, category_id)
+);
+CREATE INDEX IF NOT EXISTS idx_recipe_category_members_recipe ON recipe.recipe_category_members(recipe_id);
+CREATE INDEX IF NOT EXISTS idx_recipe_category_members_category ON recipe.recipe_category_members(category_id);
 
 CREATE TABLE IF NOT EXISTS recipe.ingredient_measurement (
     id SERIAL PRIMARY KEY,
