@@ -91,6 +91,19 @@
   font-size: 0.95rem;
 }
 
+.recipe-detail-form .form-row.instructions-row {
+  width: 100%;
+  display: block;
+  grid-column: 1 / -1; /* span full width if form is ever in a grid */
+}
+
+.recipe-detail-form .form-row.instructions-row textarea {
+  max-width: none;
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
 .recipe-detail-form textarea {
   min-height: 120px;
   resize: vertical;
@@ -110,6 +123,32 @@
 .recipe-detail-form .form-group select {
   width: 100%;
   min-width: 100px;
+}
+
+.category-checkboxes {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 0.35rem 1.25rem;
+  align-items: center;
+}
+
+.category-checkbox {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.9rem;
+  color: #555;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.category-checkbox input[type="checkbox"] {
+  width: 1rem;
+  height: 1rem;
+  margin: 0;
+  justify-self: start;
+  vertical-align: middle;
 }
 
 .form-actions {
@@ -218,6 +257,47 @@
 
 .btn-remove-ingredient:hover {
   color: #e74c3c;
+}
+
+.btn-edit-ingredient {
+  font-size: 0.85rem;
+  padding: 0.2rem 0.5rem;
+  background: #ecf0f1;
+  color: #2c3e50;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.btn-edit-ingredient:hover {
+  background: #dfe6e9;
+}
+
+.btn-sm {
+  font-size: 0.85rem;
+  padding: 0.25rem 0.6rem;
+}
+
+.ingredient-edit-inline {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  width: 100%;
+}
+
+.ingredient-edit-inline .qty-input {
+  width: 70px;
+}
+
+.ingredient-edit-inline .comment-input {
+  width: 120px;
+}
+
+.ingredient-edit-name {
+  font-weight: 500;
+  color: #2c3e50;
+  margin-right: 0.5rem;
 }
 
 .recipe-no-ingredients {

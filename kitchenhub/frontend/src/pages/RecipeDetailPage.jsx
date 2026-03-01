@@ -9,6 +9,7 @@ import {
   updateRecipe,
   deleteRecipe,
   addRecipeIngredient,
+  updateRecipeIngredient,
   removeRecipeIngredient,
 } from '../api/api';
 import './RecipeDetailPage.css';
@@ -25,18 +26,20 @@ function RecipeDetailPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [editing, setEditing] = useState(false);
-  const [form, setForm] = useState({ name: '', servings: 1, category_id: '', instructions: '' });
+  const [form, setForm] = useState({ name: '', servings: 1, category_ids: [], instructions: '' });
   const [addIngredientId, setAddIngredientId] = useState('');
   const [addIngredientQty, setAddIngredientQty] = useState('');
   const [addIngredientMeasureId, setAddIngredientMeasureId] = useState('');
   const [addIngredientComment, setAddIngredientComment] = useState('');
   const [addIngredientOptional, setAddIngredientOptional] = useState(false);
+  const [editingIngredientId, setEditingIngredientId] = useState(null);
+  const [editIngredientForm, setEditIngredientForm] = useState({ qty: '', measurement_id: '', comment: '', is_optional: false });
 
   useEffect(() => {
     if (isNew) {
       setLoading(false);
       loadOptions();
-      setForm({ name: '', servings: 1, category_id: categories[0]?.id ?? '', instructions: '' });
+      setForm({ name: '', servings: 1, category_ids: [], instructions: '' });
       return;
     }
     loadRecipe();
@@ -44,10 +47,10 @@ function RecipeDetailPage() {
   }, [id, isNew]);
 
   useEffect(() => {
-    if (isNew && categories.length > 0 && !form.category_id) {
-      setForm((f) => ({ ...f, category_id: categories[0].id }));
+    if (isNew && categories.length > 0 && form.category_ids.length === 0) {
+      setForm((f) => ({ ...f, category_ids: [categories[0].id] }));
     }
-  }, [isNew, categories, form.category_id]);
+  }, [isNew, categories, form.category_ids.length]);
 
   const loadOptions = async () => {
     try {
@@ -73,7 +76,7 @@ function RecipeDetailPage() {
       setForm({
         name: res.data.name,
         servings: res.data.servings,
-        category_id: res.data.category_id,
+        category_ids: res.data.category_ids || [],
         instructions: res.data.instructions ?? '',
       });
     } catch (err) {
@@ -92,7 +95,7 @@ function RecipeDetailPage() {
         const res = await createRecipe({
           name: form.name,
           servings: Number(form.servings) || 1,
-          category_id: form.category_id,
+          category_ids: form.category_ids,
           instructions: form.instructions || null,
         });
         navigate(`/recipes/${res.data.id}`, { replace: true });
@@ -101,10 +104,10 @@ function RecipeDetailPage() {
       await updateRecipe(id, {
         name: form.name,
         servings: Number(form.servings) || 1,
-        category_id: form.category_id,
+        category_ids: form.category_ids,
         instructions: form.instructions || null,
       });
-      setRecipe((prev) => prev && { ...prev, ...form });
+      setRecipe((prev) => prev && { ...prev, ...form, category_names: categories.filter((c) => form.category_ids.includes(c.id)).map((c) => c.name).join(', ') });
       setEditing(false);
       loadRecipe();
     } catch (err) {
@@ -152,6 +155,46 @@ function RecipeDetailPage() {
     } catch (err) {
       setError(err.response?.data?.error || err.message || 'Failed to remove ingredient');
     }
+  };
+
+  const startEditIngredient = (row) => {
+    setEditingIngredientId(row.ingredient_id);
+    setEditIngredientForm({
+      qty: row.qty != null ? String(row.qty) : '',
+      measurement_id: row.measurement_id != null ? String(row.measurement_id) : '',
+      comment: row.comment || '',
+      is_optional: Boolean(row.is_optional),
+    });
+  };
+
+  const cancelEditIngredient = () => {
+    setEditingIngredientId(null);
+    setEditIngredientForm({ qty: '', measurement_id: '', comment: '', is_optional: false });
+  };
+
+  const handleSaveEditIngredient = async (ingredientId) => {
+    try {
+      await updateRecipeIngredient(id, ingredientId, {
+        qty: editIngredientForm.qty ? parseFloat(editIngredientForm.qty) : null,
+        measurement_id: editIngredientForm.measurement_id ? Number(editIngredientForm.measurement_id) : null,
+        comment: editIngredientForm.comment.trim() || null,
+        is_optional: editIngredientForm.is_optional,
+      });
+      setEditingIngredientId(null);
+      setEditIngredientForm({ qty: '', measurement_id: '', comment: '', is_optional: false });
+      loadRecipe();
+    } catch (err) {
+      setError(err.response?.data?.error || err.message || 'Failed to update ingredient');
+    }
+  };
+
+  const toggleCategory = (categoryId) => {
+    setForm((f) => ({
+      ...f,
+      category_ids: f.category_ids.includes(categoryId)
+        ? f.category_ids.filter((cid) => cid !== categoryId)
+        : [...f.category_ids, categoryId],
+    }));
   };
 
   const formatIngredientLine = (row) => {
@@ -213,18 +256,22 @@ function RecipeDetailPage() {
                 />
               </div>
               <div className="form-group">
-                <label>Category</label>
-                <select
-                  value={form.category_id}
-                  onChange={(e) => setForm((f) => ({ ...f, category_id: e.target.value }))}
-                >
+                <label>Categories</label>
+                <div className="category-checkboxes">
                   {categories.map((c) => (
-                    <option key={c.id} value={c.id}>{c.name}</option>
+                    <label key={c.id} className="category-checkbox">
+                      <input
+                        type="checkbox"
+                        checked={form.category_ids.includes(c.id)}
+                        onChange={() => toggleCategory(c.id)}
+                      />
+                      {c.name}
+                    </label>
                   ))}
-                </select>
+                </div>
               </div>
             </div>
-            <div className="form-row">
+            <div className="form-row instructions-row">
               <label>Instructions</label>
               <textarea
                 value={form.instructions}
@@ -242,7 +289,7 @@ function RecipeDetailPage() {
           <>
             <div className="recipe-detail-header">
               <h1>{recipe.name}</h1>
-              <p className="recipe-meta">{recipe.category_name} · {recipe.servings} servings</p>
+            <p className="recipe-meta">{recipe.category_names || 'Uncategorized'} · {recipe.servings} servings</p>
               <div className="recipe-detail-actions">
                 <button
                   type="button"
@@ -278,37 +325,21 @@ function RecipeDetailPage() {
                     />
                   </div>
                   <div className="form-group">
-                    <label>Category</label>
-                    <select
-                      value={form.category_id}
-                      onChange={(e) => setForm((f) => ({ ...f, category_id: e.target.value }))}
-                    >
+                    <label>Categories</label>
+                    <div className="category-checkboxes">
                       {categories.map((c) => (
-                        <option key={c.id} value={c.id}>{c.name}</option>
+                        <label key={c.id} className="category-checkbox">
+                          <input
+                            type="checkbox"
+                            checked={form.category_ids.includes(c.id)}
+                            onChange={() => toggleCategory(c.id)}
+                          />
+                          {c.name}
+                        </label>
                       ))}
-                    </select>
+                    </div>
                   </div>
                 </div>
-                <div className="form-row">
-                  <label>Instructions</label>
-                  <textarea
-                    value={form.instructions}
-                    onChange={(e) => setForm((f) => ({ ...f, instructions: e.target.value }))}
-                    rows={6}
-                  />
-                </div>
-                <div className="form-actions">
-                  <button type="submit" className="btn btn-primary">Save</button>
-                </div>
-              </form>
-            ) : (
-              <>
-                {recipe.instructions && (
-                  <div className="recipe-instructions">
-                    <h2>Instructions</h2>
-                    <pre className="recipe-instructions-text">{recipe.instructions}</pre>
-                  </div>
-                )}
 
                 <div className="recipe-ingredients-section">
                   <h2>Ingredients</h2>
@@ -316,24 +347,59 @@ function RecipeDetailPage() {
                     <ul className="recipe-ingredients-list">
                       {recipe.ingredients.map((row) => (
                         <li key={row.ingredient_id} className="recipe-ingredient-row">
-                          <span className="ingredient-line">
-                            {row.is_optional && <span className="ingredient-optional">Optional: </span>}
-                            {formatIngredientLine(row)}
-                            {row.comment && <span className="ingredient-comment"> — {row.comment}</span>}
-                          </span>
-                          {row.shopping_measure && (
-                            <span className="ingredient-shopping-measure" title="Shopping measure for list">
-                              Buy: {row.shopping_measure}
-                            </span>
+                          {editingIngredientId === row.ingredient_id ? (
+                            <div className="ingredient-edit-inline">
+                              <input
+                                type="text"
+                                placeholder="Qty"
+                                value={editIngredientForm.qty}
+                                onChange={(e) => setEditIngredientForm((f) => ({ ...f, qty: e.target.value }))}
+                                className="qty-input"
+                              />
+                              <select
+                                value={editIngredientForm.measurement_id}
+                                onChange={(e) => setEditIngredientForm((f) => ({ ...f, measurement_id: e.target.value }))}
+                              >
+                                <option value="">Unit</option>
+                                {measurements.map((m) => (
+                                  <option key={m.id} value={m.id}>{m.name}</option>
+                                ))}
+                              </select>
+                              <input
+                                type="text"
+                                placeholder="Comment"
+                                value={editIngredientForm.comment}
+                                onChange={(e) => setEditIngredientForm((f) => ({ ...f, comment: e.target.value }))}
+                                className="comment-input"
+                              />
+                              <label className="optional-checkbox">
+                                <input
+                                  type="checkbox"
+                                  checked={editIngredientForm.is_optional}
+                                  onChange={(e) => setEditIngredientForm((f) => ({ ...f, is_optional: e.target.checked }))}
+                                />
+                                Optional
+                              </label>
+                              <span className="ingredient-edit-name">{row.ingredient_details ? `${row.ingredient_name} (${row.ingredient_details})` : row.ingredient_name}</span>
+                              <button type="button" className="btn btn-primary btn-sm" onClick={() => handleSaveEditIngredient(row.ingredient_id)}>Save</button>
+                              <button type="button" className="btn btn-secondary btn-sm" onClick={cancelEditIngredient}>Cancel</button>
+                            </div>
+                          ) : (
+                            <>
+                              <span className="ingredient-line">
+                                {row.is_optional && <span className="ingredient-optional">Optional: </span>}
+                                {formatIngredientLine(row)}
+                                {row.comment && <span className="ingredient-comment"> — {row.comment}</span>}
+                              </span>
+                              {row.shopping_measure && (
+                                <span className="ingredient-shopping-measure" title="Shopping measure for list">
+                                  Buy: {row.shopping_measure}
+                                </span>
+                              )}
+                              <button type="button" className="btn-edit-ingredient" onClick={() => startEditIngredient(row)} title="Edit">Edit</button>
+                              <button type="button" className="btn-remove-ingredient" onClick={() => handleRemoveIngredient(row.ingredient_id)} title="Remove">×</button>
+                            </>
                           )}
-                          <button
-                            type="button"
-                            className="btn-remove-ingredient"
-                            onClick={() => handleRemoveIngredient(row.ingredient_id)}
-                            title="Remove ingredient"
-                          >
-                            ×
-                          </button>
                         </li>
                       ))}
                     </ul>
@@ -392,6 +458,52 @@ function RecipeDetailPage() {
                       <button type="submit" className="btn btn-primary">Add</button>
                     </div>
                   </form>
+                </div>
+
+                <div className="form-row instructions-row">
+                  <label>Instructions</label>
+                  <textarea
+                    value={form.instructions}
+                    onChange={(e) => setForm((f) => ({ ...f, instructions: e.target.value }))}
+                    rows={6}
+                  />
+                </div>
+
+                <div className="form-actions">
+                  <button type="submit" className="btn btn-primary">Save</button>
+                </div>
+              </form>
+            ) : (
+              <>
+                {recipe.instructions && (
+                  <div className="recipe-instructions">
+                    <h2>Instructions</h2>
+                    <pre className="recipe-instructions-text">{recipe.instructions}</pre>
+                  </div>
+                )}
+
+                <div className="recipe-ingredients-section">
+                  <h2>Ingredients</h2>
+                  {recipe.ingredients && recipe.ingredients.length > 0 ? (
+                    <ul className="recipe-ingredients-list">
+                      {recipe.ingredients.map((row) => (
+                        <li key={row.ingredient_id} className="recipe-ingredient-row">
+                          <span className="ingredient-line">
+                            {row.is_optional && <span className="ingredient-optional">Optional: </span>}
+                            {formatIngredientLine(row)}
+                            {row.comment && <span className="ingredient-comment"> — {row.comment}</span>}
+                          </span>
+                          {row.shopping_measure && (
+                            <span className="ingredient-shopping-measure" title="Shopping measure for list">
+                              Buy: {row.shopping_measure}
+                            </span>
+                          )}
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p className="recipe-no-ingredients">No ingredients yet.</p>
+                  )}
                 </div>
               </>
             )}

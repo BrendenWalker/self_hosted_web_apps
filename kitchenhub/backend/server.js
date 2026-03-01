@@ -623,15 +623,17 @@ app.get('/api/recipes', async (req, res) => {
   try {
     const { category_id } = req.query;
     let query = `
-      SELECT r.id, r.name, r.servings, r.category_id, r.instructions, r.created, r.modified,
-             c.name as category_name
+      SELECT r.id, r.name, r.servings, r.instructions, r.created, r.modified,
+             (SELECT string_agg(c.name, ', ' ORDER BY c.name)
+              FROM recipe.recipe_category_members m
+              JOIN recipe.recipe_category c ON c.id = m.category_id
+              WHERE m.recipe_id = r.id) AS category_names
       FROM recipe.recipe r
-      JOIN recipe.recipe_category c ON r.category_id = c.id
     `;
     const params = [];
     if (category_id != null && category_id !== '') {
       params.push(category_id);
-      query += ` WHERE r.category_id = $${params.length}`;
+      query += ` WHERE EXISTS (SELECT 1 FROM recipe.recipe_category_members m WHERE m.recipe_id = r.id AND m.category_id = $${params.length})`;
     }
     query += ' ORDER BY r.name';
     const result = await pool.query(query, params);
@@ -645,10 +647,8 @@ app.get('/api/recipes', async (req, res) => {
 app.get('/api/recipes/:id', async (req, res) => {
   try {
     const recipeResult = await pool.query(
-      `SELECT r.id, r.name, r.servings, r.category_id, r.instructions, r.created, r.modified,
-              c.name as category_name
+      `SELECT r.id, r.name, r.servings, r.instructions, r.created, r.modified
        FROM recipe.recipe r
-       JOIN recipe.recipe_category c ON r.category_id = c.id
        WHERE r.id = $1`,
       [req.params.id]
     );
@@ -656,6 +656,16 @@ app.get('/api/recipes/:id', async (req, res) => {
       return res.status(404).json({ error: 'Recipe not found' });
     }
     const recipe = recipeResult.rows[0];
+
+    const catResult = await pool.query(
+      `SELECT m.category_id as id, c.name
+       FROM recipe.recipe_category_members m
+       JOIN recipe.recipe_category c ON c.id = m.category_id
+       WHERE m.recipe_id = $1 ORDER BY c.name`,
+      [req.params.id]
+    );
+    recipe.category_ids = catResult.rows.map((row) => row.id);
+    recipe.category_names = catResult.rows.map((row) => row.name).join(', ');
 
     const ingResult = await pool.query(
       `SELECT ri.ingredient_id, ri.qty, ri.measurement_id, ri.comment, ri.is_optional,
@@ -678,12 +688,23 @@ app.get('/api/recipes/:id', async (req, res) => {
 
 app.post('/api/recipes', async (req, res) => {
   try {
-    const { name, servings, category_id, instructions } = req.body;
+    const { name, servings, category_ids, instructions } = req.body;
+    const categoryIds = Array.isArray(category_ids) ? category_ids : (category_ids != null ? [category_ids] : []);
+    if (categoryIds.length === 0) {
+      return res.status(400).json({ error: 'At least one category is required' });
+    }
     const result = await pool.query(
-      `INSERT INTO recipe.recipe (name, servings, category_id, instructions)
-       VALUES ($1, $2, $3, $4) RETURNING *`,
-      [name, servings || 1, category_id, instructions || null]
+      `INSERT INTO recipe.recipe (name, servings, instructions)
+       VALUES ($1, $2, $3) RETURNING *`,
+      [name, servings || 1, instructions || null]
     );
+    const recipeId = result.rows[0].id;
+    for (const cid of categoryIds) {
+      await pool.query(
+        'INSERT INTO recipe.recipe_category_members (recipe_id, category_id) VALUES ($1, $2) ON CONFLICT DO NOTHING',
+        [recipeId, cid]
+      );
+    }
     res.status(201).json(result.rows[0]);
   } catch (error) {
     console.error('Error creating recipe:', error);
@@ -699,14 +720,27 @@ app.post('/api/recipes', async (req, res) => {
 
 app.put('/api/recipes/:id', async (req, res) => {
   try {
-    const { name, servings, category_id, instructions } = req.body;
+    const { name, servings, category_ids, instructions } = req.body;
     const result = await pool.query(
-      `UPDATE recipe.recipe SET name = $1, servings = $2, category_id = $3, instructions = $4, modified = CURRENT_TIMESTAMP
-       WHERE id = $5 RETURNING *`,
-      [name, servings, category_id, instructions || null, req.params.id]
+      `UPDATE recipe.recipe SET name = $1, servings = $2, instructions = $3, modified = CURRENT_TIMESTAMP
+       WHERE id = $4 RETURNING *`,
+      [name, servings, instructions || null, req.params.id]
     );
     if (result.rows.length === 0) {
       return res.status(404).json({ error: 'Recipe not found' });
+    }
+    const categoryIds = Array.isArray(category_ids) ? category_ids : (category_ids != null ? [category_ids] : []);
+    if (categoryIds.length === 0) {
+      return res.status(400).json({ error: 'At least one category is required' });
+    }
+    if (categoryIds.length > 0) {
+      await pool.query('DELETE FROM recipe.recipe_category_members WHERE recipe_id = $1', [req.params.id]);
+      for (const cid of categoryIds) {
+        await pool.query(
+          'INSERT INTO recipe.recipe_category_members (recipe_id, category_id) VALUES ($1, $2) ON CONFLICT DO NOTHING',
+          [req.params.id, cid]
+        );
+      }
     }
     res.json(result.rows[0]);
   } catch (error) {

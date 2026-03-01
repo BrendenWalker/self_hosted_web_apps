@@ -49,6 +49,12 @@ Use your DB name if different: `psql -U your_user -d your_database -f kitchenhub
    psql -U postgres -d hausfrau -f kitchenhub/database/migrations/002-recipe-ingredient-is-optional.sql
    ```
 
+   - **Recipe multiple categories**: If your `recipe.recipe` table has a single `category_id` column, run once to switch to many-to-many categories (recipes can belong to multiple categories):
+
+   ```bash
+   psql -U postgres -d hausfrau -f kitchenhub/database/migrations/003-recipe-multiple-categories.sql
+   ```
+
 4. (Optional) Migrate data from Firebird database:
 
 If you have an existing Firebird database, use the automated migration script:
