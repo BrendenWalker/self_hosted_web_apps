@@ -1,0 +1,41 @@
+version: '3.8'
+
+services:
+  backend:
+    build:
+      context: ..
+      dockerfile: retirementhub/backend/Dockerfile
+    container_name: retirementhub-backend
+    ports:
+      - "8100:80"
+    env_file:
+      - .env
+    environment:
+      - PORT=80
+      - DB_HOST=${DB_HOST:-host.docker.internal}
+      - DB_PORT=${DB_PORT:-5432}
+      - DB_NAME=${DB_NAME:-retirementhub}
+      - DB_USER=${DB_USER:-postgres}
+      - DB_PASSWORD=${DB_PASSWORD:-postgres}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    networks:
+      - retirementhub-network
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ..
+      dockerfile: retirementhub/frontend/Dockerfile
+    container_name: retirementhub-frontend
+    ports:
+      - "8110:80"
+    depends_on:
+      - backend
+    networks:
+      - retirementhub-network
+    restart: unless-stopped
+
+networks:
+  retirementhub-network:
+    driver: bridge
