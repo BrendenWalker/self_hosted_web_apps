@@ -1,0 +1,79 @@
+.home-page {
+  padding: 0;
+}
+
+.home-hero {
+  margin-bottom: 2.5rem;
+}
+
+.home-hero h1 {
+  color: #1a3d35;
+  font-size: 2rem;
+  margin-bottom: 0.5rem;
+}
+
+.home-subtitle {
+  color: #5a6b64;
+  font-size: 1.05rem;
+  margin-bottom: 2rem;
+  max-width: 42rem;
+}
+
+.home-quick-links {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 1.25rem;
+}
+
+.home-card {
+  display: block;
+  background: #fff;
+  border-radius: 10px;
+  padding: 1.35rem;
+  text-decoration: none;
+  color: inherit;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+  border: 1px solid #e8eeec;
+  transition: box-shadow 0.2s, border-color 0.2s;
+}
+
+.home-card:hover {
+  border-color: #0d5c4a;
+  box-shadow: 0 4px 12px rgba(13, 92, 74, 0.15);
+}
+
+.home-card h2 {
+  color: #0d5c4a;
+  font-size: 1.15rem;
+  margin-bottom: 0.5rem;
+}
+
+.home-card p {
+  color: #5a6b64;
+  font-size: 0.9rem;
+  line-height: 1.45;
+}
+
+.home-details {
+  margin-top: 2rem;
+}
+
+.home-detail-card {
+  background: #fff;
+  border-radius: 10px;
+  padding: 1.35rem;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+  border: 1px solid #e8eeec;
+}
+
+.home-detail-card h3 {
+  color: #1a3d35;
+  font-size: 1.1rem;
+  margin-bottom: 0.75rem;
+}
+
+.home-detail-card p {
+  color: #5a6b64;
+  font-size: 0.95rem;
+  line-height: 1.5;
+}
