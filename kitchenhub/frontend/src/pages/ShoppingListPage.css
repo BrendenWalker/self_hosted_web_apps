@@ -143,6 +143,17 @@
   border-left: 4px solid #4caf50;
 }
 
+.item-row.item-row-highlight {
+  background-color: #fff3e0;
+  border-left: 4px solid #ff9800;
+  animation: item-row-highlight-pulse 1s ease 2;
+}
+
+@keyframes item-row-highlight-pulse {
+  0%, 100% { background-color: #fff3e0; }
+  50% { background-color: #ffe0b2; }
+}
+
 .item-info {
   flex: 1;
   display: flex;

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { getStores, getShoppingList } from '../api/api';
+import { getStores, getShoppingList, markPurchased } from '../api/api';
 import { queuePurchaseUpdate, subscribePendingCount, flushPurchaseQueue } from '../utils/purchaseSync';
 import './ShoppingPage.css';
 
@@ -19,8 +19,6 @@ function ShoppingPage() {
     return null;
   });
   const [shoppingList, setShoppingList] = useState([]);
-  const [purchasedItems, setPurchasedItems] = useState([]);
-  const [showPurchased, setShowPurchased] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [confirmPurchase, setConfirmPurchase] = useState(null);
@@ -57,9 +55,9 @@ function ShoppingPage() {
 
   useEffect(() => {
     if (!validStoreId) return;
-    shoppingListRequestRef.current = { storeId: selectedStoreId, showPurchased };
+    shoppingListRequestRef.current = { storeId: selectedStoreId };
     loadShoppingList();
-  }, [selectedStoreId, showPurchased, validStoreId]);
+  }, [selectedStoreId, validStoreId]);
 
   // After initial list load, flush any pending purchase updates from previous session (e.g. was offline)
   useEffect(() => {
@@ -96,33 +94,28 @@ function ShoppingPage() {
   const loadShoppingList = async () => {
     if (!validStoreId) return;
     const storeId = selectedStoreId;
-    const show = showPurchased;
     setLoading(true);
     setError(null);
     try {
-      const response = await getShoppingList(storeId, show);
-      const { storeId: currentStoreId, showPurchased: currentShow } = shoppingListRequestRef.current;
-      if (currentStoreId !== storeId || currentShow !== show) return;
+      const response = await getShoppingList(storeId);
+      const { storeId: currentStoreId } = shoppingListRequestRef.current;
+      if (currentStoreId !== storeId) return;
       const items = response.data || [];
-      const purchased = items.filter((item) => item.purchased === 1);
-      const unpurchased = items.filter((item) => !item.purchased || item.purchased === 0);
-      setPurchasedItems(purchased);
-      setShoppingList(unpurchased);
+      setShoppingList(items);
     } catch (err) {
-      const { storeId: currentStoreId, showPurchased: currentShow } = shoppingListRequestRef.current;
-      if (currentStoreId !== storeId || currentShow !== show) return;
+      const { storeId: currentStoreId } = shoppingListRequestRef.current;
+      if (currentStoreId !== storeId) return;
       setError('Failed to load shopping list');
       console.error(err);
     } finally {
-      const { storeId: currentStoreId, showPurchased: currentShow } = shoppingListRequestRef.current;
-      if (currentStoreId === storeId && currentShow === show) setLoading(false);
+      const { storeId: currentStoreId } = shoppingListRequestRef.current;
+      if (currentStoreId === storeId) setLoading(false);
     }
   };
 
   const handleTogglePurchased = async (itemName, currentPurchased) => {
-    // When marking as purchased, show confirmation first
     if (!currentPurchased) {
-      const item = shoppingList.find(i => i.name === itemName) || purchasedItems.find(i => i.name === itemName);
+      const item = shoppingList.find(i => i.name === itemName);
       if (item) {
         setConfirmPurchase({ name: item.name, quantity: item.quantity || '1' });
         return;
@@ -131,24 +124,19 @@ function ShoppingPage() {
     await doMarkPurchased(itemName, !currentPurchased);
   };
 
-  const doMarkPurchased = (itemName, purchased) => {
+  const doMarkPurchased = async (itemName, purchased) => {
     setConfirmPurchase(null);
-    // Optimistic update: apply immediately so UI doesn't wait on network
     if (purchased) {
-      const item = shoppingList.find((i) => i.name === itemName);
-      if (item) {
-        setShoppingList((s) => s.filter((i) => i.name !== itemName));
-        setPurchasedItems((p) => [...p, { ...item, purchased: 1 }]);
-      }
+      setShoppingList((s) => s.filter((i) => i.name !== itemName));
+      queuePurchaseUpdate(itemName, purchased);
     } else {
-      const item = purchasedItems.find((i) => i.name === itemName);
-      if (item) {
-        setPurchasedItems((p) => p.filter((i) => i.name !== itemName));
-        setShoppingList((s) => [...s, { ...item, purchased: 0 }]);
+      try {
+        await markPurchased(itemName, false);
+        loadShoppingList();
+      } catch (_) {
+        queuePurchaseUpdate(itemName, false);
       }
     }
-    // Queue for background sync; persists to localStorage if offline
-    queuePurchaseUpdate(itemName, purchased);
   };
 
   const groupedByZone = shoppingList.reduce((acc, item) => {
@@ -190,14 +178,6 @@ function ShoppingPage() {
             ))}
           </select>
         </div>
-        <label className="toggle-purchased">
-          <input
-            type="checkbox"
-            checked={showPurchased}
-            onChange={(e) => setShowPurchased(e.target.checked)}
-          />
-          Show Purchased
-        </label>
       </div>
 
       {error && <div className="error-message">{error}</div>}
@@ -218,7 +198,7 @@ function ShoppingPage() {
       {!loading && validStoreId && (
         <>
           <div className="shopping-list-container">
-            {sortedZones.length === 0 && !showPurchased && (
+            {sortedZones.length === 0 && (
               <div className="empty-message">No items in shopping list</div>
             )}
 
@@ -229,13 +209,13 @@ function ShoppingPage() {
                   {groupedByZone[zone].map(item => (
                     <div
                       key={item.name}
-                      className={`shopping-item ${item.purchased ? 'purchased' : ''}`}
+                      className="shopping-item"
                     >
                       <label className="item-checkbox">
                         <input
                           type="checkbox"
-                          checked={item.purchased === 1}
-                          onChange={() => handleTogglePurchased(item.name, item.purchased === 1)}
+                          checked={false}
+                          onChange={() => handleTogglePurchased(item.name, false)}
                         />
                         <span className="item-quantity">{item.quantity || '1'} ×</span>
                         <span className="item-name">{item.name}</span>
@@ -246,30 +226,6 @@ function ShoppingPage() {
               </div>
             ))}
           </div>
-
-          {showPurchased && purchasedItems.length > 0 && (
-            <div className="purchased-section">
-              <h2>Purchased Items</h2>
-              <div className="items-list">
-                {purchasedItems.map(item => (
-                  <div
-                    key={item.name}
-                    className="shopping-item purchased"
-                  >
-                    <label className="item-checkbox">
-                      <input
-                        type="checkbox"
-                        checked={true}
-                        onChange={() => handleTogglePurchased(item.name, true)}
-                      />
-                      <span className="item-quantity">{item.quantity || '1'} ×</span>
-                      <span className="item-name">{item.name}</span>
-                    </label>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
         </>
       )}
 
