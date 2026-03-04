@@ -4,10 +4,14 @@ import {
   importAccountBalancesCsv,
 } from '../api/api';
 
-const EXPENSE_SAMPLE = `category_name,category_group,actual_annual
+const EXPENSE_SAMPLE_3COL = `category_name,category_group,actual_annual
 Fuel,fixed,2213.63
 Mad Money,discretionary,13998.41
 Travel,discretionary,469.60`;
+
+const EXPENSE_SAMPLE_2COL = `Discretionary:Home Improvement,389.73
+Discretionary:Mad Money:Educational,159.00
+Fixed:Auto Fuel,2213.63`;
 
 const BALANCE_SAMPLE = `account_name,balance
 Ally Savings,12500.00
@@ -99,7 +103,7 @@ export default function ImportPage() {
       <div className="card" style={{ marginBottom: '1.5rem' }}>
         <h2>Import expense totals</h2>
         <p style={{ marginBottom: '1rem', fontSize: '0.9rem', color: '#5a6b64' }}>
-          Use this for data from <strong>Prior Year Discretionary</strong> or <strong>Prior Year Expenses</strong> reports. CSV columns: <code>category_name</code>, <code>category_group</code>, <code>actual_annual</code>. Select the <strong>As of date</strong> below (e.g. end of year). Category names are matched to existing expense categories; group must match (discretionary, fixed, insurance, utilities, tax, personal). Common report names are mapped automatically.
+          Format is detected by column count. <strong>Two columns</strong>: category path and amount (e.g. <code>Discretionary:Home Improvement,389.73</code> or <code>Group:Sub:Name,amount</code> — text before the first <code>:</code> is category group, text after the last <code>:</code> is category name; if there is no <code>:</code>, the value is used for both). <strong>Three or more columns</strong>: <code>category_name</code>, <code>category_group</code>, <code>actual_annual</code>. Category group must be one of: discretionary, fixed, insurance, utilities, tax, personal. Categories are created automatically if they don’t exist. Select the <strong>As of date</strong> (e.g. end of year).
         </p>
         <form onSubmit={handleExpenseSubmit} className="form-row">
           <div className="form-group">
@@ -129,7 +133,15 @@ export default function ImportPage() {
         </form>
         {expenseResult && (
           <div className="import-result" style={{ marginTop: '1rem', padding: '0.75rem', background: '#f0f7f4', borderRadius: 4 }}>
-            <strong>Result:</strong> {expenseResult.imported} imported, {expenseResult.skipped} skipped (no matching category), {expenseResult.errors} errors.
+            <strong>Result:</strong> {expenseResult.imported} imported
+            {expenseResult.categories_created != null && expenseResult.categories_created > 0 && (
+              <>, {expenseResult.categories_created} new categor{expenseResult.categories_created === 1 ? 'y' : 'ies'} created</>
+            )}
+            {expenseResult.skipped > 0 && (<>; {expenseResult.skipped} skipped</>)}
+            {expenseResult.errors > 0 && (<>; {expenseResult.errors} errors</>)}.
+            {expenseResult.details?.categories_created?.length > 0 && (
+              <div style={{ marginTop: 0.5, fontSize: '0.9rem' }}>New categories: {expenseResult.details.categories_created.join(', ')}</div>
+            )}
             {expenseResult.details?.skipped?.length > 0 && (
               <div style={{ marginTop: 0.5, fontSize: '0.9rem' }}>Skipped: {expenseResult.details.skipped.map((s) => s.category).join(', ')}</div>
             )}
@@ -139,8 +151,11 @@ export default function ImportPage() {
           </div>
         )}
         <details style={{ marginTop: '1rem' }}>
-          <summary style={{ cursor: 'pointer', fontSize: '0.9rem' }}>Sample CSV</summary>
-          <pre style={{ marginTop: 0.5, padding: '0.5rem', background: '#f5f5f5', fontSize: '0.85rem', overflow: 'auto' }}>{EXPENSE_SAMPLE}</pre>
+          <summary style={{ cursor: 'pointer', fontSize: '0.9rem' }}>Sample CSV (two formats)</summary>
+          <p style={{ marginTop: 0.5, fontSize: '0.85rem', color: '#5a6b64' }}>Three columns (with header):</p>
+          <pre style={{ marginTop: 0.25, padding: '0.5rem', background: '#f5f5f5', fontSize: '0.85rem', overflow: 'auto' }}>{EXPENSE_SAMPLE_3COL}</pre>
+          <p style={{ marginTop: 0.5, fontSize: '0.85rem', color: '#5a6b64' }}>Two columns (no header — group:name or group:sub:name, amount):</p>
+          <pre style={{ marginTop: 0.25, padding: '0.5rem', background: '#f5f5f5', fontSize: '0.85rem', overflow: 'auto' }}>{EXPENSE_SAMPLE_2COL}</pre>
         </details>
       </div>
 
