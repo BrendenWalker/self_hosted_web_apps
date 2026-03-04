@@ -7,6 +7,14 @@ const api = axios.create({
   headers: { 'Content-Type': 'application/json' },
 });
 
+// Let the browser set Content-Type (with boundary) for FormData; default json breaks multipart
+api.interceptors.request.use((config) => {
+  if (config.data instanceof FormData) {
+    delete config.headers['Content-Type'];
+  }
+  return config;
+});
+
 export const getHousehold = () => api.get('/household');
 export const updateHousehold = (data) => api.put('/household', data);
 

@@ -491,6 +491,15 @@ function parseCsvRows(buffer) {
     const parsed = parseCsv(text, { skip_empty_lines: true, trim: true, relax_column_count: true });
     if (!parsed.length) return { rows: [], headers: [] };
     const first = parsed[0];
+    // Two-column format with no header: first cell contains ":" (e.g. "Discretionary:Home Improvement,389.73")
+    if (first.length === 2 && String(first[0] || '').includes(':')) {
+      const headers = ['category_path', 'actual_annual'];
+      const rows = parsed.map((row) => ({
+        category_path: row[0] != null ? String(row[0]).trim() : '',
+        actual_annual: row[1] != null ? String(row[1]).trim() : '',
+      }));
+      return { rows, headers };
+    }
     const headers = first.map((h) => (h != null ? String(h).trim().toLowerCase() : ''));
     const rows = parsed.slice(1).map((row) => {
       const obj = {};
@@ -501,6 +510,25 @@ function parseCsvRows(buffer) {
   } catch (e) {
     throw new Error('Invalid CSV: ' + (e.message || String(e)));
   }
+}
+
+/** Parse "Group:Name" or "Group:Sub:Name" → { category_group, category_name }. If no colon, use value for both. */
+function parseCategoryPath(path) {
+  if (!path || typeof path !== 'string') return { category_group: '', category_name: '' };
+  const s = path.trim();
+  const idx = s.indexOf(':');
+  if (idx === -1) return { category_group: s, category_name: s };
+  const category_group = s.slice(0, idx).trim();
+  const category_name = s.slice(s.lastIndexOf(':') + 1).trim();
+  return { category_group: category_group || s, category_name: category_name || s };
+}
+
+const ALLOWED_GROUPS = ['discretionary', 'fixed', 'insurance', 'utilities', 'tax', 'personal'];
+
+function normalizeCategoryGroup(raw) {
+  if (!raw || typeof raw !== 'string') return 'discretionary';
+  const n = String(raw).trim().toLowerCase().replace(/\s+/g, '_');
+  return ALLOWED_GROUPS.includes(n) ? n : (ALLOWED_GROUPS.find((g) => g.startsWith(n)) || 'discretionary');
 }
 
 app.post('/api/import/expenses', upload.single('file'), async (req, res) => {
@@ -518,47 +546,92 @@ app.post('/api/import/expenses', upload.single('file'), async (req, res) => {
       if (parts.length >= 3) asOf = `${parts[2]}-${parts[0].padStart(2, '0')}-${parts[1].padStart(2, '0')}`;
     }
     const { rows, headers } = parseCsvRows(req.file.buffer);
-    const categoryIdx = headers.findIndex((h) => /category|name/i.test(h) && !/group|amount|actual/.test(h));
+    const isTwoColumn = headers.length === 2;
+
+    const categoryIdx = headers.findIndex((h) => /category|name|path/i.test(h) && !/group|amount|actual/.test(h));
     const groupIdx = headers.findIndex((h) => /group/i.test(h));
     const amountIdx = headers.findIndex((h) => /actual_annual|amount|total/i.test(h));
-    const getCategory = (row) => (categoryIdx >= 0 ? row[headers[categoryIdx]] : row[0]);
-    const getGroup = (row) => (groupIdx >= 0 ? row[headers[groupIdx]] : (headers.length > 2 ? row[1] : ''));
-    const getAmount = (row) => (amountIdx >= 0 ? row[headers[amountIdx]] : row[headers.length > 2 ? 2 : 1]);
+    const pathIdx = headers.findIndex((h) => /path|category_path/i.test(h));
 
-    const categoriesResult = await pool.query('SELECT id, name, category_group FROM expense_category');
-    const categoryByName = {};
-    categoriesResult.rows.forEach((r) => { categoryByName[r.name.toLowerCase()] = { id: r.id, category_group: r.category_group }; });
+    const getCategoryPathOrName = (row) => {
+      if (isTwoColumn) return (pathIdx >= 0 ? row[headers[pathIdx]] : row[headers[0]]) ?? '';
+      return (categoryIdx >= 0 ? row[headers[categoryIdx]] : row[headers[0]]) ?? '';
+    };
+    const getGroup = (row) => {
+      if (isTwoColumn) return ''; // parsed from path
+      return (groupIdx >= 0 ? row[headers[groupIdx]] : (headers.length > 2 ? row[headers[1]] : '')) ?? '';
+    };
+    const getAmount = (row) => {
+      if (isTwoColumn) return (amountIdx >= 0 ? row[headers[amountIdx]] : row[headers[1]]) ?? '';
+      return (amountIdx >= 0 ? row[headers[amountIdx]] : row[headers[headers.length > 2 ? 2 : 1]]) ?? '';
+    };
 
     const imported = [];
     const skipped = [];
     const errors = [];
+    const categoriesCreated = [];
 
-    const groupAliases = { discretionary: 'discretionary', fixed: 'fixed', insurance: 'insurance', utilities: 'utilities', tax: 'tax', personal: 'personal' };
+    async function getOrCreateCategory(categoryName, categoryGroup) {
+      const name = categoryName.trim();
+      if (!name) return null;
+      const group = normalizeCategoryGroup(categoryGroup || 'discretionary');
+      const existing = await pool.query('SELECT id FROM expense_category WHERE LOWER(name) = LOWER($1)', [name]);
+      if (existing.rows.length > 0) return { id: existing.rows[0].id, created: false };
+      const maxOrder = await pool.query('SELECT COALESCE(MAX(sort_order), 0) + 10 AS next_order FROM expense_category');
+      const sortOrder = maxOrder.rows[0].next_order;
+      await pool.query(
+        'INSERT INTO expense_category (name, category_group, sort_order) VALUES ($1, $2, $3) ON CONFLICT (name) DO NOTHING',
+        [name, group, sortOrder]
+      );
+      const inserted = await pool.query('SELECT id FROM expense_category WHERE LOWER(name) = LOWER($1)', [name]);
+      if (inserted.rows.length > 0) {
+        categoriesCreated.push(name);
+        return { id: inserted.rows[0].id, created: true };
+      }
+      return null;
+    }
 
     for (const row of rows) {
-      const rawName = getCategory(row);
+      const rawPathOrName = getCategoryPathOrName(row);
       const amountStr = getAmount(row);
-      if (!rawName || rawName.toLowerCase() === 'grand total') continue;
-      const name = normalizeCategoryName(rawName);
-      const cat = name ? categoryByName[name.toLowerCase()] : null;
-      if (!cat) {
-        skipped.push({ category: rawName, reason: 'No matching expense category' });
-        continue;
-      }
-      const rowGroup = getGroup(row);
-      if (rowGroup && rowGroup.trim()) {
-        const normalizedGroup = String(rowGroup).trim().toLowerCase().replace(/\s+/g, '_');
-        const wantGroup = groupAliases[normalizedGroup] || normalizedGroup;
-        if (cat.category_group !== wantGroup) {
-          skipped.push({ category: rawName, reason: `Group "${rowGroup}" does not match category group "${cat.category_group}"` });
+      if (!rawPathOrName || String(rawPathOrName).toLowerCase() === 'grand total') continue;
+
+      let categoryName;
+      let categoryGroup;
+
+      if (isTwoColumn) {
+        const parsed = parseCategoryPath(rawPathOrName);
+        categoryName = parsed.category_name || parsed.category_group;
+        categoryGroup = parsed.category_group;
+        if (!categoryName) {
+          skipped.push({ category: rawPathOrName, reason: 'Could not parse category from path' });
           continue;
         }
+        categoryGroup = normalizeCategoryGroup(categoryGroup);
+      } else {
+        categoryName = normalizeCategoryName(rawPathOrName);
+        if (!categoryName) {
+          skipped.push({ category: rawPathOrName, reason: 'Empty category name' });
+          continue;
+        }
+        const rowGroup = getGroup(row);
+        categoryGroup = rowGroup && String(rowGroup).trim()
+          ? normalizeCategoryGroup(String(rowGroup).trim())
+          : 'discretionary';
       }
-      const amount = parseFloat(String(amountStr).replace(/[$,]/g, ''));
-      if (Number.isNaN(amount)) {
-        errors.push({ category: rawName, reason: 'Invalid amount' });
+
+      const cat = await getOrCreateCategory(categoryName, categoryGroup);
+      if (!cat) {
+        errors.push({ category: rawPathOrName, reason: 'Could not create or find category' });
         continue;
       }
+
+      const amount = parseFloat(String(amountStr).replace(/[$,]/g, ''));
+      if (Number.isNaN(amount)) {
+        errors.push({ category: rawPathOrName, reason: 'Invalid amount' });
+        continue;
+      }
+
       try {
         await pool.query(
           `INSERT INTO expense_line (expense_category_id, as_of, current_monthly, retirement_monthly, actual_annual)
@@ -568,9 +641,9 @@ app.post('/api/import/expenses', upload.single('file'), async (req, res) => {
              modified = CURRENT_TIMESTAMP`,
           [cat.id, asOf, amount]
         );
-        imported.push({ category: name, as_of: asOf, actual_annual: amount });
+        imported.push({ category: categoryName, as_of: asOf, actual_annual: amount });
       } catch (err) {
-        errors.push({ category: rawName, reason: err.message || 'Database error' });
+        errors.push({ category: rawPathOrName, reason: err.message || 'Database error' });
       }
     }
 
@@ -578,7 +651,8 @@ app.post('/api/import/expenses', upload.single('file'), async (req, res) => {
       imported: imported.length,
       skipped: skipped.length,
       errors: errors.length,
-      details: { imported, skipped, errors },
+      categories_created: categoriesCreated.length,
+      details: { imported, skipped, errors, categories_created: categoriesCreated },
     });
   } catch (error) {
     console.error('Import expenses error:', error);
