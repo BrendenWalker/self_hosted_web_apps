@@ -334,6 +334,20 @@ app.post('/api/items', async (req, res) => {
       return res.status(400).json({ error: 'Validation failed', detail: 'Item name is required' });
     }
     const { department, qty } = req.body;
+    // Case-insensitive duplicate check (DB may have "parsley" while user adds "Parsley")
+    const existing = await pool.query(
+      'SELECT id, name FROM items WHERE LOWER(name) = LOWER($1)',
+      [name]
+    );
+    if (existing.rows.length > 0) {
+      const existingName = existing.rows[0].name;
+      return res.status(409).json({
+        error: 'Failed to create item',
+        detail: existingName !== name
+          ? `An item with this name already exists (existing item: "${existingName}")`
+          : 'An item with this name already exists'
+      });
+    }
     const result = await pool.query(
       'INSERT INTO items (name, department, qty) VALUES ($1, $2, $3) RETURNING *',
       [name, department || null, qty || 0]
@@ -388,9 +402,23 @@ app.put('/api/items/:id', async (req, res) => {
     }
     const { department, qty } = req.body;
     const id = req.params.id;
+    // Case-insensitive duplicate check, excluding current item
+    const existing = await pool.query(
+      'SELECT id, name FROM items WHERE LOWER(name) = LOWER($1) AND id != $2',
+      [name, id]
+    );
+    if (existing.rows.length > 0) {
+      const existingName = existing.rows[0].name;
+      return res.status(409).json({
+        error: 'Failed to update item',
+        detail: existingName !== name
+          ? `An item with this name already exists (existing item: "${existingName}")`
+          : 'An item with this name already exists'
+      });
+    }
     const result = await pool.query(
       'UPDATE items SET name = $1, department = $2, qty = $3 WHERE id = $4 RETURNING *',
-      [name, department || null, qty || 0, req.params.id]
+      [name, department || null, qty || 0, id]
     );
     if (result.rows.length === 0) {
       return res.status(404).json({ error: 'Item not found' });

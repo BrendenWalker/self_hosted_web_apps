@@ -92,6 +92,15 @@ Vite proxies `/api` to http://localhost:8100. Open http://localhost:3010.
 - **Accounts:** User-defined accounts (any number): savings, checking, HSA, IRA (traditional/Roth), 401(k) (traditional/Roth), taxable. Your names; balances and contributions in Stage 3.  
 - **Expenses:** Categories with current monthly, retirement monthly, “in retirement” flag, optional actual annual; mortgage (payment + payoff date); budget summary with current/retirement annual and 25× targets  
 
+### Import (CSV from GnuCash-style reports)
+
+You can upload **expense totals** and **account balances** via CSV from the **Import** page (nav → Import).
+
+- **Expense totals:** Use data from *Prior Year Discretionary* or *Prior Year Expenses* reports. CSV format: `category_name`, `category_group`, `actual_annual`. Select the **As of date** in the Import form (e.g. end of year). To build the CSV from the HTML report: copy the **Subtotal Table** (category names and totals) into a spreadsheet, add a header row and a `category_group` column (discretionary, fixed, insurance, utilities, tax, personal), then save as CSV. Category names are matched to existing expense categories; group must match.
+- **Account balances:** Use end-of-year balances from your accounts/savings report. CSV format: `account_name`, `balance`. Select the **As of date** in the Import form. If an account does not exist, it is created as a Savings account. Copy into a spreadsheet and save as CSV.
+
+Sample CSV templates are shown on the Import page.
+
 ## Later stages
 
 - **Stage 2:** Tax-leveraged savings maximums (IRA, HSA, 401k limits)  

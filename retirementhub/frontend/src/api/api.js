@@ -35,4 +35,7 @@ export const deleteAccountBalance = (id) => api.delete(`/account-balances/${id}`
 
 export const getBudgetSummary = () => api.get('/budget-summary');
 
+export const importExpensesCsv = (formData) => api.post('/import/expenses', formData);
+export const importAccountBalancesCsv = (formData) => api.post('/import/account-balances', formData);
+
 export default api;
