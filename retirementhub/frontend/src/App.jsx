@@ -5,6 +5,7 @@ import HouseholdPage from './pages/HouseholdPage';
 import IncomePage from './pages/IncomePage';
 import AccountsPage from './pages/AccountsPage';
 import ExpensesPage from './pages/ExpensesPage';
+import SavingsLimitsPage from './pages/SavingsLimitsPage';
 import ImportPage from './pages/ImportPage';
 import VersionFooter from './components/VersionFooter';
 import './App.css';
@@ -21,6 +22,7 @@ function App() {
               <Link to="/household" className="nav-link">Household</Link>
               <Link to="/income" className="nav-link">Income</Link>
               <Link to="/accounts" className="nav-link">Accounts</Link>
+              <Link to="/savings-limits" className="nav-link">Savings limits</Link>
               <Link to="/expenses" className="nav-link">Expenses</Link>
               <Link to="/import" className="nav-link">Import</Link>
             </div>
@@ -32,6 +34,7 @@ function App() {
             <Route path="/household" element={<HouseholdPage />} />
             <Route path="/income" element={<IncomePage />} />
             <Route path="/accounts" element={<AccountsPage />} />
+            <Route path="/savings-limits" element={<SavingsLimitsPage />} />
             <Route path="/expenses" element={<ExpensesPage />} />
             <Route path="/import" element={<ImportPage />} />
             <Route path="*" element={<HomePage />} />

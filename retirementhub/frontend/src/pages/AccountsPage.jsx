@@ -5,7 +5,10 @@ import {
   updateAccount,
   deleteAccount,
   getAccountBalances,
+  getAccountBalancesHistory,
   upsertAccountBalance,
+  updateAccountBalance,
+  deleteAccountBalance,
 } from '../api/api';
 
 const ACCOUNT_TYPES = [
@@ -36,8 +39,12 @@ export default function AccountsPage() {
   const [saving, setSaving] = useState(false);
   const [deletingId, setDeletingId] = useState(null);
   const [balanceFormAccountId, setBalanceFormAccountId] = useState(null);
+  const [balanceFormBalanceId, setBalanceFormBalanceId] = useState(null);
   const [balanceForm, setBalanceForm] = useState({ as_of: '', balance: '' });
   const [balancesByAccount, setBalancesByAccount] = useState({});
+  const [expandedHistoryAccountId, setExpandedHistoryAccountId] = useState(null);
+  const [balanceHistory, setBalanceHistory] = useState({});
+  const [historyLoading, setHistoryLoading] = useState(false);
 
   useEffect(() => {
     load();
@@ -135,14 +142,46 @@ export default function AccountsPage() {
     }
   };
 
-  const openBalanceForm = (acc) => {
-    const b = balancesByAccount[acc.id];
+  const openBalanceForm = (acc, balanceRow = null) => {
+    const b = balanceRow ?? balancesByAccount[acc.id];
     const today = new Date().toISOString().slice(0, 10);
     setBalanceFormAccountId(acc.id);
+    setBalanceFormBalanceId(balanceRow?.id ?? null);
     setBalanceForm({
       as_of: b?.as_of ? String(b.as_of).slice(0, 10) : today,
       balance: b != null && b.balance != null ? String(b.balance) : '',
     });
+  };
+
+  const toggleHistory = async (accountId) => {
+    if (expandedHistoryAccountId === accountId) {
+      setExpandedHistoryAccountId(null);
+      return;
+    }
+    setExpandedHistoryAccountId(accountId);
+    if (!balanceHistory[accountId]) {
+      setHistoryLoading(true);
+      try {
+        const res = await getAccountBalancesHistory(accountId);
+        setBalanceHistory((prev) => ({ ...prev, [accountId]: res.data || [] }));
+      } catch (err) {
+        setMessage(err.response?.data?.error || 'Failed to load balance history');
+      } finally {
+        setHistoryLoading(false);
+      }
+    }
+  };
+
+  const handleBalanceDelete = async (balanceId, accountId) => {
+    setMessage(null);
+    try {
+      await deleteAccountBalance(balanceId);
+      const res = await getAccountBalancesHistory(accountId);
+      setBalanceHistory((prev) => ({ ...prev, [accountId]: res.data || [] }));
+      await load();
+    } catch (err) {
+      setMessage(err.response?.data?.error || 'Failed to delete balance');
+    }
   };
 
   const handleBalanceSubmit = async (e) => {
@@ -150,13 +189,27 @@ export default function AccountsPage() {
     if (!balanceFormAccountId) return;
     setMessage(null);
     setSaving(true);
+    const accountId = balanceFormAccountId;
+    const balanceId = balanceFormBalanceId;
     try {
-      await upsertAccountBalance({
-        account_id: balanceFormAccountId,
-        as_of: balanceForm.as_of || new Date().toISOString().slice(0, 10),
-        balance: balanceForm.balance === '' ? 0 : parseFloat(balanceForm.balance),
-      });
+      if (balanceId != null) {
+        await updateAccountBalance(balanceId, {
+          as_of: balanceForm.as_of || new Date().toISOString().slice(0, 10),
+          balance: balanceForm.balance === '' ? 0 : parseFloat(balanceForm.balance),
+        });
+      } else {
+        await upsertAccountBalance({
+          account_id: accountId,
+          as_of: balanceForm.as_of || new Date().toISOString().slice(0, 10),
+          balance: balanceForm.balance === '' ? 0 : parseFloat(balanceForm.balance),
+        });
+      }
       setBalanceFormAccountId(null);
+      setBalanceFormBalanceId(null);
+      if (expandedHistoryAccountId === accountId) {
+        const res = await getAccountBalancesHistory(accountId);
+        setBalanceHistory((prev) => ({ ...prev, [accountId]: res.data || [] }));
+      }
       await load();
     } catch (err) {
       setMessage(err.response?.data?.error || 'Failed to save balance');
@@ -300,6 +353,13 @@ export default function AccountsPage() {
                       <button
                         type="button"
                         className="btn btn-secondary btn-sm"
+                        onClick={() => toggleHistory(acc.id)}
+                      >
+                        {expandedHistoryAccountId === acc.id ? 'Hide history' : 'View history'}
+                      </button>
+                      <button
+                        type="button"
+                        className="btn btn-secondary btn-sm"
                         onClick={() => startEdit(acc)}
                       >
                         Edit
@@ -315,6 +375,53 @@ export default function AccountsPage() {
                     </div>
                   </>
                 )}
+                {expandedHistoryAccountId === acc.id && (
+                  <div className="balance-history-section">
+                    <h4 className="balance-history-title">Balance history</h4>
+                    {historyLoading ? (
+                      <p className="muted">Loading…</p>
+                    ) : (
+                      <>
+                        <ul className="balance-history-list">
+                          {(balanceHistory[acc.id] || []).map((row) => (
+                            <li key={row.id} className="balance-history-item">
+                              <span className="balance-history-date">{String(row.as_of).slice(0, 10)}</span>
+                              <span className="balance-history-amount">
+                                ${Number(row.balance).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}
+                              </span>
+                              <span className="balance-history-actions">
+                                <button
+                                  type="button"
+                                  className="btn btn-secondary btn-sm"
+                                  onClick={() => openBalanceForm(acc, row)}
+                                >
+                                  Edit
+                                </button>
+                                <button
+                                  type="button"
+                                  className="btn btn-secondary btn-sm"
+                                  onClick={() => handleBalanceDelete(row.id, acc.id)}
+                                >
+                                  Delete
+                                </button>
+                              </span>
+                            </li>
+                          ))}
+                        </ul>
+                        {(balanceHistory[acc.id] || []).length === 0 && (
+                          <p className="muted">No balance snapshots yet. Use &quot;Add balance&quot; or &quot;Update balance&quot; to record one.</p>
+                        )}
+                        <button
+                          type="button"
+                          className="btn btn-secondary btn-sm"
+                          onClick={() => openBalanceForm(acc)}
+                        >
+                          Add snapshot
+                        </button>
+                      </>
+                    )}
+                  </div>
+                )}
               </li>
             ))}
           </ul>
@@ -322,7 +429,7 @@ export default function AccountsPage() {
 
         {balanceFormAccountId != null && (
           <form onSubmit={handleBalanceSubmit} className="balance-form card">
-            <h3>Balance (as of date)</h3>
+            <h3>{balanceFormBalanceId != null ? 'Edit balance' : 'Balance (as of date)'}</h3>
             <div className="form-row">
               <div className="form-group">
                 <label>As of</label>
@@ -345,7 +452,16 @@ export default function AccountsPage() {
               </div>
               <div className="form-group" style={{ alignSelf: 'flex-end' }}>
                 <button type="submit" className="btn btn-primary" disabled={saving}>Save</button>
-                <button type="button" className="btn btn-secondary" onClick={() => setBalanceFormAccountId(null)}>Cancel</button>
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  onClick={() => {
+                    setBalanceFormAccountId(null);
+                    setBalanceFormBalanceId(null);
+                  }}
+                >
+                  Cancel
+                </button>
               </div>
             </div>
           </form>

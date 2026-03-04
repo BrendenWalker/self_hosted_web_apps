@@ -9,6 +9,8 @@ CREATE TABLE IF NOT EXISTS household (
     p2_display_name VARCHAR(80) NOT NULL DEFAULT 'P2',
     p1_birth_year INTEGER NOT NULL CHECK (p1_birth_year >= 1900 AND p1_birth_year <= 2100),
     p2_birth_year INTEGER NOT NULL CHECK (p2_birth_year >= 1900 AND p2_birth_year <= 2100),
+    p1_retirement_date DATE,
+    p2_retirement_date DATE,
     filing_status VARCHAR(40) NOT NULL DEFAULT 'married_filing_jointly'
         CHECK (filing_status IN ('single', 'married_filing_jointly', 'married_filing_separately', 'head_of_household')),
     modified TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -16,6 +18,7 @@ CREATE TABLE IF NOT EXISTS household (
 
 -- ==================== INCOME (for budget context) ====================
 -- Multiple rows by as_of date; use latest for "current". History preserved.
+-- 401(k): P1 uses four_o_one_k_pct / four_o_one_k_match_pct; P2 uses _p2 columns.
 CREATE TABLE IF NOT EXISTS income (
     id SERIAL PRIMARY KEY,
     as_of DATE NOT NULL DEFAULT CURRENT_DATE,
@@ -25,6 +28,8 @@ CREATE TABLE IF NOT EXISTS income (
     bonus_quarterly DECIMAL(14, 2),
     four_o_one_k_pct DECIMAL(5, 2),
     four_o_one_k_match_pct DECIMAL(5, 2),
+    four_o_one_k_pct_p2 DECIMAL(5, 2),
+    four_o_one_k_match_pct_p2 DECIMAL(5, 2),
     modified TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 

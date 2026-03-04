@@ -41,14 +41,16 @@ app.get('/api/household', async (req, res) => {
 
 app.put('/api/household', async (req, res) => {
   try {
-    const { p1_display_name, p2_display_name, p1_birth_year, p2_birth_year, filing_status } = req.body;
+    const { p1_display_name, p2_display_name, p1_birth_year, p2_birth_year, p1_retirement_date, p2_retirement_date, filing_status } = req.body;
     const result = await pool.query(
       `UPDATE household SET
         p1_display_name = COALESCE($1, p1_display_name),
         p2_display_name = COALESCE($2, p2_display_name),
         p1_birth_year = COALESCE($3, p1_birth_year),
         p2_birth_year = COALESCE($4, p2_birth_year),
-        filing_status = COALESCE($5, filing_status),
+        p1_retirement_date = $5,
+        p2_retirement_date = $6,
+        filing_status = COALESCE($7, filing_status),
         modified = CURRENT_TIMESTAMP
        WHERE id = (SELECT id FROM household LIMIT 1)
        RETURNING *`,
@@ -57,6 +59,8 @@ app.put('/api/household', async (req, res) => {
         p2_display_name != null ? String(p2_display_name).trim() : null,
         p1_birth_year != null ? parseInt(p1_birth_year, 10) : null,
         p2_birth_year != null ? parseInt(p2_birth_year, 10) : null,
+        p1_retirement_date && String(p1_retirement_date).trim() ? String(p1_retirement_date).trim().slice(0, 10) : null,
+        p2_retirement_date && String(p2_retirement_date).trim() ? String(p2_retirement_date).trim().slice(0, 10) : null,
         filing_status != null ? String(filing_status).trim() : null,
       ]
     );
@@ -93,7 +97,8 @@ app.get('/api/income', async (req, res) => {
 
 app.put('/api/income', async (req, res) => {
   try {
-    const { id, as_of, gross_salary, gross_salary_p2, expected_raise_pct, bonus_quarterly, four_o_one_k_pct, four_o_one_k_match_pct } = req.body;
+    const { id, as_of, gross_salary, gross_salary_p2, expected_raise_pct, bonus_quarterly,
+      four_o_one_k_pct, four_o_one_k_match_pct, four_o_one_k_pct_p2, four_o_one_k_match_pct_p2 } = req.body;
     const targetId = id != null ? parseInt(id, 10) : null;
     if (targetId != null && Number.isInteger(targetId)) {
       const result = await pool.query(
@@ -105,8 +110,10 @@ app.put('/api/income', async (req, res) => {
           bonus_quarterly = $5,
           four_o_one_k_pct = $6,
           four_o_one_k_match_pct = $7,
+          four_o_one_k_pct_p2 = $8,
+          four_o_one_k_match_pct_p2 = $9,
           modified = CURRENT_TIMESTAMP
-         WHERE id = $8
+         WHERE id = $10
          RETURNING *`,
         [
           as_of && String(as_of).trim() ? String(as_of).trim() : null,
@@ -116,6 +123,8 @@ app.put('/api/income', async (req, res) => {
           bonus_quarterly != null ? parseFloat(bonus_quarterly) : null,
           four_o_one_k_pct != null ? parseFloat(four_o_one_k_pct) : null,
           four_o_one_k_match_pct != null ? parseFloat(four_o_one_k_match_pct) : null,
+          four_o_one_k_pct_p2 != null ? parseFloat(four_o_one_k_pct_p2) : null,
+          four_o_one_k_match_pct_p2 != null ? parseFloat(four_o_one_k_match_pct_p2) : null,
           targetId,
         ]
       );
@@ -133,6 +142,8 @@ app.put('/api/income', async (req, res) => {
         bonus_quarterly = $5,
         four_o_one_k_pct = $6,
         four_o_one_k_match_pct = $7,
+        four_o_one_k_pct_p2 = $8,
+        four_o_one_k_match_pct_p2 = $9,
         modified = CURRENT_TIMESTAMP
        WHERE id = (SELECT id FROM income ORDER BY as_of DESC, id DESC LIMIT 1)
        RETURNING *`,
@@ -144,6 +155,8 @@ app.put('/api/income', async (req, res) => {
         bonus_quarterly != null ? parseFloat(bonus_quarterly) : null,
         four_o_one_k_pct != null ? parseFloat(four_o_one_k_pct) : null,
         four_o_one_k_match_pct != null ? parseFloat(four_o_one_k_match_pct) : null,
+        four_o_one_k_pct_p2 != null ? parseFloat(four_o_one_k_pct_p2) : null,
+        four_o_one_k_match_pct_p2 != null ? parseFloat(four_o_one_k_match_pct_p2) : null,
       ]
     );
     if (result.rows.length === 0) {
@@ -358,16 +371,19 @@ app.get('/api/expense-categories', async (req, res) => {
   }
 });
 
-// ==================== EXPENSE LINES ====================
-// Returns latest as_of per category; multiple rows per category allowed for history.
-
+// Returns latest as_of per category; only rows with actual_annual or positive current/mo or retirement/mo.
 app.get('/api/expense-lines', async (req, res) => {
   try {
     const result = await pool.query(
-      `SELECT DISTINCT ON (el.expense_category_id) el.*, ec.name AS category_name, ec.category_group
-       FROM expense_line el
-       JOIN expense_category ec ON el.expense_category_id = ec.id
-       ORDER BY el.expense_category_id, el.as_of DESC, el.id DESC`
+      `SELECT * FROM (
+        SELECT DISTINCT ON (el.expense_category_id) el.*, ec.name AS category_name, ec.category_group
+        FROM expense_line el
+        JOIN expense_category ec ON el.expense_category_id = ec.id
+        ORDER BY el.expense_category_id, el.as_of DESC, el.id DESC
+      ) sub
+      WHERE (sub.actual_annual IS NOT NULL AND sub.actual_annual > 0)
+         OR (sub.current_monthly > 0)
+         OR (sub.retirement_monthly IS NOT NULL AND sub.retirement_monthly > 0)`
     );
     res.json(result.rows);
   } catch (error) {
@@ -545,6 +561,19 @@ app.post('/api/import/expenses', upload.single('file'), async (req, res) => {
       const parts = asOf.split(/[/-]/);
       if (parts.length >= 3) asOf = `${parts[2]}-${parts[0].padStart(2, '0')}-${parts[1].padStart(2, '0')}`;
     }
+
+    // Household retirement dates: if AsOf >= effective retirement date, pre-fill retirement/mo; else current/mo
+    let effectiveRetirementDate = null;
+    const householdResult = await pool.query('SELECT p1_retirement_date, p2_retirement_date FROM household ORDER BY id LIMIT 1');
+    if (householdResult.rows.length > 0) {
+      const h = householdResult.rows[0];
+      const d1 = h.p1_retirement_date ? String(h.p1_retirement_date).slice(0, 10) : null;
+      const d2 = h.p2_retirement_date ? String(h.p2_retirement_date).slice(0, 10) : null;
+      if (d1 && d2) effectiveRetirementDate = d1 > d2 ? d1 : d2;
+      else if (d1) effectiveRetirementDate = d1;
+      else if (d2) effectiveRetirementDate = d2;
+    }
+
     const { rows, headers } = parseCsvRows(req.file.buffer);
     const isTwoColumn = headers.length === 2;
 
@@ -632,14 +661,21 @@ app.post('/api/import/expenses', upload.single('file'), async (req, res) => {
         continue;
       }
 
+      const monthlyValue = Math.round((amount / 12) * 100) / 100;
+      const isRetirement = effectiveRetirementDate && asOf >= effectiveRetirementDate;
+      const currentMonthly = isRetirement ? 0 : monthlyValue;
+      const retirementMonthly = isRetirement ? monthlyValue : null;
+
       try {
         await pool.query(
           `INSERT INTO expense_line (expense_category_id, as_of, current_monthly, retirement_monthly, actual_annual)
-           VALUES ($1, $2, 0, NULL, $3)
+           VALUES ($1, $2, $3, $4, $5)
            ON CONFLICT (expense_category_id, as_of) DO UPDATE SET
+             current_monthly = EXCLUDED.current_monthly,
+             retirement_monthly = EXCLUDED.retirement_monthly,
              actual_annual = EXCLUDED.actual_annual,
              modified = CURRENT_TIMESTAMP`,
-          [cat.id, asOf, amount]
+          [cat.id, asOf, currentMonthly, retirementMonthly, amount]
         );
         imported.push({ category: categoryName, as_of: asOf, actual_annual: amount });
       } catch (err) {
@@ -774,6 +810,105 @@ app.put('/api/mortgage', async (req, res) => {
   } catch (error) {
     console.error('Error updating mortgage:', error);
     res.status(500).json({ error: error.message || 'Failed to update mortgage' });
+  }
+});
+
+// ==================== SAVINGS LIMITS (Stage 2 — tax-leveraged maximums) ====================
+// IRS annual limits by year. Update annually; values for 2024–2026.
+
+const SAVINGS_LIMITS_BY_YEAR = {
+  2024: {
+    ira: 7000,
+    ira_catch_up: 1000,
+    hsa_individual: 4150,
+    hsa_family: 8300,
+    hsa_catch_up: 1000,
+    '401k_elective': 23000,
+    '401k_catch_up': 7500,
+  },
+  2025: {
+    ira: 7000,
+    ira_catch_up: 1000,
+    hsa_individual: 4300,
+    hsa_family: 8550,
+    hsa_catch_up: 1000,
+    '401k_elective': 23500,
+    '401k_catch_up': 7500,
+  },
+  2026: {
+    ira: 7500,
+    ira_catch_up: 1100,
+    hsa_individual: 4400,
+    hsa_family: 8750,
+    hsa_catch_up: 1000,
+    '401k_elective': 24500,
+    '401k_catch_up': 8000,
+  },
+};
+
+app.get('/api/savings-limits', async (req, res) => {
+  try {
+    const yearParam = req.query.year != null ? parseInt(String(req.query.year).trim(), 10) : null;
+    let household = null;
+    try {
+      const hResult = await pool.query('SELECT p1_display_name, p2_display_name, p1_birth_year, p2_birth_year FROM household ORDER BY id LIMIT 1');
+      if (hResult.rows.length > 0) household = hResult.rows[0];
+    } catch (e) { /* ignore */ }
+
+    const p1BirthYear = household?.p1_birth_year != null ? parseInt(household.p1_birth_year, 10) : null;
+    const p2BirthYear = household?.p2_birth_year != null ? parseInt(household.p2_birth_year, 10) : null;
+
+    function ageAtEoy(birthYear, year) {
+      if (birthYear == null || !Number.isInteger(birthYear)) return null;
+      return year - birthYear;
+    }
+
+    function buildPartyLimits(birthYear, base, year) {
+      const age = ageAtEoy(birthYear, year);
+      const iraCatchUp = age != null && age >= 50 ? (base.ira_catch_up || 0) : 0;
+      const k401CatchUp = age != null && age >= 50 ? (base['401k_catch_up'] || 0) : 0;
+      const hsaCatchUp = age != null && age >= 55 ? (base.hsa_catch_up || 0) : 0;
+      return {
+        age_at_eoy: age,
+        ira_limit: (base.ira || 0) + iraCatchUp,
+        ira_catch_up_applies: iraCatchUp > 0,
+        '401k_elective_limit': (base['401k_elective'] || 0) + k401CatchUp,
+        '401k_catch_up_applies': k401CatchUp > 0,
+        hsa_individual_limit: (base.hsa_individual || 0) + (hsaCatchUp > 0 ? hsaCatchUp : 0),
+        hsa_family_limit: (base.hsa_family || 0) + (hsaCatchUp > 0 ? hsaCatchUp : 0),
+        hsa_catch_up_applies: hsaCatchUp > 0,
+      };
+    }
+
+    if (yearParam != null && Number.isInteger(yearParam) && yearParam >= 2020 && yearParam <= 2030) {
+      const base = SAVINGS_LIMITS_BY_YEAR[yearParam] || SAVINGS_LIMITS_BY_YEAR[2025];
+      const p1 = buildPartyLimits(p1BirthYear, base, yearParam);
+      const p2 = buildPartyLimits(p2BirthYear, base, yearParam);
+      return res.json({
+        year: yearParam,
+        household: household ? { p1_display_name: household.p1_display_name, p2_display_name: household.p2_display_name } : null,
+        limits: base,
+        p1,
+        p2,
+      });
+    }
+
+    const years = {};
+    for (const [yStr, base] of Object.entries(SAVINGS_LIMITS_BY_YEAR)) {
+      const y = parseInt(yStr, 10);
+      years[y] = {
+        base,
+        p1: buildPartyLimits(p1BirthYear, base, y),
+        p2: buildPartyLimits(p2BirthYear, base, y),
+      };
+    }
+    res.json({
+      household: household ? { p1_display_name: household.p1_display_name, p2_display_name: household.p2_display_name } : null,
+      years,
+    });
+  } catch (error) {
+    console.error('Error fetching savings limits:', error);
+    res.status(500).json({ error: error.message || 'Failed to fetch savings limits' });
   }
 });
 
