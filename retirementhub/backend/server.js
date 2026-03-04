@@ -1,5 +1,7 @@
 const express = require('express');
 const cors = require('cors');
+const multer = require('multer');
+const { parse: parseCsv } = require('csv-parse/sync');
 const { createDbPool, testConnection } = require('../../common/database/db-config');
 require('dotenv').config();
 
@@ -10,6 +12,8 @@ let isReady = false;
 
 app.use(cors());
 app.use(express.json());
+
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 2 * 1024 * 1024 } });
 
 const pool = createDbPool({
   database: process.env.DB_NAME || 'retirementhub',
@@ -431,6 +435,231 @@ app.post('/api/expense-lines', async (req, res) => {
   } catch (error) {
     console.error('Error creating expense line:', error);
     res.status(500).json({ error: error.message || 'Failed to create expense line' });
+  }
+});
+
+// ==================== IMPORT (CSV from GnuCash-style reports) ====================
+// Expenses CSV: category_name, actual_annual [, as_of ]. Headers optional; as_of defaults to request body or last day of current year.
+// Account balances CSV: account_name, as_of, balance. Headers optional. Missing accounts are created as savings/joint.
+
+const CATEGORY_ALIASES = {
+  'educational': 'Education',
+  'entertain': 'Entertainment',
+  'home improvement': 'Home Repair',
+  'serv': 'Auto Service',
+  'bank chrg': 'Misc',
+  'registration': 'Auto Registration',
+  'fuel': 'Auto Fuel',
+  'household': 'Groceries',
+  'auto': 'Auto',
+  'homeowners': 'Homeowners',
+  'medical (pretax)': 'Medical',
+  'mortgage interest': 'Supplies',
+  'medicine and doctors': 'Medicine/Docs',
+  'misc': 'Misc',
+  'total expenses (c-ez)': 'Misc',
+  'property tax': 'Property Tax',
+  'sales tax': 'Misc',
+  'tax prep': 'Misc',
+  'federal': 'Federal',
+  'medicare': 'Medicare',
+  'social security': 'Social Security',
+  'cable': 'Cable',
+  'cell phone': 'Cell Phone',
+  'electric': 'Electricity',
+  'garbage collection': 'Garbage',
+  'gas': 'Gas',
+  'reno sewer': 'Sewer',
+  'water': 'Water',
+  'expenses': 'Misc',
+  'lodging': 'Travel',
+  'memberships': 'Memberships',
+  'mad money': 'Mad Money',
+  'travel': 'Travel',
+};
+
+function normalizeCategoryName(name) {
+  if (!name || typeof name !== 'string') return '';
+  const t = name.trim().toLowerCase();
+  return CATEGORY_ALIASES[t] || name.trim();
+}
+
+function parseCsvRows(buffer) {
+  const text = buffer.toString('utf8').trim();
+  if (!text) return { rows: [], headers: [] };
+  try {
+    const parsed = parseCsv(text, { skip_empty_lines: true, trim: true, relax_column_count: true });
+    if (!parsed.length) return { rows: [], headers: [] };
+    const first = parsed[0];
+    const headers = first.map((h) => (h != null ? String(h).trim().toLowerCase() : ''));
+    const rows = parsed.slice(1).map((row) => {
+      const obj = {};
+      headers.forEach((h, i) => { obj[h] = row[i] != null ? String(row[i]).trim() : ''; });
+      return obj;
+    });
+    return { rows, headers };
+  } catch (e) {
+    throw new Error('Invalid CSV: ' + (e.message || String(e)));
+  }
+}
+
+app.post('/api/import/expenses', upload.single('file'), async (req, res) => {
+  try {
+    if (!req.file || !req.file.buffer) {
+      return res.status(400).json({ error: 'CSV file is required. Use form field name "file".' });
+    }
+    const asOfFromBody = req.body.as_of && String(req.body.as_of).trim();
+    if (!asOfFromBody) {
+      return res.status(400).json({ error: 'As of date is required. Select a date in the import form.' });
+    }
+    let asOf = asOfFromBody.slice(0, 10);
+    if (asOf.includes('/')) {
+      const parts = asOf.split(/[/-]/);
+      if (parts.length >= 3) asOf = `${parts[2]}-${parts[0].padStart(2, '0')}-${parts[1].padStart(2, '0')}`;
+    }
+    const { rows, headers } = parseCsvRows(req.file.buffer);
+    const categoryIdx = headers.findIndex((h) => /category|name/i.test(h) && !/group|amount|actual/.test(h));
+    const groupIdx = headers.findIndex((h) => /group/i.test(h));
+    const amountIdx = headers.findIndex((h) => /actual_annual|amount|total/i.test(h));
+    const getCategory = (row) => (categoryIdx >= 0 ? row[headers[categoryIdx]] : row[0]);
+    const getGroup = (row) => (groupIdx >= 0 ? row[headers[groupIdx]] : (headers.length > 2 ? row[1] : ''));
+    const getAmount = (row) => (amountIdx >= 0 ? row[headers[amountIdx]] : row[headers.length > 2 ? 2 : 1]);
+
+    const categoriesResult = await pool.query('SELECT id, name, category_group FROM expense_category');
+    const categoryByName = {};
+    categoriesResult.rows.forEach((r) => { categoryByName[r.name.toLowerCase()] = { id: r.id, category_group: r.category_group }; });
+
+    const imported = [];
+    const skipped = [];
+    const errors = [];
+
+    const groupAliases = { discretionary: 'discretionary', fixed: 'fixed', insurance: 'insurance', utilities: 'utilities', tax: 'tax', personal: 'personal' };
+
+    for (const row of rows) {
+      const rawName = getCategory(row);
+      const amountStr = getAmount(row);
+      if (!rawName || rawName.toLowerCase() === 'grand total') continue;
+      const name = normalizeCategoryName(rawName);
+      const cat = name ? categoryByName[name.toLowerCase()] : null;
+      if (!cat) {
+        skipped.push({ category: rawName, reason: 'No matching expense category' });
+        continue;
+      }
+      const rowGroup = getGroup(row);
+      if (rowGroup && rowGroup.trim()) {
+        const normalizedGroup = String(rowGroup).trim().toLowerCase().replace(/\s+/g, '_');
+        const wantGroup = groupAliases[normalizedGroup] || normalizedGroup;
+        if (cat.category_group !== wantGroup) {
+          skipped.push({ category: rawName, reason: `Group "${rowGroup}" does not match category group "${cat.category_group}"` });
+          continue;
+        }
+      }
+      const amount = parseFloat(String(amountStr).replace(/[$,]/g, ''));
+      if (Number.isNaN(amount)) {
+        errors.push({ category: rawName, reason: 'Invalid amount' });
+        continue;
+      }
+      try {
+        await pool.query(
+          `INSERT INTO expense_line (expense_category_id, as_of, current_monthly, retirement_monthly, actual_annual)
+           VALUES ($1, $2, 0, NULL, $3)
+           ON CONFLICT (expense_category_id, as_of) DO UPDATE SET
+             actual_annual = EXCLUDED.actual_annual,
+             modified = CURRENT_TIMESTAMP`,
+          [cat.id, asOf, amount]
+        );
+        imported.push({ category: name, as_of: asOf, actual_annual: amount });
+      } catch (err) {
+        errors.push({ category: rawName, reason: err.message || 'Database error' });
+      }
+    }
+
+    res.status(200).json({
+      imported: imported.length,
+      skipped: skipped.length,
+      errors: errors.length,
+      details: { imported, skipped, errors },
+    });
+  } catch (error) {
+    console.error('Import expenses error:', error);
+    res.status(400).json({ error: error.message || 'Import failed' });
+  }
+});
+
+app.post('/api/import/account-balances', upload.single('file'), async (req, res) => {
+  try {
+    if (!req.file || !req.file.buffer) {
+      return res.status(400).json({ error: 'CSV file is required. Use form field name "file".' });
+    }
+    const asOfFromBody = req.body.as_of && String(req.body.as_of).trim();
+    if (!asOfFromBody) {
+      return res.status(400).json({ error: 'As of date is required. Select a date in the import form.' });
+    }
+    let asOf = asOfFromBody.slice(0, 10);
+    if (asOf.includes('/')) {
+      const parts = asOf.split(/[/-]/);
+      if (parts.length >= 3) asOf = `${parts[2]}-${parts[0].padStart(2, '0')}-${parts[1].padStart(2, '0')}`;
+    }
+    const { rows, headers } = parseCsvRows(req.file.buffer);
+    const nameIdx = headers.findIndex((h) => /account|name/i.test(h) && !/balance/.test(h));
+    const balanceIdx = headers.findIndex((h) => /balance|amount/i.test(h));
+    const getName = (row) => (nameIdx >= 0 ? row[headers[nameIdx]] : row[0]);
+    const getBalance = (row) => (balanceIdx >= 0 ? row[headers[balanceIdx]] : row[1]);
+
+    const accountsResult = await pool.query('SELECT id, name FROM account');
+    const accountByName = {};
+    accountsResult.rows.forEach((r) => { accountByName[r.name.toLowerCase()] = r.id; });
+
+    const imported = [];
+    const created = [];
+    const errors = [];
+
+    for (const row of rows) {
+      const accountName = getName(row);
+      if (!accountName || accountName.toLowerCase() === 'grand total') continue;
+      const balanceStr = getBalance(row);
+      const balance = parseFloat(String(balanceStr).replace(/[$,]/g, ''));
+      if (Number.isNaN(balance)) {
+        errors.push({ account: accountName, reason: 'Invalid balance' });
+        continue;
+      }
+      let accountId = accountByName[accountName.toLowerCase()];
+      if (!accountId) {
+        try {
+          const ins = await pool.query(
+            `INSERT INTO account (name, account_type, owner_type, sort_order) VALUES ($1, 'savings', 'joint', 0) RETURNING id, name`,
+            [accountName.trim()]
+          );
+          accountId = ins.rows[0].id;
+          accountByName[accountName.toLowerCase()] = accountId;
+          created.push(accountName.trim());
+        } catch (err) {
+          errors.push({ account: accountName, reason: err.message || 'Could not create account' });
+          continue;
+        }
+      }
+      try {
+        await pool.query(
+          `INSERT INTO account_balance (account_id, as_of, balance)
+           VALUES ($1, $2, $3)
+           ON CONFLICT (account_id, as_of) DO UPDATE SET balance = EXCLUDED.balance, modified = CURRENT_TIMESTAMP`,
+          [accountId, asOf, balance]
+        );
+        imported.push({ account: accountName, as_of: asOf, balance });
+      } catch (err) {
+        errors.push({ account: accountName, reason: err.message || 'Database error' });
+      }
+    }
+
+    res.status(200).json({
+      imported: imported.length,
+      accounts_created: created.length,
+      errors: errors.length,
+      details: { imported, accounts_created: created, errors },
+    });
+  } catch (error) {
+    console.error('Import account balances error:', error);
+    res.status(400).json({ error: error.message || 'Import failed' });
   }
 });
 
