@@ -326,28 +326,68 @@ app.get('/api/items/:id', async (req, res) => {
 
 // Create item
 app.post('/api/items', async (req, res) => {
+  let name;
   try {
-    const { name, department, qty } = req.body;
-  const result = await pool.query(
+    const rawName = req.body.name;
+    name = typeof rawName === 'string' ? rawName.trim() : '';
+    if (!name) {
+      return res.status(400).json({ error: 'Validation failed', detail: 'Item name is required' });
+    }
+    const { department, qty } = req.body;
+    const result = await pool.query(
       'INSERT INTO items (name, department, qty) VALUES ($1, $2, $3) RETURNING *',
       [name, department || null, qty || 0]
     );
     res.status(201).json(result.rows[0]);
   } catch (error) {
     console.error('Error creating item:', error);
-    const isDuplicate = error.code === '23505'; // PostgreSQL unique_violation
-    const detail = isDuplicate
-      ? 'An item with this name already exists'
-      : (error.message || 'Unknown error');
-    const status = isDuplicate ? 409 : 500;
-    res.status(status).json({ error: 'Failed to create item', detail });
+    if (error.code === '23505') {
+      // Unique violation: look up conflicting row (case-insensitive) for a helpful message
+      const attemptedName = typeof req.body?.name === 'string' ? req.body.name.trim() : (name || '');
+      if (attemptedName) {
+        try {
+          const existing = await pool.query(
+            'SELECT id, name FROM items WHERE LOWER(name) = LOWER($1)',
+            [attemptedName]
+          );
+          if (existing.rows.length > 0) {
+            const row = existing.rows[0];
+            return res.status(409).json({
+              error: 'Failed to create item',
+              detail: `An item with this name already exists: "${row.name}" (ID: ${row.id}). Find it in the Items list below.`,
+              existingItem: { id: row.id, name: row.name }
+            });
+          }
+        } catch (lookupErr) {
+          console.error('Lookup conflicting item:', lookupErr);
+        }
+      }
+      // Constraint failed but we couldn't find the row (e.g. different DB/collation). Include PG details for debugging.
+      console.error('23505 constraint:', error.constraint, 'detail:', error.detail);
+      return res.status(409).json({
+        error: 'Failed to create item',
+        detail: `An item with this name already exists (constraint: ${error.constraint || 'unknown'}).`,
+        existingItem: null
+      });
+    }
+    res.status(500).json({
+      error: 'Failed to create item',
+      detail: error.message || 'Unknown error'
+    });
   }
 });
 
 // Update item
 app.put('/api/items/:id', async (req, res) => {
+  let name;
   try {
-    const { name, department, qty } = req.body;
+    const rawName = req.body.name;
+    name = typeof rawName === 'string' ? rawName.trim() : '';
+    if (!name) {
+      return res.status(400).json({ error: 'Validation failed', detail: 'Item name is required' });
+    }
+    const { department, qty } = req.body;
+    const id = req.params.id;
     const result = await pool.query(
       'UPDATE items SET name = $1, department = $2, qty = $3 WHERE id = $4 RETURNING *',
       [name, department || null, qty || 0, req.params.id]
@@ -358,12 +398,38 @@ app.put('/api/items/:id', async (req, res) => {
     res.json(result.rows[0]);
   } catch (error) {
     console.error('Error updating item:', error);
-    const isDuplicate = error.code === '23505';
-    const detail = isDuplicate
-      ? 'An item with this name already exists'
-      : (error.message || 'Unknown error');
-    const status = isDuplicate ? 409 : 500;
-    res.status(status).json({ error: 'Failed to update item', detail });
+    if (error.code === '23505') {
+      const attemptedName = typeof req.body?.name === 'string' ? req.body.name.trim() : (name || '');
+      const id = req.params.id;
+      if (attemptedName) {
+        try {
+          const existing = await pool.query(
+            'SELECT id, name FROM items WHERE LOWER(name) = LOWER($1) AND id != $2',
+            [attemptedName, id]
+          );
+          if (existing.rows.length > 0) {
+            const row = existing.rows[0];
+            return res.status(409).json({
+              error: 'Failed to update item',
+              detail: `An item with this name already exists: "${row.name}" (ID: ${row.id}). Find it in the Items list below.`,
+              existingItem: { id: row.id, name: row.name }
+            });
+          }
+        } catch (lookupErr) {
+          console.error('Lookup conflicting item:', lookupErr);
+        }
+      }
+      console.error('23505 constraint:', error.constraint, 'detail:', error.detail);
+      return res.status(409).json({
+        error: 'Failed to update item',
+        detail: `An item with this name already exists (constraint: ${error.constraint || 'unknown'}).`,
+        existingItem: null
+      });
+    }
+    res.status(500).json({
+      error: 'Failed to update item',
+      detail: error.message || 'Unknown error'
+    });
   }
 });
 
@@ -381,84 +447,39 @@ app.delete('/api/items/:id', async (req, res) => {
   }
 });
 
-// ==================== SHOPPING LIST ====================
-
-const ONE_DAY_MS = 24 * 60 * 60 * 1000;
-
-const SETTING_LAST_PURCHASED_CLEANUP = 'shopping_list_last_cleanup_at';
-
-/** If last cleanup was 24+ hours ago (or never), delete purchased items and update timestamp. */
-async function runPurchasedCleanupIfDue(pool) {
-  const client = await pool.connect();
-  try {
-    const row = await client.query(
-      'SELECT value FROM config.settings WHERE key = $1',
-      [SETTING_LAST_PURCHASED_CLEANUP]
-    );
-    const value = row.rows[0]?.value;
-    const lastAt = value ? new Date(value) : null;
-    const now = Date.now();
-    if (lastAt !== null && !isNaN(lastAt.getTime()) && (now - lastAt.getTime()) < ONE_DAY_MS) {
-      return;
-    }
-    await client.query('DELETE FROM shopping_list WHERE purchased = 1');
-    await client.query(
-      `INSERT INTO config.settings (key, value) VALUES ($1, $2)
-       ON CONFLICT (key) DO UPDATE SET value = $2`,
-      [SETTING_LAST_PURCHASED_CLEANUP, new Date().toISOString()]
-    );
-  } finally {
-    client.release();
-  }
-}
+// ==================== SHOPPING LIST (items with qty > 0) ====================
 
 // Get shopping list for a store (All store -1: all items in General zone, no storezones)
 app.get('/api/shopping-list/:storeId', async (req, res) => {
   try {
-    await runPurchasedCleanupIfDue(pool);
     const { showPurchased } = req.query;
+    // Shopping list = items where qty > 0; no separate "purchased" state (marking purchased sets qty to 0)
     if (isAllStore(req.params.storeId)) {
-      let query = `
-        SELECT sl.name, sl.description, sl.quantity, sl.purchased,
-               sl.department_id, sl.item_id,
-               'General' as zone, 0 as zone_seq,
-               d.name as department_name
-        FROM shopping_list sl
-        LEFT JOIN common.department d ON sl.department_id = d.id
-      `;
-      if (showPurchased !== 'true') {
-        query += ` WHERE (sl.purchased IS NULL OR sl.purchased = 0)`;
-      }
-      query += ' ORDER BY sl.name';
-      const result = await pool.query(query);
+      const result = await pool.query(
+        `SELECT i.name, i.name as description, i.qty::text as quantity, 0 as purchased,
+                i.department as department_id, i.id as item_id,
+                'General' as zone, 0 as zone_seq,
+                d.name as department_name
+         FROM items i
+         LEFT JOIN common.department d ON i.department = d.id
+         WHERE i.qty > 0
+         ORDER BY i.name`
+      );
       return res.json(result.rows);
     }
-    let query = `
-      SELECT 
-        sl.name,
-        sl.description,
-        sl.quantity,
-        sl.purchased,
-        sl.department_id,
-        sl.item_id,
-        COALESCE(sz.zonename, 'Uncategorized') as zone,
-        COALESCE(sz.zonesequence, 999) as zone_seq,
-        d.name as department_name
-      FROM shopping_list sl
-      LEFT JOIN storezones sz ON sz.departmentid = sl.department_id AND sz.storeid = $1
-      LEFT JOIN common.department d ON sl.department_id = d.id
-    `;
-    
-    const params = [req.params.storeId];
-    let paramCount = 1;
-    
-    if (showPurchased !== 'true') {
-      query += ` WHERE (sl.purchased IS NULL OR sl.purchased = 0)`;
-    }
-    
-    query += ' ORDER BY COALESCE(sz.zonesequence, 999), sl.name';
-    
-    const result = await pool.query(query, params);
+    const result = await pool.query(
+      `SELECT i.name, i.name as description, i.qty::text as quantity, 0 as purchased,
+              i.department as department_id, i.id as item_id,
+              COALESCE(sz.zonename, 'Uncategorized') as zone,
+              COALESCE(sz.zonesequence, 999) as zone_seq,
+              d.name as department_name
+       FROM items i
+       LEFT JOIN storezones sz ON sz.departmentid = i.department AND sz.storeid = $1
+       LEFT JOIN common.department d ON i.department = d.id
+       WHERE i.qty > 0
+       ORDER BY COALESCE(sz.zonesequence, 999), i.name`,
+      [req.params.storeId]
+    );
     res.json(result.rows);
   } catch (error) {
     console.error('Error fetching shopping list:', error);
@@ -466,16 +487,17 @@ app.get('/api/shopping-list/:storeId', async (req, res) => {
   }
 });
 
-// Get all shopping list items (for management page)
+// Get all shopping list items (for management page) — items with qty > 0
 app.get('/api/shopping-list', async (req, res) => {
   try {
-    await runPurchasedCleanupIfDue(pool);
     const result = await pool.query(
-      `SELECT sl.*, d.name as department_name, i.name as item_name
-       FROM shopping_list sl
-       LEFT JOIN common.department d ON sl.department_id = d.id
-       LEFT JOIN items i ON sl.item_id = i.id
-       ORDER BY sl.name`
+      `SELECT i.id as item_id, i.name, i.name as item_name, i.name as description,
+              i.department as department_id, i.qty::text as quantity, 0 as purchased,
+              d.name as department_name
+       FROM items i
+       LEFT JOIN common.department d ON i.department = d.id
+       WHERE i.qty > 0
+       ORDER BY i.name`
     );
     res.json(result.rows);
   } catch (error) {
@@ -484,86 +506,107 @@ app.get('/api/shopping-list', async (req, res) => {
   }
 });
 
-// Add item to shopping list
+// Add item to shopping list (increment qty or set by item_id/name)
 app.post('/api/shopping-list', async (req, res) => {
   try {
-    const { name, description, quantity, department_id, item_id } = req.body;
-    const result = await pool.query(
-      `INSERT INTO shopping_list (name, description, quantity, department_id, item_id, purchased) 
-       VALUES ($1, $2, $3, $4, $5, 0) 
-       ON CONFLICT (name) 
-       DO UPDATE SET description = $2, quantity = $3, department_id = $4, item_id = $5, modified = CURRENT_TIMESTAMP 
-       RETURNING *`,
-      [name, description || null, quantity || '1', department_id || null, item_id || null]
-    );
-    res.status(201).json(result.rows[0]);
+    const { name, quantity, department_id, item_id } = req.body;
+    const addQty = parseFloat(quantity) || 1;
+    let result;
+    if (item_id) {
+      result = await pool.query(
+        `UPDATE items SET qty = COALESCE(qty, 0) + $1 WHERE id = $2 RETURNING *`,
+        [addQty, item_id]
+      );
+    } else if (name) {
+      result = await pool.query(
+        `UPDATE items SET qty = COALESCE(qty, 0) + $1 WHERE name = $2 RETURNING *`,
+        [addQty, name]
+      );
+    } else {
+      return res.status(400).json({ error: 'name or item_id required' });
+    }
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Item not found' });
+    }
+    const row = result.rows[0];
+    res.status(201).json({
+      name: row.name,
+      description: row.name,
+      quantity: String(row.qty),
+      purchased: 0,
+      department_id: row.department,
+      item_id: row.id
+    });
   } catch (error) {
     console.error('Error adding to shopping list:', error);
     res.status(500).json({ error: 'Failed to add to shopping list' });
   }
 });
 
-// Update shopping list item
+// Update shopping list item (set qty by item name)
 app.put('/api/shopping-list/:name', async (req, res) => {
   try {
-    const { quantity, purchased } = req.body;
-    const updates = [];
-    const values = [];
-    let paramCount = 1;
-
-    if (quantity !== undefined) {
-      updates.push(`quantity = $${paramCount++}`);
-      values.push(quantity);
-    }
-    if (purchased !== undefined) {
-      updates.push(`purchased = $${paramCount++}`);
-      values.push(purchased ? 1 : 0);
-    }
-
-    if (updates.length === 0) {
+    const { quantity } = req.body;
+    if (quantity === undefined) {
       return res.status(400).json({ error: 'No fields to update' });
     }
-
-    updates.push(`modified = CURRENT_TIMESTAMP`);
-    values.push(req.params.name);
-
+    const qty = parseFloat(quantity);
+    const num = Number.isNaN(qty) ? 0 : Math.max(0, qty);
     const result = await pool.query(
-      `UPDATE shopping_list SET ${updates.join(', ')} WHERE name = $${paramCount} RETURNING *`,
-      values
+      'UPDATE items SET qty = $1 WHERE name = $2 RETURNING *',
+      [num, req.params.name]
     );
-
     if (result.rows.length === 0) {
       return res.status(404).json({ error: 'Shopping list item not found' });
     }
-    res.json(result.rows[0]);
+    const row = result.rows[0];
+    res.json({
+      name: row.name,
+      description: row.name,
+      quantity: String(row.qty),
+      purchased: 0,
+      department_id: row.department,
+      item_id: row.id
+    });
   } catch (error) {
     console.error('Error updating shopping list:', error);
     res.status(500).json({ error: 'Failed to update shopping list' });
   }
 });
 
-// Mark item as purchased/unpurchased
+// Mark item as purchased — set qty to 0 so it leaves the list; unpurchase sets qty to 1
 app.patch('/api/shopping-list/:name/purchased', async (req, res) => {
   try {
     const { purchased } = req.body;
+    const qty = purchased ? 0 : 1;
     const result = await pool.query(
-      'UPDATE shopping_list SET purchased = $1, modified = CURRENT_TIMESTAMP WHERE name = $2 RETURNING *',
-      [purchased ? 1 : 0, req.params.name]
+      'UPDATE items SET qty = $1 WHERE name = $2 RETURNING *',
+      [qty, req.params.name]
     );
     if (result.rows.length === 0) {
       return res.status(404).json({ error: 'Shopping list item not found' });
     }
-    res.json(result.rows[0]);
+    const row = result.rows[0];
+    res.json({
+      name: row.name,
+      quantity: String(row.qty),
+      purchased: purchased ? 1 : 0,
+      department_id: row.department,
+      item_id: row.id
+    });
   } catch (error) {
     console.error('Error updating purchased status:', error);
     res.status(500).json({ error: 'Failed to update purchased status' });
   }
 });
 
-// Remove item from shopping list
+// Remove item from shopping list (set qty to 0)
 app.delete('/api/shopping-list/:name', async (req, res) => {
   try {
-    const result = await pool.query('DELETE FROM shopping_list WHERE name = $1 RETURNING *', [req.params.name]);
+    const result = await pool.query(
+      'UPDATE items SET qty = 0 WHERE name = $1 RETURNING *',
+      [req.params.name]
+    );
     if (result.rows.length === 0) {
       return res.status(404).json({ error: 'Shopping list item not found' });
     }

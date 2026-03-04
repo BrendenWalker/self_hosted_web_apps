@@ -16,6 +16,8 @@ function ShoppingListPage() {
     name: '',
     department: null
   });
+  const [highlightItemId, setHighlightItemId] = useState(null);
+  const itemRowRefs = React.useRef({});
 
   useEffect(() => {
     loadData();
@@ -185,8 +187,17 @@ function ShoppingListPage() {
       setEditingItem(null);
       await loadData();
     } catch (err) {
-      const detail = err.response?.data?.detail || err.response?.data?.error;
+      const data = err.response?.data;
+      const detail = data?.detail || data?.error;
       setError(detail ? `${detail}` : `Failed to ${editingItem ? 'update' : 'create'} item`);
+      // If server tells us which item conflicts, switch to Items tab and show it
+      const existingItem = data?.existingItem;
+      if (existingItem?.id != null && existingItem?.name) {
+        setActiveTab('items');
+        setItemFilter(existingItem.name);
+        setHighlightItemId(existingItem.id);
+        setTimeout(() => setHighlightItemId(null), 5000);
+      }
       console.error(err);
     }
   };
@@ -228,6 +239,13 @@ function ShoppingListPage() {
 
   // On your list: exclude purchased items
   const unpurchasedList = shoppingList.filter(item => !item.purchased || item.purchased === 0);
+
+  // Scroll conflicting item into view when we highlight it
+  useEffect(() => {
+    if (highlightItemId == null) return;
+    const el = itemRowRefs.current[highlightItemId];
+    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }, [highlightItemId]);
 
   return (
     <div className="shopping-list-page">
@@ -354,7 +372,8 @@ function ShoppingListPage() {
                         return (
                           <div
                             key={item.id}
-                            className={`item-row ${inList ? 'in-shopping-list' : ''}`}
+                            ref={r => { itemRowRefs.current[item.id] = r; }}
+                            className={`item-row ${inList ? 'in-shopping-list' : ''} ${highlightItemId === item.id ? 'item-row-highlight' : ''}`}
                             onDoubleClick={() => handleItemDoubleClick(item)}
                             title="Double-click to add/remove from shopping list"
                           >

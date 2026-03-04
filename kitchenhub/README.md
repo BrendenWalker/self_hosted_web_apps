@@ -55,6 +55,12 @@ Use your DB name if different: `psql -U your_user -d your_database -f kitchenhub
    psql -U postgres -d hausfrau -f kitchenhub/database/migrations/003-recipe-multiple-categories.sql
    ```
 
+   - **Shopping list in items table**: If you have an existing `shopping_list` table, run once to copy quantities into `items.qty` and drop the old table (shopping list is now “items with qty > 0”):
+
+   ```bash
+   psql -U postgres -d hausfrau -f kitchenhub/database/migrations/005-shopping-list-to-items.sql
+   ```
+
 4. (Optional) Migrate data from Firebird database:
 
 If you have an existing Firebird database, use the automated migration script:

@@ -38,19 +38,6 @@ CREATE TABLE IF NOT EXISTS items (
 CREATE INDEX IF NOT EXISTS idx_items_department ON items(department);
 CREATE INDEX IF NOT EXISTS idx_items_changed ON items(changed);
 
-CREATE TABLE IF NOT EXISTS shopping_list (
-    name VARCHAR(80) NOT NULL PRIMARY KEY,
-    department_id INTEGER REFERENCES common.department(id),
-    description VARCHAR(80),
-    quantity VARCHAR(80),
-    purchased INTEGER DEFAULT 0,
-    item_id INTEGER REFERENCES items(id),
-    modified TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
-CREATE INDEX IF NOT EXISTS idx_shopping_list_dept ON shopping_list(department_id);
-CREATE INDEX IF NOT EXISTS idx_shopping_list_itemid ON shopping_list(item_id);
-CREATE INDEX IF NOT EXISTS idx_shopping_list_purchased ON shopping_list(purchased);
-
 -- ========== CONFIG ==========
 CREATE SCHEMA IF NOT EXISTS config;
 
