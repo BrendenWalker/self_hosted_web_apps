@@ -37,17 +37,30 @@ function defaultQueryHandler(sql, params) {
   if (s.includes('INSERT INTO common.department')) return { rows: [{ id: 2, name: params?.[0] || 'New' }] };
   if (s.includes('FROM items i') && s.includes('LEFT JOIN common.department')) {
     if (s.includes('WHERE i.id')) return { rows: params?.[0] == 1 ? [{ id: 1, name: 'Item', department: 1, department_name: 'Produce' }] : [] };
+    if (s.includes('WHERE i.qty > 0')) {
+      // Shopping list GET (by store or all): return rows with selected columns
+      return { rows: [{ name: 'Milk', description: 'Milk', quantity: '1', purchased: 0, department_id: 1, item_id: 1, zone: 'General', zone_seq: 0, department_name: 'Produce' }] };
+    }
     return { rows: [{ id: 1, name: 'Item', department: 1, department_name: 'Produce' }] };
   }
+  if (s.includes('FROM items i') && s.includes('storezones sz') && s.includes('WHERE i.qty > 0')) {
+    return { rows: [{ name: 'Milk', quantity: '1', department_id: 1, item_id: 1, zone: 'Aisle 1', zone_seq: 1, department_name: 'Produce' }] };
+  }
   if (s.includes('INSERT INTO items')) return { rows: [{ id: 1, name: params?.[0], department: params?.[1], qty: params?.[2] ?? 0 }] };
-  if (s.includes('UPDATE items SET')) return { rows: [{ id: params?.[3], name: params?.[0], department: params?.[1], qty: params?.[2] }] };
+  if (s.includes('UPDATE items SET name = $1, department = $2, qty = $3')) return { rows: [{ id: params?.[3], name: params?.[0], department: params?.[1], qty: params?.[2] }] };
+  // Shopping list: increment qty (POST add)
+  if (s.includes('UPDATE items SET qty = COALESCE(qty, 0) + $1')) {
+    const name = params?.[1]; // name or id; when by name params are [addQty, name]
+    return { rows: [{ id: 1, name: typeof name === 'string' ? name : 'Milk', department: 1, qty: params?.[0] ?? 1 }] };
+  }
+  // Shopping list: set qty (PUT, PATCH purchased, DELETE remove)
+  if (s.includes('UPDATE items SET qty = $1 WHERE name = $2') || (s.includes('UPDATE items SET qty = 0 WHERE name = $1'))) {
+    const nameParam = s.includes('WHERE name = $2') ? params?.[1] : params?.[0];
+    const qtyParam = s.includes('WHERE name = $2') ? params?.[0] : 0;
+    return { rows: nameParam === 'Nonexistent' ? [] : [{ id: 1, name: nameParam || 'Milk', department: 1, qty: qtyParam }] };
+  }
   if (s.includes('DELETE FROM items')) return { rows: [{ id: params?.[0] }] };
-  if (s.includes('FROM shopping_list sl') && s.includes('LEFT JOIN common.department')) return { rows: [] };
-  if (s.includes('FROM shopping_list sl') && s.includes('LEFT JOIN items')) return { rows: [] };
-  if (s.includes('INSERT INTO shopping_list') || s.includes('ON CONFLICT (name)')) return { rows: [{ name: params?.[0], description: null, quantity: '1', department_id: null, item_id: null, purchased: 0 }] };
-  if (s.includes('UPDATE shopping_list SET') && s.includes('quantity')) return { rows: [{ name: params?.[params.length - 1], quantity: params?.[0], purchased: 0 }] };
-  if (s.includes('UPDATE shopping_list SET purchased')) return { rows: [{ name: params?.[1], purchased: params?.[0] }] };
-  if (s.includes('DELETE FROM shopping_list WHERE name')) return { rows: [{ name: params?.[0] }] };
+  // Legacy shopping_list mocks removed (shopping list now uses items table)
   // DELETE store zone: must return at least one row for 200
   if (s.includes('DELETE FROM storezones') && s.includes('RETURNING *')) return { rows: [{ storeid: 1, zonesequence: 1, departmentid: 1 }] };
   if (s.includes('UPDATE storezones SET zonesequence')) return { rows: [] };
@@ -341,7 +354,7 @@ describe('KitchenHub API', () => {
 
     it('PUT /api/shopping-list/:name returns 404 when not found', async () => {
       mockPool.query.mockImplementation((sql, params) => {
-        if (sql && sql.includes('UPDATE shopping_list SET') && sql.includes('quantity')) return Promise.resolve({ rows: [] });
+        if (sql && sql.includes('UPDATE items SET qty = $1 WHERE name = $2') && params?.[1] === 'Nonexistent') return Promise.resolve({ rows: [] });
         return Promise.resolve(defaultQueryHandler(sql, params));
       });
       const res = await request(serverModule.app).put('/api/shopping-list/Nonexistent').send({ quantity: '1' });
@@ -355,7 +368,7 @@ describe('KitchenHub API', () => {
 
     it('PATCH /api/shopping-list/:name/purchased returns 404 when not found', async () => {
       mockPool.query.mockImplementation((sql, params) => {
-        if (sql && sql.includes('UPDATE shopping_list SET purchased')) return Promise.resolve({ rows: [] });
+        if (sql && sql.includes('UPDATE items SET qty = $1 WHERE name = $2') && params?.[1] === 'Nonexistent') return Promise.resolve({ rows: [] });
         return Promise.resolve(defaultQueryHandler(sql, params));
       });
       const res = await request(serverModule.app).patch('/api/shopping-list/Nonexistent/purchased').send({ purchased: true });
@@ -370,7 +383,7 @@ describe('KitchenHub API', () => {
 
     it('DELETE /api/shopping-list/:name returns 404 when not found', async () => {
       mockPool.query.mockImplementation((sql, params) => {
-        if (sql && sql.includes('DELETE FROM shopping_list WHERE name')) return Promise.resolve({ rows: [] });
+        if (sql && sql.includes('UPDATE items SET qty = 0 WHERE name = $1') && params?.[0] === 'Nonexistent') return Promise.resolve({ rows: [] });
         return Promise.resolve(defaultQueryHandler(sql, params));
       });
       const res = await request(serverModule.app).delete('/api/shopping-list/Nonexistent');
