@@ -18,6 +18,7 @@ function ShoppingListPage() {
   });
   const [highlightItemId, setHighlightItemId] = useState(null);
   const itemRowRefs = React.useRef({});
+  const addInProgressRef = React.useRef(null);
 
   useEffect(() => {
     loadData();
@@ -56,38 +57,45 @@ function ShoppingListPage() {
   };
 
   const handleAddToShoppingList = async (item) => {
-    const existingItem = getShoppingListItem(item.name);
-    if (existingItem) {
-      const currentQty = parseInt(existingItem.quantity) || 1;
-      const newQuantity = String(currentQty + 1);
-      setShoppingList((prev) =>
-        prev.map((i) => (i.name === item.name ? { ...i, quantity: newQuantity } : i))
-      );
+    const key = item.name;
+    if (addInProgressRef.current === key) return;
+    addInProgressRef.current = key;
+    try {
+      const existingItem = getShoppingListItem(item.name);
+      if (existingItem) {
+        const currentQty = parseInt(existingItem.quantity) || 1;
+        const newQuantity = String(currentQty + 1);
+        setShoppingList((prev) =>
+          prev.map((i) => (i.name === item.name ? { ...i, quantity: newQuantity } : i))
+        );
+        try {
+          await updateShoppingListItem(item.name, { quantity: newQuantity });
+        } catch (err) {
+          setError('Failed to add item to shopping list');
+          console.error(err);
+          await loadData();
+        }
+        return;
+      }
+      const newEntry = {
+        name: item.name,
+        description: item.name,
+        quantity: '1',
+        department_id: item.department || null,
+        item_id: item.id,
+        department_name: departments.find((d) => d.id === item.department)?.name || null,
+        purchased: 0,
+      };
+      setShoppingList((prev) => [...prev, newEntry]);
       try {
-        await updateShoppingListItem(item.name, { quantity: newQuantity });
+        await addToShoppingList(newEntry);
       } catch (err) {
         setError('Failed to add item to shopping list');
         console.error(err);
         await loadData();
       }
-      return;
-    }
-    const newEntry = {
-      name: item.name,
-      description: item.name,
-      quantity: '1',
-      department_id: item.department || null,
-      item_id: item.id,
-      department_name: departments.find((d) => d.id === item.department)?.name || null,
-      purchased: 0,
-    };
-    setShoppingList((prev) => [...prev, newEntry]);
-    try {
-      await addToShoppingList(newEntry);
-    } catch (err) {
-      setError('Failed to add item to shopping list');
-      console.error(err);
-      await loadData();
+    } finally {
+      addInProgressRef.current = null;
     }
   };
 
