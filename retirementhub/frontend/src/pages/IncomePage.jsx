@@ -14,6 +14,8 @@ export default function IncomePage() {
     bonus_quarterly: '',
     four_o_one_k_pct: '',
     four_o_one_k_match_pct: '',
+    four_o_one_k_pct_p2: '',
+    four_o_one_k_match_pct_p2: '',
   });
 
   useEffect(() => {
@@ -34,6 +36,8 @@ export default function IncomePage() {
         bonus_quarterly: i.bonus_quarterly != null ? String(i.bonus_quarterly) : '',
         four_o_one_k_pct: i.four_o_one_k_pct != null ? String(i.four_o_one_k_pct) : '',
         four_o_one_k_match_pct: i.four_o_one_k_match_pct != null ? String(i.four_o_one_k_match_pct) : '',
+        four_o_one_k_pct_p2: i.four_o_one_k_pct_p2 != null ? String(i.four_o_one_k_pct_p2) : '',
+        four_o_one_k_match_pct_p2: i.four_o_one_k_match_pct_p2 != null ? String(i.four_o_one_k_match_pct_p2) : '',
       });
     } catch (err) {
       setMessage({ type: 'error', text: err.response?.data?.error || 'Failed to load income' });
@@ -61,6 +65,8 @@ export default function IncomePage() {
         bonus_quarterly: form.bonus_quarterly === '' ? undefined : parseFloat(form.bonus_quarterly),
         four_o_one_k_pct: form.four_o_one_k_pct === '' ? undefined : parseFloat(form.four_o_one_k_pct),
         four_o_one_k_match_pct: form.four_o_one_k_match_pct === '' ? undefined : parseFloat(form.four_o_one_k_match_pct),
+        four_o_one_k_pct_p2: form.four_o_one_k_pct_p2 === '' ? undefined : parseFloat(form.four_o_one_k_pct_p2),
+        four_o_one_k_match_pct_p2: form.four_o_one_k_match_pct_p2 === '' ? undefined : parseFloat(form.four_o_one_k_match_pct_p2),
       });
       setMessage({ type: 'success', text: 'Income saved.' });
       await load();
@@ -159,7 +165,7 @@ export default function IncomePage() {
           </div>
           <div className="form-row">
             <div className="form-group">
-              <label htmlFor="four_o_one_k_pct">401(k) contribution %</label>
+              <label htmlFor="four_o_one_k_pct">401(k) contribution % (P1)</label>
               <input
                 id="four_o_one_k_pct"
                 name="four_o_one_k_pct"
@@ -172,7 +178,7 @@ export default function IncomePage() {
               />
             </div>
             <div className="form-group">
-              <label htmlFor="four_o_one_k_match_pct">401(k) employer match %</label>
+              <label htmlFor="four_o_one_k_match_pct">401(k) employer match % (P1)</label>
               <input
                 id="four_o_one_k_match_pct"
                 name="four_o_one_k_match_pct"
@@ -180,6 +186,34 @@ export default function IncomePage() {
                 step="0.01"
                 min="0"
                 value={form.four_o_one_k_match_pct}
+                onChange={handleChange}
+                placeholder="Optional"
+              />
+            </div>
+          </div>
+          <div className="form-row">
+            <div className="form-group">
+              <label htmlFor="four_o_one_k_pct_p2">401(k) contribution % (P2)</label>
+              <input
+                id="four_o_one_k_pct_p2"
+                name="four_o_one_k_pct_p2"
+                type="number"
+                step="0.01"
+                min="0"
+                value={form.four_o_one_k_pct_p2}
+                onChange={handleChange}
+                placeholder="Optional"
+              />
+            </div>
+            <div className="form-group">
+              <label htmlFor="four_o_one_k_match_pct_p2">401(k) employer match % (P2)</label>
+              <input
+                id="four_o_one_k_match_pct_p2"
+                name="four_o_one_k_match_pct_p2"
+                type="number"
+                step="0.01"
+                min="0"
+                value={form.four_o_one_k_match_pct_p2}
                 onChange={handleChange}
                 placeholder="Optional"
               />

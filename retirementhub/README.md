@@ -30,6 +30,13 @@ If you have an **existing** database created before the `as_of` and `account_bal
 psql -U postgres -d retirementhub -f retirementhub/database/migrations/002_as_of_and_account_balance.sql
 ```
 
+If your database was created before retirement dates or per-party 401(k) fields, also run:
+
+```bash
+psql -U postgres -d retirementhub -f retirementhub/database/migrations/003_household_retirement_dates.sql
+psql -U postgres -d retirementhub -f retirementhub/database/migrations/004_income_p2_401k.sql
+```
+
 ### Environment Configuration
 
 1. Create a `.env` file in the project root directory (same level as `docker-compose.yml`):
@@ -103,6 +110,6 @@ Sample CSV templates are shown on the Import page.
 
 ## Later stages
 
-- **Stage 2:** Tax-leveraged savings maximums (IRA, HSA, 401k limits)  
-- **Stage 3:** Tracking and updating savings totals  
+- **Stage 2:** Tax-leveraged savings maximums (IRA, HSA, 401k limits) — **Implemented.** Use the **Savings limits** page: limits are broken down by party (P1 / P2) with catch-up included when that person is 50+ (IRA, 401k) or 55+ (HSA) at end of each year. Income page has 401(k) contribution % and match % per party; planned 401(k) is shown per party on Savings limits.
+- **Stage 3:** Tracking and updating savings totals — **Implemented.** On the **Accounts** page, use “View history” per account to see all balance snapshots and add, edit, or delete them.
 - **Stage 4:** Projections and charts  

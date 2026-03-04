@@ -18,6 +18,8 @@ export default function HouseholdPage() {
     p2_display_name: 'P2',
     p1_birth_year: '',
     p2_birth_year: '',
+    p1_retirement_date: '',
+    p2_retirement_date: '',
     filing_status: 'married_filing_jointly',
   });
 
@@ -36,6 +38,8 @@ export default function HouseholdPage() {
         p2_display_name: h.p2_display_name ?? 'P2',
         p1_birth_year: h.p1_birth_year ?? '',
         p2_birth_year: h.p2_birth_year ?? '',
+        p1_retirement_date: h.p1_retirement_date ? String(h.p1_retirement_date).slice(0, 10) : '',
+        p2_retirement_date: h.p2_retirement_date ? String(h.p2_retirement_date).slice(0, 10) : '',
         filing_status: h.filing_status ?? 'married_filing_jointly',
       });
     } catch (err) {
@@ -60,6 +64,8 @@ export default function HouseholdPage() {
         p2_display_name: form.p2_display_name.trim() || 'P2',
         p1_birth_year: form.p1_birth_year ? parseInt(form.p1_birth_year, 10) : undefined,
         p2_birth_year: form.p2_birth_year ? parseInt(form.p2_birth_year, 10) : undefined,
+        p1_retirement_date: form.p1_retirement_date?.trim() || undefined,
+        p2_retirement_date: form.p2_retirement_date?.trim() || undefined,
         filing_status: form.filing_status,
       });
       setMessage({ type: 'success', text: 'Household saved.' });
@@ -87,6 +93,7 @@ export default function HouseholdPage() {
         <h2>P1 & P2</h2>
         <p style={{ marginBottom: '1rem', color: '#5a6b64', fontSize: '0.9rem' }}>
           Set display names and birth years for both parties. Birth years drive ages in future projections.
+          Retirement dates are used when importing expenses: if the import &quot;As of&quot; date is on or after the (later) retirement date, amounts are pre-filled as retirement/mo; otherwise as current/mo.
         </p>
         <form onSubmit={handleSubmit}>
           <div className="form-row">
@@ -138,6 +145,30 @@ export default function HouseholdPage() {
                 value={form.p2_birth_year}
                 onChange={handleChange}
                 placeholder="e.g. 1975"
+              />
+            </div>
+          </div>
+          <div className="form-row">
+            <div className="form-group">
+              <label htmlFor="p1_retirement_date">P1 retirement date</label>
+              <input
+                id="p1_retirement_date"
+                name="p1_retirement_date"
+                type="date"
+                value={form.p1_retirement_date}
+                onChange={handleChange}
+                title="Used with expense import: if As of date is on or after this (or P2's), amounts go to retirement/mo"
+              />
+            </div>
+            <div className="form-group">
+              <label htmlFor="p2_retirement_date">P2 retirement date</label>
+              <input
+                id="p2_retirement_date"
+                name="p2_retirement_date"
+                type="date"
+                value={form.p2_retirement_date}
+                onChange={handleChange}
+                title="Used with expense import: if As of date is on or after this (or P1's), amounts go to retirement/mo"
               />
             </div>
           </div>

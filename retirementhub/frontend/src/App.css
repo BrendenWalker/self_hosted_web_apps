@@ -262,6 +262,50 @@
   color: #1a3d35;
 }
 
+.balance-history-section {
+  margin-top: 0.75rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid #e8eeec;
+  width: 100%;
+}
+
+.balance-history-title {
+  font-size: 0.95rem;
+  color: #1a3d35;
+  margin-bottom: 0.5rem;
+}
+
+.balance-history-list {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 0.5rem 0;
+}
+
+.balance-history-item {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.35rem 0;
+  font-size: 0.9rem;
+}
+
+.balance-history-date {
+  min-width: 6rem;
+  color: #5a6b64;
+}
+
+.balance-history-amount {
+  font-weight: 500;
+  color: #0d5c4a;
+}
+
+.balance-history-actions {
+  margin-left: auto;
+  display: flex;
+  gap: 0.35rem;
+}
+
 .muted {
   color: #5a6b64;
   font-style: italic;
@@ -337,4 +381,49 @@
   padding: 0.75rem 1rem;
   border-radius: 6px;
   margin-bottom: 1rem;
+}
+
+.table-responsive {
+  overflow-x: auto;
+  margin-bottom: 0.5rem;
+}
+
+.limits-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+}
+
+.limits-table th,
+.limits-table td {
+  padding: 0.5rem 0.75rem;
+  text-align: left;
+  border-bottom: 1px solid #e8eeec;
+}
+
+.limits-table th {
+  font-weight: 600;
+  color: #1a3d35;
+  background: #f5f9f8;
+}
+
+.over-limit {
+  color: #b91c1c;
+  font-size: 0.85rem;
+}
+
+.limits-party-card {
+  margin-bottom: 1.5rem;
+}
+
+.limits-party-card .limits-party-title {
+  font-size: 1.1rem;
+  color: #1a3d35;
+  margin-bottom: 0.25rem;
+}
+
+.limits-age-note {
+  font-size: 0.85rem;
+  color: #5a6b64;
+  margin-bottom: 0.75rem;
 }
