@@ -17,6 +17,7 @@ services:
       - DB_NAME=${DB_NAME:-retirementhub}
       - DB_USER=${DB_USER:-postgres}
       - DB_PASSWORD=${DB_PASSWORD:-postgres}
+      - DEBUG=${DEBUG:-}
     extra_hosts:
       - "host.docker.internal:host-gateway"
     networks:
@@ -27,6 +28,8 @@ services:
     build:
       context: ..
       dockerfile: retirementhub/frontend/Dockerfile
+      args:
+        VITE_DEBUG: ${DEBUG:-}
     container_name: retirementhub-frontend
     ports:
       - "8110:80"

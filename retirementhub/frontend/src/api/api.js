@@ -25,6 +25,7 @@ export const getExpenseCategories = () => api.get('/expense-categories');
 export const getExpenseLines = () => api.get('/expense-lines');
 export const createExpenseLine = (data) => api.post('/expense-lines', data);
 export const updateExpenseLine = (id, data) => api.put(`/expense-lines/${id}`, data);
+export const patchExpenseCategory = (id, data) => api.patch(`/expense-categories/${id}`, data);
 
 export const getMortgage = () => api.get('/mortgage');
 export const updateMortgage = (data) => api.put('/mortgage', data);
@@ -42,6 +43,11 @@ export const updateAccountBalance = (id, data) => api.put(`/account-balances/${i
 export const deleteAccountBalance = (id) => api.delete(`/account-balances/${id}`);
 
 export const getBudgetSummary = () => api.get('/budget-summary');
+
+export const getRetirementTaxGuide = (params) => api.get('/retirement-tax-guide', { params: params || {} });
+
+export const getProjections = (years, growthPct, expenseColaPct) =>
+  api.get('/projections', { params: { years: years ?? 30, growth_pct: growthPct ?? 5, expense_cola_pct: expenseColaPct ?? 2.5 } });
 
 export const getSavingsLimits = (year) =>
   year != null ? api.get('/savings-limits', { params: { year } }) : api.get('/savings-limits');

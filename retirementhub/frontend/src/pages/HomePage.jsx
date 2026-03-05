@@ -35,13 +35,19 @@ export default function HomePage() {
               Current and retirement expenses by category, mortgage, and 25× annual targets.
             </p>
           </Link>
+          <Link to="/projections" className="home-card">
+            <h2>Projections</h2>
+            <p>
+              Net worth over time and income vs expenses by year. Charts and 25× target.
+            </p>
+          </Link>
         </div>
       </section>
       <section className="home-details">
         <div className="home-detail-card">
           <h3>Stage 1 — Budget</h3>
           <p>
-            This release focuses on the <strong>budget</strong>: household (P1/P2), income inputs, and expense categories with current vs retirement amounts and mortgage. Next stages add tax-leveraged limits, savings tracking, and projections with charts.
+            This release focuses on the <strong>budget</strong>: household (P1/P2), income inputs, and expense categories with current vs retirement amounts and mortgage. Stage 2 adds tax-leveraged limits, Stage 3 savings tracking, Stage 4 projections and charts.
           </p>
         </div>
       </section>
