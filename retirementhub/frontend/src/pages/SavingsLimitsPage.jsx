@@ -5,7 +5,7 @@ const LIMIT_KEYS = [
   { key: 'ira_limit', label: 'IRA (traditional + Roth combined)' },
   { key: '401k_elective_limit', label: '401(k) elective deferral (incl. catch-up if 50+ at EOY)' },
   { key: 'hsa_individual_limit', label: 'HSA individual (incl. catch-up if 55+ at EOY)' },
-  { key: 'hsa_family_limit', label: 'HSA family (incl. catch-up if 55+ at EOY)' },
+  { key: 'hsa_family_limit', label: 'HSA family (incl. catch-up if 55+ at EOY, household — P1 only)' },
 ];
 
 function PartyLimitsTable({ partyKey, displayName, yearsData, yearList, planned401k }) {
@@ -15,6 +15,11 @@ function PartyLimitsTable({ partyKey, displayName, yearsData, yearList, planned4
     const data = yearsData[y];
     return partyKey === 'p1' ? data?.p1 : data?.p2;
   };
+
+  const limitRows = LIMIT_KEYS.filter(({ key }) => {
+    if (key === 'hsa_family_limit' && partyKey === 'p2') return false;
+    return true;
+  });
 
   return (
     <div className="card limits-party-card">
@@ -41,7 +46,7 @@ function PartyLimitsTable({ partyKey, displayName, yearsData, yearList, planned4
             </tr>
           </thead>
           <tbody>
-            {LIMIT_KEYS.map(({ key, label }) => {
+            {limitRows.map(({ key, label }) => {
               const is401k = key === '401k_elective_limit';
               return (
                 <tr key={key}>
@@ -58,14 +63,18 @@ function PartyLimitsTable({ partyKey, displayName, yearsData, yearList, planned4
                     <td>
                       {is401k ? (
                         <>
-                          ${planned401k.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
                           {yearList.length > 0 && (() => {
                             const limit = getPartyForYear(yearList[yearList.length - 1])?.[key];
-                            if (limit && planned401k > limit) {
-                              return <span className="over-limit" title="Exceeds limit for that year"> (over)</span>;
-                            }
-                            return null;
+                            const displayVal = limit != null && planned401k > limit ? limit : planned401k;
+                            const isCapped = limit != null && planned401k > limit;
+                            return (
+                              <>
+                                ${displayVal.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+                                {isCapped && <span className="over-limit" title="Capped at IRS max; plan will stop at limit"> (capped at max)</span>}
+                              </>
+                            );
                           })()}
+                          {yearList.length === 0 && `$${planned401k.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`}
                         </>
                       ) : '—'}
                     </td>
@@ -164,7 +173,7 @@ export default function SavingsLimitsPage() {
 
       {hasPlanned && (
         <p className="muted" style={{ marginTop: '0.75rem', fontSize: '0.9rem' }}>
-          Your planned 401(k) is from the Income page (contribution % × gross salary per party). Limits are per person; catch-up is included when that person is 50+ at end of year.
+          Your planned 401(k) is from the Income page (contribution % × gross salary per party). When planned exceeds the IRS limit, the value shown is capped at the max (the plan is assumed to stop at the limit). Catch-up is included when that person is 50+ at end of year.
         </p>
       )}
     </div>

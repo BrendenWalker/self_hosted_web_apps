@@ -2,7 +2,7 @@
 -- Supports P1/P2 household, income, expenses, mortgage
 
 -- ==================== HOUSEHOLD ====================
--- Single row: P1 and P2 display names, birth years, tax filing status
+-- Single row: P1 and P2 display names, birth years, tax filing status, retirement dates, SS estimates
 CREATE TABLE IF NOT EXISTS household (
     id SERIAL PRIMARY KEY,
     p1_display_name VARCHAR(80) NOT NULL DEFAULT 'P1',
@@ -11,6 +11,10 @@ CREATE TABLE IF NOT EXISTS household (
     p2_birth_year INTEGER NOT NULL CHECK (p2_birth_year >= 1900 AND p2_birth_year <= 2100),
     p1_retirement_date DATE,
     p2_retirement_date DATE,
+    p1_ss_monthly_estimate DECIMAL(10, 2),
+    p2_ss_monthly_estimate DECIMAL(10, 2),
+    p1_ss_at_fra DECIMAL(10, 2),
+    p2_ss_at_fra DECIMAL(10, 2),
     filing_status VARCHAR(40) NOT NULL DEFAULT 'married_filing_jointly'
         CHECK (filing_status IN ('single', 'married_filing_jointly', 'married_filing_separately', 'head_of_household')),
     modified TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -42,6 +46,8 @@ CREATE TABLE IF NOT EXISTS expense_category (
     category_group VARCHAR(40) NOT NULL
         CHECK (category_group IN ('discretionary', 'fixed', 'insurance', 'utilities', 'tax', 'personal')),
     sort_order INTEGER NOT NULL DEFAULT 0,
+    category_type VARCHAR(40) NOT NULL DEFAULT 'regular'
+        CHECK (category_type IN ('regular', 'p2_health_until_medicare')),
     modified TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
