@@ -1,6 +1,6 @@
 import React from 'react';
 import { vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import App from './App';
 
@@ -30,15 +30,16 @@ describe('App', () => {
         <App />
       </MemoryRouter>
     );
-    expect(screen.getByText('RetirementHub')).toBeInTheDocument();
-    expect(screen.getByText('Home')).toBeInTheDocument();
-    expect(screen.getByText('Household')).toBeInTheDocument();
-    expect(screen.getByText('Income')).toBeInTheDocument();
-    expect(screen.getByText('Accounts')).toBeInTheDocument();
-    expect(screen.getByText('Savings limits')).toBeInTheDocument();
-    expect(screen.getByText('Projections')).toBeInTheDocument();
-    expect(screen.getByText('Expenses')).toBeInTheDocument();
-    expect(screen.getByText('Import')).toBeInTheDocument();
+    const nav = screen.getByRole('navigation');
+    expect(within(nav).getByRole('link', { name: 'RetirementHub' })).toBeInTheDocument();
+    expect(within(nav).getByRole('link', { name: 'Home' })).toBeInTheDocument();
+    expect(within(nav).getByRole('link', { name: 'Household' })).toBeInTheDocument();
+    expect(within(nav).getByRole('link', { name: 'Income' })).toBeInTheDocument();
+    expect(within(nav).getByRole('link', { name: 'Accounts' })).toBeInTheDocument();
+    expect(within(nav).getByRole('link', { name: 'Savings limits' })).toBeInTheDocument();
+    expect(within(nav).getByRole('link', { name: 'Projections' })).toBeInTheDocument();
+    expect(within(nav).getByRole('link', { name: 'Expenses' })).toBeInTheDocument();
+    expect(within(nav).getByRole('link', { name: 'Import' })).toBeInTheDocument();
   });
 
   it('renders HomePage at /', () => {
