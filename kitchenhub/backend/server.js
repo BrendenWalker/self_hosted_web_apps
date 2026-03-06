@@ -674,7 +674,7 @@ app.get('/api/ingredient-measurements', async (req, res) => {
 app.get('/api/ingredients', async (req, res) => {
   try {
     const result = await pool.query(
-      `SELECT i.id, i.name, i.details, i.measurement_id, i.department_id, i.shopping_measure, i.shopping_measure_grams,
+      `SELECT i.id, i.name, i.details, i.kcal, i.qty, i.measurement_id, i.department_id, i.shopping_measure, i.shopping_measure_grams,
               d.name as department_name, m.name as measurement_name
        FROM recipe.ingredients i
        LEFT JOIN common.department d ON i.department_id = d.id
@@ -688,13 +688,123 @@ app.get('/api/ingredients', async (req, res) => {
   }
 });
 
+app.get('/api/ingredients/:id', async (req, res) => {
+  try {
+    const result = await pool.query(
+      `SELECT i.id, i.name, i.details, i.kcal, i.qty, i.measurement_id, i.department_id, i.shopping_measure, i.shopping_measure_grams,
+              d.name as department_name, m.name as measurement_name
+       FROM recipe.ingredients i
+       LEFT JOIN common.department d ON i.department_id = d.id
+       LEFT JOIN recipe.ingredient_measurement m ON i.measurement_id = m.id
+       WHERE i.id = $1`,
+      [req.params.id]
+    );
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Ingredient not found' });
+    }
+    res.json(result.rows[0]);
+  } catch (error) {
+    console.error('Error fetching ingredient:', error);
+    res.status(500).json({ error: 'Failed to fetch ingredient' });
+  }
+});
+
+app.post('/api/ingredients', async (req, res) => {
+  try {
+    const { name, details, kcal, qty, measurement_id, department_id, shopping_measure, shopping_measure_grams } = req.body;
+    if (!name || !department_id) {
+      return res.status(400).json({ error: 'name and department_id are required' });
+    }
+    const result = await pool.query(
+      `INSERT INTO recipe.ingredients (name, details, kcal, qty, measurement_id, department_id, shopping_measure, shopping_measure_grams)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+       RETURNING id, name, details, kcal, qty, measurement_id, department_id, shopping_measure, shopping_measure_grams`,
+      [
+        name.trim(),
+        details ? details.trim() : null,
+        kcal != null ? parseInt(kcal, 10) : null,
+        qty != null ? parseFloat(qty) : 0,
+        measurement_id || null,
+        department_id,
+        shopping_measure ? shopping_measure.trim() : null,
+        shopping_measure_grams != null ? parseFloat(shopping_measure_grams) : null,
+      ]
+    );
+    res.status(201).json(result.rows[0]);
+  } catch (error) {
+    console.error('Error creating ingredient:', error);
+    if (error.code === '23503') {
+      return res.status(400).json({ error: 'Invalid department_id or measurement_id' });
+    }
+    if (error.code === '23505') {
+      return res.status(409).json({ error: 'Ingredient with same name and details already exists' });
+    }
+    res.status(500).json({ error: 'Failed to create ingredient' });
+  }
+});
+
+app.put('/api/ingredients/:id', async (req, res) => {
+  try {
+    const { name, details, kcal, qty, measurement_id, department_id, shopping_measure, shopping_measure_grams } = req.body;
+    if (!name || !department_id) {
+      return res.status(400).json({ error: 'name and department_id are required' });
+    }
+    const result = await pool.query(
+      `UPDATE recipe.ingredients
+       SET name = $1, details = $2, kcal = $3, qty = $4, measurement_id = $5, department_id = $6, shopping_measure = $7, shopping_measure_grams = $8
+       WHERE id = $9
+       RETURNING id, name, details, kcal, qty, measurement_id, department_id, shopping_measure, shopping_measure_grams`,
+      [
+        name.trim(),
+        details ? details.trim() : null,
+        kcal != null ? parseInt(kcal, 10) : null,
+        qty != null ? parseFloat(qty) : 0,
+        measurement_id || null,
+        department_id,
+        shopping_measure ? shopping_measure.trim() : null,
+        shopping_measure_grams != null ? parseFloat(shopping_measure_grams) : null,
+        req.params.id,
+      ]
+    );
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Ingredient not found' });
+    }
+    res.json(result.rows[0]);
+  } catch (error) {
+    console.error('Error updating ingredient:', error);
+    if (error.code === '23503') {
+      return res.status(400).json({ error: 'Invalid department_id or measurement_id' });
+    }
+    if (error.code === '23505') {
+      return res.status(409).json({ error: 'Ingredient with same name and details already exists' });
+    }
+    res.status(500).json({ error: 'Failed to update ingredient' });
+  }
+});
+
+app.delete('/api/ingredients/:id', async (req, res) => {
+  try {
+    const result = await pool.query('DELETE FROM recipe.ingredients WHERE id = $1 RETURNING id', [req.params.id]);
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Ingredient not found' });
+    }
+    res.json({ message: 'Ingredient deleted successfully' });
+  } catch (error) {
+    console.error('Error deleting ingredient:', error);
+    if (error.code === '23503') {
+      return res.status(400).json({ error: 'Cannot delete: ingredient is used in recipes' });
+    }
+    res.status(500).json({ error: 'Failed to delete ingredient' });
+  }
+});
+
 // ==================== RECIPES ====================
 
 app.get('/api/recipes', async (req, res) => {
   try {
     const { category_id } = req.query;
     let query = `
-      SELECT r.id, r.name, r.servings, r.instructions, r.created, r.modified,
+      SELECT r.id, r.name, r.servings, r.instructions,
              (SELECT string_agg(c.name, ', ' ORDER BY c.name)
               FROM recipe.recipe_category_members m
               JOIN recipe.recipe_category c ON c.id = m.category_id
@@ -718,7 +828,7 @@ app.get('/api/recipes', async (req, res) => {
 app.get('/api/recipes/:id', async (req, res) => {
   try {
     const recipeResult = await pool.query(
-      `SELECT r.id, r.name, r.servings, r.instructions, r.created, r.modified
+      `SELECT r.id, r.name, r.servings, r.instructions
        FROM recipe.recipe r
        WHERE r.id = $1`,
       [req.params.id]
@@ -793,7 +903,7 @@ app.put('/api/recipes/:id', async (req, res) => {
   try {
     const { name, servings, category_ids, instructions } = req.body;
     const result = await pool.query(
-      `UPDATE recipe.recipe SET name = $1, servings = $2, instructions = $3, modified = CURRENT_TIMESTAMP
+      `UPDATE recipe.recipe SET name = $1, servings = $2, instructions = $3
        WHERE id = $4 RETURNING *`,
       [name, servings, instructions || null, req.params.id]
     );
