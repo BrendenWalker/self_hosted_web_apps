@@ -11,7 +11,7 @@ The workflow uses a **matrix strategy** to build multiple services in parallel.
 
 ### Trigger Conditions
 
-- **Version Tags**: Builds on semver tags on any branch. Tag format is `<service>/<version>` with **X.X.X only** (no `v` prefix), e.g. `kitchenhub/1.0.0`, `vehiclehub/2.1.3-beta.1`.
+- **Version Tags**: Builds on semver tags on any branch. Tag format is `<service>/<version>` with **X.X.X only** (no `v` prefix), e.g. `kitchenhub/1.0.0`, `vehiclehub/2.1.3-beta.1`, `retirementhub/1.0.0`.
 - **Pull Requests**: Builds but doesn't push (for testing)
 - **Path Filters**: Only triggers when files in service directories change
 
@@ -29,20 +29,21 @@ The workflow uses a **matrix strategy** to build multiple services in parallel.
 ### Image Naming
 
 - Format: `{username}/{service}-{backend|frontend}:{tag}`
-- Defaults: `kitchenhub-backend`, `kitchenhub-frontend`, `vehiclehub-backend`, `vehiclehub-frontend`
+- Defaults: `kitchenhub-backend`, `kitchenhub-frontend`, `vehiclehub-backend`, `vehiclehub-frontend`, `retirementhub-backend`, `retirementhub-frontend`
 - Version tag: `X.X.X` only (e.g. `1.0.0`). Branch determines floating tag: `latest` (main) or `beta` (other branches).
 
 ### Semver Tagging Strategy
 
-- **Tag format**: Use `<service>/<version>` with version **X.X.X only** (e.g. `kitchenhub/1.0.0`). Do not use `vX.X.X`.
+- **Tag format**: Use `<service>/<version>` with version **X.X.X only** (e.g. `kitchenhub/1.0.0`, `retirementhub/1.0.0`). Do not use `vX.X.X`.
 - **Tag on main** (stable): Image tagged as `X.X.X` and `latest`. Pre-release on main (e.g. `1.0.0-beta.1`): `X.X.X-beta.1` only, no `latest`.
 - **Tag on any other branch**: Image tagged as `X.X.X` and `beta` (floating pre-release tag).
 - **Pull requests**: Tagged as `pr-{number}` (builds but doesn't push).
 
 ### Build Contexts
 
-- **KitchenHub**: Context is `./kitchenhub/backend` or `./kitchenhub/frontend`
-- **VehicleHub**: Context is `./vehiclehub` (Dockerfile uses `backend/` paths)
+- **KitchenHub**: Context is monorepo root; Dockerfiles use `kitchenhub/backend/` or `kitchenhub/frontend/` paths
+- **VehicleHub**: Context is monorepo root; Dockerfiles use `vehiclehub/backend/` paths
+- **RetirementHub**: Context is monorepo root; Dockerfiles use `retirementhub/backend/` or `retirementhub/frontend/` paths
 
 ### Docker Hub Integration
 

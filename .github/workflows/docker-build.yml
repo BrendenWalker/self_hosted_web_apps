@@ -5,12 +5,14 @@ on:
     tags:
       - 'kitchenhub/*'   # e.g., kitchenhub/1.0.0 (X.X.X only, no v prefix)
       - 'vehiclehub/*'   # e.g., vehiclehub/1.0.0
+      - 'retirementhub/*'   # e.g., retirementhub/1.0.0
   pull_request:
     branches:
       - main
     paths:
       - 'kitchenhub/**'
       - 'vehiclehub/**'
+      - 'retirementhub/**'
       - '.github/workflows/docker-build.yml'
 
 jobs:
@@ -21,7 +23,7 @@ jobs:
       checks: write   # required for publish-unit-test-result-action to create check runs
     strategy:
       matrix:
-        project: [kitchenhub]
+        project: [kitchenhub, retirementhub]
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -125,7 +127,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        project: [kitchenhub, vehiclehub]
+        project: [kitchenhub, vehiclehub, retirementhub]
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -168,8 +170,8 @@ jobs:
           SERVICE="${TAG_REF%%/*}"
           VERSION="${TAG_REF#*/}"
           
-          if [ "$SERVICE" != "kitchenhub" ] && [ "$SERVICE" != "vehiclehub" ]; then
-            echo "Error: Unsupported service '$SERVICE' in tag. Expected 'kitchenhub' or 'vehiclehub'."
+          if [ "$SERVICE" != "kitchenhub" ] && [ "$SERVICE" != "vehiclehub" ] && [ "$SERVICE" != "retirementhub" ]; then
+            echo "Error: Unsupported service '$SERVICE' in tag. Expected 'kitchenhub', 'vehiclehub', or 'retirementhub'."
             exit 1
           fi
           
@@ -193,9 +195,12 @@ jobs:
           if [ "${PROJECT_SUBFOLDER}" = "kitchenhub" ]; then
             DEFAULT_BACKEND="kitchenhub-backend"
             DEFAULT_FRONTEND="kitchenhub-frontend"
-          else
+          elif [ "${PROJECT_SUBFOLDER}" = "vehiclehub" ]; then
             DEFAULT_BACKEND="vehiclehub-backend"
             DEFAULT_FRONTEND="vehiclehub-frontend"
+          else
+            DEFAULT_BACKEND="retirementhub-backend"
+            DEFAULT_FRONTEND="retirementhub-frontend"
           fi
           echo "DEFAULT_BACKEND=${DEFAULT_BACKEND}" >> $GITHUB_ENV
           echo "DEFAULT_FRONTEND=${DEFAULT_FRONTEND}" >> $GITHUB_ENV
