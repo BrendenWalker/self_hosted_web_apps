@@ -1370,7 +1370,15 @@ app.get('/api/health', (req, res) => {
   }
 });
 
-app.listen(port, () => {
-  console.log(`Server running on port ${port}`);
-  isReady = true;
-});
+function startServer(portToUse = port) {
+  return app.listen(portToUse, () => {
+    console.log(`Server running on port ${portToUse}`);
+    isReady = true;
+  });
+}
+
+if (require.main === module) {
+  startServer();
+} else {
+  module.exports = { app, startServer };
+}
