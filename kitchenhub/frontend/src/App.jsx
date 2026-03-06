@@ -6,6 +6,7 @@ import ShoppingListPage from './pages/ShoppingListPage';
 import StorePage from './pages/StorePage';
 import RecipesPage from './pages/RecipesPage';
 import RecipeDetailPage from './pages/RecipeDetailPage';
+import IngredientsCatalogPage from './pages/IngredientsCatalogPage';
 import VersionFooter from './components/VersionFooter';
 import './App.css';
 
@@ -30,6 +31,7 @@ function App() {
             <Route path="/shopping" element={<ShoppingPage />} />
             <Route path="/list" element={<ShoppingListPage />} />
             <Route path="/recipes" element={<RecipesPage />} />
+            <Route path="/recipes/ingredients" element={<IngredientsCatalogPage />} />
             <Route path="/recipes/:id" element={<RecipeDetailPage />} />
             <Route path="/stores" element={<StorePage />} />
             <Route path="*" element={<HomePage />} />

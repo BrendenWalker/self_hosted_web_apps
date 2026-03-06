@@ -60,9 +60,7 @@ CREATE TABLE IF NOT EXISTS recipe.recipe (
     name VARCHAR(80) NOT NULL UNIQUE,
     servings INTEGER NOT NULL,
     instructions TEXT,
-    image BYTEA,
-    created TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    modified TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    image BYTEA
 );
 CREATE INDEX IF NOT EXISTS idx_recipe_name ON recipe.recipe(name);
 
@@ -91,7 +89,6 @@ CREATE TABLE IF NOT EXISTS recipe.ingredients (
     qty NUMERIC(10, 2) DEFAULT 0 NOT NULL,
     shopping_measure VARCHAR(255),
     shopping_measure_grams NUMERIC(10, 2),
-    modified TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT ingredients_name_details_unique UNIQUE (name, details)
 );
 CREATE INDEX IF NOT EXISTS idx_ingredients_name ON recipe.ingredients(name);

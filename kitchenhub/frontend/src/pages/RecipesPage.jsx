@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, NavLink } from 'react-router-dom';
 import { getRecipes, getRecipeCategories } from '../api/api';
 import './RecipesPage.css';
 
@@ -9,6 +9,7 @@ function RecipesPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [categoryId, setCategoryId] = useState('');
+  const [recipeFilter, setRecipeFilter] = useState('');
 
   useEffect(() => {
     loadRecipes();
@@ -43,10 +44,27 @@ function RecipesPage() {
     }
   };
 
+  const searchText = recipeFilter.trim().toLowerCase();
+  const filteredRecipes = searchText
+    ? recipes.filter((r) => {
+        const name = (r.name || '').toLowerCase();
+        const cats = (r.category_names || '').toLowerCase();
+        return name.includes(searchText) || cats.includes(searchText);
+      })
+    : recipes;
+
   return (
     <div className="recipes-page">
       <header className="recipes-header">
         <h1>Recipes</h1>
+        <nav className="recipes-subnav" aria-label="Recipes section">
+          <NavLink to="/recipes" end className={({ isActive }) => isActive ? 'recipes-subnav-link active' : 'recipes-subnav-link'}>
+            Recipes
+          </NavLink>
+          <NavLink to="/recipes/ingredients" className={({ isActive }) => isActive ? 'recipes-subnav-link active' : 'recipes-subnav-link'}>
+            Ingredients
+          </NavLink>
+        </nav>
         <p className="recipes-subtitle">Browse recipes by category. Open a recipe to see ingredients and instructions.</p>
         <div className="recipes-toolbar">
           <label htmlFor="recipe-category-filter" className="filter-label">Category</label>
@@ -61,6 +79,13 @@ function RecipesPage() {
               <option key={c.id} value={c.id}>{c.name}</option>
             ))}
           </select>
+          <input
+            type="text"
+            placeholder="Filter by name or category..."
+            value={recipeFilter}
+            onChange={(e) => setRecipeFilter(e.target.value)}
+            className="recipes-filter-input"
+          />
           <Link to="/recipes/new" className="btn btn-primary">New recipe</Link>
         </div>
       </header>
@@ -78,9 +103,13 @@ function RecipesPage() {
           <p>No recipes found.</p>
           <Link to="/recipes/new" className="btn btn-primary">Create your first recipe</Link>
         </div>
+      ) : filteredRecipes.length === 0 ? (
+        <div className="recipes-empty">
+          <p>{recipeFilter ? 'No recipes match your search' : 'No recipes found.'}</p>
+        </div>
       ) : (
         <ul className="recipes-list">
-          {recipes.map((r) => (
+          {filteredRecipes.map((r) => (
             <li key={r.id}>
               <Link to={`/recipes/${r.id}`} className="recipe-card">
                 <span className="recipe-card-name">{r.name}</span>
