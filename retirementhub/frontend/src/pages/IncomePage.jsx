@@ -82,7 +82,7 @@ export default function IncomePage() {
   }
 
   return (
-    <div>
+    <div className="page-scroll">
       <h1 className="page-title">Income</h1>
       {message && (
         <div className={message.type === 'error' ? 'error-message' : 'success-message'}>

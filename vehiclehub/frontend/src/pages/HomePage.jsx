@@ -68,7 +68,7 @@ function HomePage() {
   };
 
   return (
-    <div className="home-page">
+    <div className="home-page page-scroll">
       <section className="home-hero">
         <h1>Welcome to VehicleHub</h1>
         <p className="home-subtitle">

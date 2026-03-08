@@ -115,7 +115,7 @@ export default function HouseholdPage() {
   }
 
   return (
-    <div>
+    <div className="page-scroll">
       <h1 className="page-title">Household</h1>
       {message && (
         <div className={message.type === 'error' ? 'error-message' : 'success-message'}>

@@ -180,6 +180,7 @@ function ShoppingPage() {
         </div>
       </div>
 
+      <div className="shopping-page-body">
       {error && <div className="error-message">{error}</div>}
 
       {validStoreId && !loading && (
@@ -232,6 +233,7 @@ function ShoppingPage() {
       {!validStoreId && !loading && (
         <div className="empty-message">Please select a store to view your shopping list</div>
       )}
+      </div>
 
       {confirmPurchase && (
         <div className="purchase-confirm-overlay" role="dialog" aria-modal="true" aria-labelledby="purchase-confirm-title">

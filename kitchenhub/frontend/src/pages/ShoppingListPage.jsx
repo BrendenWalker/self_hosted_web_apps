@@ -345,6 +345,7 @@ function ShoppingListPage() {
         </div>
       )}
 
+      <div className="shopping-list-page-content">
       {activeTab === 'items' && (
         <>
           <div className="filter-section">
@@ -545,6 +546,7 @@ function ShoppingListPage() {
           </div>
         </>
       )}
+      </div>
     </div>
   );
 }

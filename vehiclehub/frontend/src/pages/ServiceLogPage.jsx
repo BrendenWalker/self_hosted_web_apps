@@ -52,7 +52,7 @@ function ServiceLogPage() {
   };
 
   return (
-    <div className="service-log-page">
+    <div className="service-log-page page-scroll">
       <div className="page-header">
         <h1>Service History</h1>
       </div>

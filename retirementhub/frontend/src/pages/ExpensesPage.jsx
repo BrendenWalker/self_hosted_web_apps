@@ -174,7 +174,7 @@ export default function ExpensesPage() {
   }
 
   return (
-    <div>
+    <div className="page-scroll">
       <h1 className="page-title">Expenses</h1>
       {message && <div className="error-message">{message}</div>}
 

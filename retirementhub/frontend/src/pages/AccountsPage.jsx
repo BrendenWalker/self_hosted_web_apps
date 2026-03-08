@@ -226,7 +226,7 @@ export default function AccountsPage() {
   }
 
   return (
-    <div>
+    <div className="page-scroll">
       <h1 className="page-title">Accounts</h1>
       <p style={{ marginBottom: '1rem', color: '#5a6b64', fontSize: '0.95rem' }}>
         Add any number of accounts: savings, checking, HSA, IRA (traditional or Roth), 401(k) (traditional or Roth), and taxable. Record balances with an “as of” date; the latest balance per account is used for projections and history is kept.

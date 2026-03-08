@@ -219,7 +219,7 @@ function RecipeDetailPage() {
   }
 
   return (
-    <div className="recipe-detail-page">
+    <div className="recipe-detail-page page-scroll">
       <div className="recipe-detail-breadcrumb">
         <Link to="/recipes">Recipes</Link>
         <span className="breadcrumb-sep">/</span>
