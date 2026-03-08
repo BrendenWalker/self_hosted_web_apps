@@ -123,7 +123,7 @@ function IngredientsCatalogPage() {
     : ingredients;
 
   return (
-    <div className="ingredients-catalog-page">
+    <div className="ingredients-catalog-page page-scroll">
       <div className="ingredients-catalog-breadcrumb">
         <Link to="/recipes">Recipes</Link>
         <span className="breadcrumb-sep">/</span>

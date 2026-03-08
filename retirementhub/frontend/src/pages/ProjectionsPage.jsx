@@ -220,7 +220,7 @@ export default function ProjectionsPage() {
   })) ?? [];
 
   return (
-    <div>
+    <div className="page-scroll">
       <h1 className="page-title">Projections</h1>
       <p style={{ marginBottom: '1rem', color: '#5a6b64', fontSize: '0.95rem' }}>
         Net worth and income vs expenses over time. Uses current account balances, income, and expense settings. Set retirement dates on Household and 401(k) on Income for accurate savings. Portfolio growth applies each year; expense growth (COLA) inflates both expenses and Social Security benefits by that % per year.

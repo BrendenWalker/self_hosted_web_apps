@@ -352,7 +352,7 @@ function StorePage() {
   );
 
   return (
-    <div className="store-page">
+    <div className="store-page page-scroll">
       <div className="page-header store-page-header">
         <h1>Store Management</h1>
         <div className="store-toolbar">

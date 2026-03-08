@@ -54,7 +54,7 @@ function RecipesPage() {
     : recipes;
 
   return (
-    <div className="recipes-page">
+    <div className="recipes-page page-scroll">
       <header className="recipes-header">
         <h1>Recipes</h1>
         <nav className="recipes-subnav" aria-label="Recipes section">

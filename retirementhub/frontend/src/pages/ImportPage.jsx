@@ -93,7 +93,7 @@ export default function ImportPage() {
   };
 
   return (
-    <div>
+    <div className="page-scroll">
       <h1 className="page-title">Import data</h1>
       <p style={{ marginBottom: '1.5rem', color: '#5a6b64', fontSize: '0.95rem' }}>
         Upload CSV files generated from your GnuCash (or similar) end-of-year reports to populate expense totals and account balances. Use the samples below as a template.

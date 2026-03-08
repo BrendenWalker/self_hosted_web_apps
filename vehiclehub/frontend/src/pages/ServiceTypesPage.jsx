@@ -81,7 +81,7 @@ function ServiceTypesPage() {
   };
 
   return (
-    <div className="service-types-page">
+    <div className="service-types-page page-scroll">
       <div className="page-header">
         <h1>Service Types</h1>
         <button

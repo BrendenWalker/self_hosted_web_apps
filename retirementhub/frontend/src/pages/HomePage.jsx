@@ -4,7 +4,7 @@ import './HomePage.css';
 
 export default function HomePage() {
   return (
-    <div className="home-page">
+    <div className="home-page page-scroll">
       <section className="home-hero">
         <h1>RetirementHub</h1>
         <p className="home-subtitle">

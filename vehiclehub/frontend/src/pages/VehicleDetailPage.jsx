@@ -183,7 +183,7 @@ function VehicleDetailPage() {
   }
 
   return (
-    <div className="vehicle-detail-page">
+    <div className="vehicle-detail-page page-scroll">
       <div className="page-header">
         <div>
           <button className="btn btn-secondary" onClick={() => navigate('/vehicles')}>

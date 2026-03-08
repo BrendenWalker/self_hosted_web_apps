@@ -98,7 +98,7 @@ function VehiclesPage() {
   };
 
   return (
-    <div className="vehicles-page">
+    <div className="vehicles-page page-scroll">
       <div className="page-header">
         <h1>Vehicles</h1>
         <button

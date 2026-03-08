@@ -141,7 +141,7 @@ export default function SavingsLimitsPage() {
   const years = apiData?.years ? Object.keys(apiData.years).map(Number).sort((a, b) => a - b) : [];
 
   return (
-    <div>
+    <div className="page-scroll">
       <h1 className="page-title">Savings limits</h1>
       <p style={{ marginBottom: '1rem', color: '#5a6b64', fontSize: '0.95rem' }}>
         IRS tax-leveraged contribution maximums by year, broken down by party. Catch-up amounts are included when that person is 50+ (IRA, 401k) or 55+ (HSA) at the end of each year. Set birth years on the Household page for age-based limits.
