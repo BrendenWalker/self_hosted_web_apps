@@ -1,0 +1,34 @@
+# Basic system aliases -- these MUST be present.
+MAILER-DAEMON:      postmaster
+postmaster:         braindead@muletrain
+
+# General redirections for pseudo accounts.
+adm:                root
+bin:                root
+daemon:             root
+exim:               root
+lp:                 root
+mail:               braindead@muletrain
+named:              braindead@muletrain
+nobody:             braindead@muletrain
+postfix:            braindead@muletrain
+
+# Well-known aliases -- these should be filled in!
+root:               braindead@muletrain
+operator:           braindead@muletrain
+
+# Standard RFC2142 aliases
+abuse:              postmaster
+ftp:                braindead@muletrain
+hostmaster:         braindead@muletrain
+news:               usenet
+noc:                root
+security:           root
+usenet:             root
+uucp:               root
+webmaster:          root
+www:                braindead@muletrain
+bkw:                braindead@muletrain
+
+# trap decode to catch security attacks
+# decode:           /dev/null
