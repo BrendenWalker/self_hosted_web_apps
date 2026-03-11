@@ -1,0 +1,6 @@
+# SpamAssassin - file-based Bayes (no MySQL)
+# Used by amavisd embedded SA. Override by placing local.cf in /home/mailhub-amavisd/
+use_bayes 1
+bayes_auto_learn 1
+bayes_auto_expire 1
+bayes_path /home/mailhub-amavisd/bayes
