@@ -1,0 +1,1 @@
+Mailhub Postfix + Fetchmail image. Receives SMTP, sends through amavisd content filter, delivers via LMTP to Dovecot. Optionally runs Fetchmail to poll external mailboxes. Config and data in `/home/mailhub-postfix` (bind from host).

@@ -1,0 +1,66 @@
+version: '3.8'
+
+# Mailhub stack: Postfix (+ fetchmail) -> Amavisd (ClamAV + SpamAssassin) -> Dovecot LMTP/IMAP/Sieve
+# All config and variable data lives under /home/<container_name> (bind from host for backup/edit).
+# Set env vars in Portainer stack or use a .env file (see .env.example).
+
+services:
+  mailhub-postfix:
+    image: ${DOCKER_HUB_REGISTRY_USERNAME}/${DOCKER_HUB_POSTFIX_IMAGE_NAME:-mailhub-postfix}:${IMAGE_TAG:-latest}
+    container_name: mailhub-postfix
+    hostname: ${MYHOSTNAME:-mailhub}
+    ports:
+      - "${SMTP_PORT:-25}:25"
+      - "${SMTPS_PORT:-465}:465"
+    environment:
+      - MYHOSTNAME=${MYHOSTNAME:-mailhub}
+      - MYDOMAIN=${MYDOMAIN}
+      - RELAYHOST=${RELAYHOST}
+      - AMAVISD_HOST=mailhub-amavisd
+      - DOVECOT_HOST=mailhub-dovecot
+      - DOVECOT_LMTP_PORT=${DOVECOT_LMTP_PORT:-24}
+      - FETCHMAIL_POLL=${FETCHMAIL_POLL:-60}
+    volumes:
+      - ${MAILHUB_DATA_ROOT:-./mailhub-data}/mailhub-postfix:/home/mailhub-postfix
+    depends_on:
+      - mailhub-amavisd
+      - mailhub-dovecot
+    networks:
+      - mailhub-network
+    restart: unless-stopped
+
+  mailhub-amavisd:
+    image: ${DOCKER_HUB_REGISTRY_USERNAME}/${DOCKER_HUB_AMAVISD_IMAGE_NAME:-mailhub-amavisd}:${IMAGE_TAG:-latest}
+    container_name: mailhub-amavisd
+    hostname: mailhub-amavisd
+    ports:
+      - "10024:10024"
+      - "10025:10025"
+    environment:
+      - POSTFIX_HOST=mailhub-postfix
+    volumes:
+      - ${MAILHUB_DATA_ROOT:-./mailhub-data}/mailhub-amavisd:/home/mailhub-amavisd
+    networks:
+      - mailhub-network
+    restart: unless-stopped
+
+  mailhub-dovecot:
+    image: ${DOCKER_HUB_REGISTRY_USERNAME}/${DOCKER_HUB_DOVECOT_IMAGE_NAME:-mailhub-dovecot}:${IMAGE_TAG:-latest}
+    container_name: mailhub-dovecot
+    hostname: mailhub-dovecot
+    ports:
+      - "${IMAPS_PORT:-993}:993"
+      - "${MANAGESIEVE_PORT:-4190}:4190"
+      - "${POP3S_PORT:-995}:995"
+    environment:
+      - POSTFIX_HOST=mailhub-postfix
+      - LMTP_LISTEN=${LMTP_LISTEN:-24}
+    volumes:
+      - ${MAILHUB_DATA_ROOT:-./mailhub-data}/mailhub-dovecot:/home/mailhub-dovecot
+    networks:
+      - mailhub-network
+    restart: unless-stopped
+
+networks:
+  mailhub-network:
+    driver: bridge

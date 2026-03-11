@@ -1,0 +1,4 @@
+# Minimal aliases; override by placing aliases in /home/mailhub-postfix and running newaliases
+MAILER-DAEMON:	postmaster
+postmaster:	root
+root:		postmaster

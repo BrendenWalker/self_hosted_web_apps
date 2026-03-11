@@ -6,6 +6,7 @@ on:
       - 'kitchenhub/*'   # e.g., kitchenhub/1.0.0 (X.X.X only, no v prefix)
       - 'vehiclehub/*'   # e.g., vehiclehub/1.0.0
       - 'retirementhub/*'   # e.g., retirementhub/1.0.0
+      - 'mailhub/*'      # e.g., mailhub/1.0.0
   pull_request:
     branches:
       - main
@@ -13,6 +14,7 @@ on:
       - 'kitchenhub/**'
       - 'vehiclehub/**'
       - 'retirementhub/**'
+      - 'mailhub/**'
       - '.github/workflows/docker-build.yml'
 
 jobs:
@@ -127,7 +129,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        project: [kitchenhub, vehiclehub, retirementhub]
+        project: [kitchenhub, vehiclehub, retirementhub, mailhub]
     steps:
       - name: Checkout code
         uses: actions/checkout@v6
@@ -170,8 +172,8 @@ jobs:
           SERVICE="${TAG_REF%%/*}"
           VERSION="${TAG_REF#*/}"
           
-          if [ "$SERVICE" != "kitchenhub" ] && [ "$SERVICE" != "vehiclehub" ] && [ "$SERVICE" != "retirementhub" ]; then
-            echo "Error: Unsupported service '$SERVICE' in tag. Expected 'kitchenhub', 'vehiclehub', or 'retirementhub'."
+          if [ "$SERVICE" != "kitchenhub" ] && [ "$SERVICE" != "vehiclehub" ] && [ "$SERVICE" != "retirementhub" ] && [ "$SERVICE" != "mailhub" ]; then
+            echo "Error: Unsupported service '$SERVICE' in tag. Expected 'kitchenhub', 'vehiclehub', 'retirementhub', or 'mailhub'."
             exit 1
           fi
           
@@ -198,12 +200,21 @@ jobs:
           elif [ "${PROJECT_SUBFOLDER}" = "vehiclehub" ]; then
             DEFAULT_BACKEND="vehiclehub-backend"
             DEFAULT_FRONTEND="vehiclehub-frontend"
+          elif [ "${PROJECT_SUBFOLDER}" = "mailhub" ]; then
+            DEFAULT_POSTFIX="mailhub-postfix"
+            DEFAULT_AMAVISD="mailhub-amavisd"
+            DEFAULT_DOVECOT="mailhub-dovecot"
           else
             DEFAULT_BACKEND="retirementhub-backend"
             DEFAULT_FRONTEND="retirementhub-frontend"
           fi
           echo "DEFAULT_BACKEND=${DEFAULT_BACKEND}" >> $GITHUB_ENV
           echo "DEFAULT_FRONTEND=${DEFAULT_FRONTEND}" >> $GITHUB_ENV
+          if [ "${PROJECT_SUBFOLDER}" = "mailhub" ]; then
+            echo "DEFAULT_POSTFIX=${DEFAULT_POSTFIX}" >> $GITHUB_ENV
+            echo "DEFAULT_AMAVISD=${DEFAULT_AMAVISD}" >> $GITHUB_ENV
+            echo "DEFAULT_DOVECOT=${DEFAULT_DOVECOT}" >> $GITHUB_ENV
+          fi
 
       - name: Set image names and tags
         if: github.event_name == 'pull_request' || env.TARGET_SERVICE == '' || matrix.project == env.TARGET_SERVICE
@@ -217,6 +228,52 @@ jobs:
           # VERSION is set by "Determine target service from tag" for tag builds; set for PR builds so images get version in-app
           if [ "${GITHUB_EVENT_NAME}" = "pull_request" ]; then
             echo "VERSION=pr-${GITHUB_EVENT_NUMBER}" >> $GITHUB_ENV
+          fi
+          if [ "${{ env.PROJECT_SUBFOLDER }}" = "mailhub" ]; then
+            POSTFIX_IMAGE_NAME="${{ vars.MAILHUB_POSTFIX_IMAGE_NAME }}"
+            AMAVISD_IMAGE_NAME="${{ vars.MAILHUB_AMAVISD_IMAGE_NAME }}"
+            DOVECOT_IMAGE_NAME="${{ vars.MAILHUB_DOVECOT_IMAGE_NAME }}"
+            [ -z "${POSTFIX_IMAGE_NAME}" ] && POSTFIX_IMAGE_NAME="${{ env.DEFAULT_POSTFIX }}"
+            [ -z "${AMAVISD_IMAGE_NAME}" ] && AMAVISD_IMAGE_NAME="${{ env.DEFAULT_AMAVISD }}"
+            [ -z "${DOVECOT_IMAGE_NAME}" ] && DOVECOT_IMAGE_NAME="${{ env.DEFAULT_DOVECOT }}"
+            POSTFIX_IMAGE="${DOCKER_HUB_USERNAME}/${POSTFIX_IMAGE_NAME}"
+            AMAVISD_IMAGE="${DOCKER_HUB_USERNAME}/${AMAVISD_IMAGE_NAME}"
+            DOVECOT_IMAGE="${DOCKER_HUB_USERNAME}/${DOVECOT_IMAGE_NAME}"
+            echo "POSTFIX_IMAGE=${POSTFIX_IMAGE}" >> $GITHUB_ENV
+            echo "AMAVISD_IMAGE=${AMAVISD_IMAGE}" >> $GITHUB_ENV
+            echo "DOVECOT_IMAGE=${DOVECOT_IMAGE}" >> $GITHUB_ENV
+            if [ "${GITHUB_EVENT_NAME}" = "pull_request" ]; then
+              echo "POSTFIX_TAGS=${POSTFIX_IMAGE}:pr-${GITHUB_EVENT_NUMBER}" >> $GITHUB_ENV
+              echo "AMAVISD_TAGS=${AMAVISD_IMAGE}:pr-${GITHUB_EVENT_NUMBER}" >> $GITHUB_ENV
+              echo "DOVECOT_TAGS=${DOVECOT_IMAGE}:pr-${GITHUB_EVENT_NUMBER}" >> $GITHUB_ENV
+            else
+              POSTFIX_TAG="${POSTFIX_IMAGE}:${VERSION}"
+              AMAVISD_TAG="${AMAVISD_IMAGE}:${VERSION}"
+              DOVECOT_TAG="${DOVECOT_IMAGE}:${VERSION}"
+              POSTFIX_TAGS="${POSTFIX_TAG}"
+              AMAVISD_TAGS="${AMAVISD_TAG}"
+              DOVECOT_TAGS="${DOVECOT_TAG}"
+              IS_MAIN="${{ env.IS_MAIN_BRANCH }}"
+              if [ "${IS_MAIN}" = "true" ] && [[ ! "$VERSION" =~ - ]]; then
+                POSTFIX_TAGS="${POSTFIX_TAGS}"$'\n'"${POSTFIX_IMAGE}:latest"
+                AMAVISD_TAGS="${AMAVISD_TAGS}"$'\n'"${AMAVISD_IMAGE}:latest"
+                DOVECOT_TAGS="${DOVECOT_TAGS}"$'\n'"${DOVECOT_IMAGE}:latest"
+              elif [ "${IS_MAIN}" = "false" ]; then
+                POSTFIX_TAGS="${POSTFIX_TAGS}"$'\n'"${POSTFIX_IMAGE}:beta"
+                AMAVISD_TAGS="${AMAVISD_TAGS}"$'\n'"${AMAVISD_IMAGE}:beta"
+                DOVECOT_TAGS="${DOVECOT_TAGS}"$'\n'"${DOVECOT_IMAGE}:beta"
+              fi
+              echo "POSTFIX_TAGS<<EOF" >> $GITHUB_ENV
+              echo "$POSTFIX_TAGS" >> $GITHUB_ENV
+              echo "EOF" >> $GITHUB_ENV
+              echo "AMAVISD_TAGS<<EOF" >> $GITHUB_ENV
+              echo "$AMAVISD_TAGS" >> $GITHUB_ENV
+              echo "EOF" >> $GITHUB_ENV
+              echo "DOVECOT_TAGS<<EOF" >> $GITHUB_ENV
+              echo "$DOVECOT_TAGS" >> $GITHUB_ENV
+              echo "EOF" >> $GITHUB_ENV
+            fi
+            exit 0
           fi
           # Set image names (use project-specific variables or defaults)
           PROJECT_VAR_PREFIX=$(echo "${{ env.PROJECT_SUBFOLDER }}" | tr '[:lower:]' '[:upper:]')
@@ -300,7 +357,7 @@ jobs:
           echo "FRONTEND_CONTEXT=${FRONTEND_CONTEXT}" >> $GITHUB_ENV
 
       - name: Build and push backend image
-        if: github.event_name == 'pull_request' || env.TARGET_SERVICE == '' || matrix.project == env.TARGET_SERVICE
+        if: (github.event_name == 'pull_request' || env.TARGET_SERVICE == '' || matrix.project == env.TARGET_SERVICE) && matrix.project != 'mailhub'
         uses: docker/build-push-action@v7
         with:
           context: ${{ env.BACKEND_CONTEXT }}
@@ -313,7 +370,7 @@ jobs:
           cache-to: type=registry,ref=${{ env.BACKEND_IMAGE }}:buildcache,mode=max
 
       - name: Build and push frontend image
-        if: github.event_name == 'pull_request' || env.TARGET_SERVICE == '' || matrix.project == env.TARGET_SERVICE
+        if: (github.event_name == 'pull_request' || env.TARGET_SERVICE == '' || matrix.project == env.TARGET_SERVICE) && matrix.project != 'mailhub'
         uses: docker/build-push-action@v7
         with:
           context: ${{ env.FRONTEND_CONTEXT }}
@@ -325,8 +382,47 @@ jobs:
           cache-from: type=registry,ref=${{ env.FRONTEND_IMAGE }}:buildcache
           cache-to: type=registry,ref=${{ env.FRONTEND_IMAGE }}:buildcache,mode=max
 
+      - name: Build and push mailhub-postfix image
+        if: (github.event_name == 'pull_request' || env.TARGET_SERVICE == '' || matrix.project == env.TARGET_SERVICE) && matrix.project == 'mailhub'
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: ./mailhub/postfix/Dockerfile
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: ${{ env.POSTFIX_TAGS }}
+          build-args: |
+            VERSION=${{ env.VERSION }}
+          cache-from: type=registry,ref=${{ env.POSTFIX_IMAGE }}:buildcache
+          cache-to: type=registry,ref=${{ env.POSTFIX_IMAGE }}:buildcache,mode=max
+
+      - name: Build and push mailhub-amavisd image
+        if: (github.event_name == 'pull_request' || env.TARGET_SERVICE == '' || matrix.project == env.TARGET_SERVICE) && matrix.project == 'mailhub'
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: ./mailhub/amavisd/Dockerfile
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: ${{ env.AMAVISD_TAGS }}
+          build-args: |
+            VERSION=${{ env.VERSION }}
+          cache-from: type=registry,ref=${{ env.AMAVISD_IMAGE }}:buildcache
+          cache-to: type=registry,ref=${{ env.AMAVISD_IMAGE }}:buildcache,mode=max
+
+      - name: Build and push mailhub-dovecot image
+        if: (github.event_name == 'pull_request' || env.TARGET_SERVICE == '' || matrix.project == env.TARGET_SERVICE) && matrix.project == 'mailhub'
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: ./mailhub/dovecot/Dockerfile
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: ${{ env.DOVECOT_TAGS }}
+          build-args: |
+            VERSION=${{ env.VERSION }}
+          cache-from: type=registry,ref=${{ env.DOVECOT_IMAGE }}:buildcache
+          cache-to: type=registry,ref=${{ env.DOVECOT_IMAGE }}:buildcache,mode=max
+
       - name: Update Docker Hub repository descriptions
-        if: github.event_name != 'pull_request' && (env.TARGET_SERVICE == '' || matrix.project == env.TARGET_SERVICE)
+        if: github.event_name != 'pull_request' && (env.TARGET_SERVICE == '' || matrix.project == env.TARGET_SERVICE) && matrix.project != 'mailhub'
         env:
           DOCKER_HUB_USERNAME: ${{ secrets.DOCKER_HUB_USERNAME }}
           DOCKER_HUB_TOKEN: ${{ secrets.DOCKER_HUB_TOKEN }}
@@ -394,3 +490,37 @@ jobs:
           FRONTEND_REPO_NAME=$(echo "${{ env.FRONTEND_IMAGE }}" | cut -d'/' -f2)
           echo "Updating description for frontend repository: ${FRONTEND_REPO_NAME}"
           update_dockerhub_description "$FRONTEND_REPO_NAME" "./${{ env.PROJECT_SUBFOLDER }}/docker-descriptions/frontend.md" "$TOKEN"
+
+      - name: Update Docker Hub repository descriptions (mailhub)
+        if: github.event_name != 'pull_request' && (env.TARGET_SERVICE == '' || matrix.project == env.TARGET_SERVICE) && matrix.project == 'mailhub'
+        env:
+          DOCKER_HUB_USERNAME: ${{ secrets.DOCKER_HUB_USERNAME }}
+          DOCKER_HUB_TOKEN: ${{ secrets.DOCKER_HUB_TOKEN }}
+        run: |
+          if ! command -v jq &> /dev/null; then
+            sudo apt-get update && sudo apt-get install -y jq
+          fi
+          update_dockerhub_description() {
+            local repo_name=$1
+            local description_file=$2
+            local token=$3
+            if [ ! -f "$description_file" ]; then return; fi
+            local description_json=$(cat "$description_file" | jq -Rs .)
+            local response=$(curl -s -w "\n%{http_code}" -X PATCH \
+              -H "Authorization: JWT ${token}" -H "Content-Type: application/json" \
+              -d "{\"full_description\": ${description_json}}" \
+              "https://hub.docker.com/v2/repositories/${DOCKER_HUB_USERNAME}/${repo_name}/")
+            local http_code=$(echo "$response" | tail -n1)
+            if [ "$http_code" = "200" ]; then
+              echo "✓ Updated description for ${repo_name}"
+            else
+              echo "✗ Failed to update ${repo_name}: $http_code"
+            fi
+          }
+          TOKEN=$(curl -s -H "Content-Type: application/json" -X POST \
+            -d "{\"username\": \"${DOCKER_HUB_USERNAME}\", \"password\": \"${DOCKER_HUB_TOKEN}\"}" \
+            https://hub.docker.com/v2/users/login/ | jq -r .token)
+          [ -z "$TOKEN" ] || [ "$TOKEN" = "null" ] && exit 1
+          update_dockerhub_description "mailhub-postfix" "./mailhub/docker-descriptions/postfix.md" "$TOKEN"
+          update_dockerhub_description "mailhub-amavisd" "./mailhub/docker-descriptions/amavisd.md" "$TOKEN"
+          update_dockerhub_description "mailhub-dovecot" "./mailhub/docker-descriptions/dovecot.md" "$TOKEN"
