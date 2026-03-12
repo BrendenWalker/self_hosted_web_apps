@@ -12,8 +12,8 @@ inet_interfaces = all
 inet_protocols = ipv4
 mynetworks_style = subnet
 unknown_local_recipient_reject_code = 550
-alias_maps = hash:/etc/postfix/aliases
-alias_database = hash:/etc/postfix/aliases
+alias_maps = lmdb:/etc/postfix/aliases
+alias_database = lmdb:/etc/postfix/aliases
 mailbox_size_limit = 0
 message_size_limit = 0
 disable_dns_lookups = yes
@@ -21,6 +21,11 @@ disable_dns_lookups = yes
 # Local delivery via Dovecot LMTP (replaces procmail/Maildir)
 mailbox_transport = lmtp:inet:mailhub-dovecot:24
 local_recipient_maps =
+
+# Domains we accept for local delivery (user@domain → LMTP to Dovecot).
+# Add your Fetchmail/recipient domain (e.g. localhost or $myhostname) so
+# mail to user@domain is delivered via mailbox_transport.
+mydestination = $myhostname, localhost
 
 # Set via env at runtime: myhostname, mydomain, myorigin, relayhost
 # (entrypoint runs postconf -e for these)

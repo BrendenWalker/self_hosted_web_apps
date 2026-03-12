@@ -21,11 +21,12 @@ All config and variable data lives under **`/home/<container_name>`** on the hos
      `docker compose -f mailhub/docker-compose.yml up --build`.
 
 2. **Prepare host data dirs** (e.g. `./mailhub-data` or `/host/data/mailhub`):
-   - `mailhub-postfix`: optional `main.cf`, `master.cf`, `aliases`, `.fetchmailrc`. For relayhost SMTP auth put `sasl_passwd` here, then inside the container run `postmap /home/mailhub-postfix/sasl_passwd` and set `smtp_sasl_password_maps` in `main.cf`.
-   - `mailhub-amavisd`: optional `amavisd.conf`, `clamd.conf`, `local.cf`; ClamAV DB and SpamAssassin Bayes live here.
-   - `mailhub-dovecot`: **required** `users` (passwd-file format: `user:password:uid:gid:gecos:home:shell`). Example:  
-     `alice:plainpass:5000:5000::/home/mailhub-dovecot/maildir/alice::`  
-     Create `maildir/<user>` per user; Sieve scripts in `sieve/` or per-user `~/sieve`, active script `~/.dovecot.sieve`.
+   - `mailhub-postfix`: optional `main.cf`, `master.cf`, `aliases`, `fetchmailrc` (CHMOD 700). For relayhost SMTP auth put `sasl_passwd` here, then inside the container run `postmap /home/mailhub-postfix/sasl_passwd` and set `smtp_sasl_password_maps` in `main.cf`.
+   - `mailhub-amavisd`: optional `amavisd.conf`, `clamd.conf`, `local.cf`; ClamAV DB and SpamAssassin Bayes live here. ClamAV DB is downloaded on first container start; to update it periodically run `docker exec mailhub-amavisd freshclam` (e.g. from cron).
+   - `mailhub-dovecot`: **required** `users` (passwd-file format: `user:password:uid:gid:gecos:home:shell`). Use the **local part** as `user` (e.g. `braindead`); LMTP recipient `braindead@localhost` will match via `auth_username_format`. For **plaintext** passwords use the `{PLAIN}` prefix in the password field. Example:  
+     `braindead:{PLAIN}yourpassword:5000:5000::/home/mailhub-dovecot/maildir/braindead::`  
+     Or use a hash: `{BLF-CRYPT}$2y$05$...`. The entrypoint creates `maildir/<user>/cur`, `new`, `tmp` from `users` and chowns to the file’s uid:gid (use 5000:5000 to match the image’s `vmail` user). Sieve scripts in `sieve/` or per-user `~/sieve`, active script `~/.dovecot.sieve`.  
+     **Auth:** Password must not contain colons. Use Unix line endings (LF) in `users` (entrypoint normalizes CRLF→LF on start). If IMAP login fails, check Dovecot logs for the auth_verbose reason.
 
 3. **Portainer**: Add stack from `mailhub/portainer-stack.yml`. Set env (or use `.env` from `.env.example`):
    - `DOCKER_HUB_REGISTRY_USERNAME`, `IMAGE_TAG`
@@ -39,7 +40,7 @@ All config and variable data lives under **`/home/<container_name>`** on the hos
 - Registry/images: `DOCKER_HUB_REGISTRY_USERNAME`, `DOCKER_HUB_POSTFIX_IMAGE_NAME`, etc., `IMAGE_TAG`
 - Data root: `MAILHUB_DATA_ROOT`
 - Postfix: `MYHOSTNAME`, `MYDOMAIN`, `RELAYHOST`, `FETCHMAIL_POLL`
-- Ports: `SMTP_PORT`, `SMTPS_PORT`, `IMAPS_PORT`, `MANAGESIEVE_PORT`, `POP3S_PORT`
+- Ports: `SMTP_PORT`, `SMTPS_PORT`, `IMAPS_PORT`, `IMAP_PORT` (143 for plain IMAP, e.g. localhost), `MANAGESIEVE_PORT`, `POP3S_PORT`
 
 ## Reference configs
 

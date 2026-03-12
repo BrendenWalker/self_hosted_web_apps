@@ -1,6 +1,6 @@
 # Mailhub Postfix + Fetchmail
 # Config/variable data in /home/mailhub-postfix (bind from host).
-# Optional: .fetchmailrc, .fetchids, main.cf, master.cf, aliases, sasl_passwd.db
+# Optional: .fetchids, main.cf, master.cf, aliases, fetchmailrc, sasl_passwd.db
 
 FROM alpine:3.20
 
@@ -19,7 +19,8 @@ COPY mailhub/postfix/main.cf mailhub/postfix/master.cf mailhub/postfix/aliases /
 
 COPY mailhub/postfix/postfix-entry.sh /usr/local/bin/postfix-entry.sh
 COPY mailhub/postfix/fetchmail-entry.sh /usr/local/bin/fetchmail-entry.sh
-RUN chmod +x /usr/local/bin/postfix-entry.sh /usr/local/bin/fetchmail-entry.sh
+RUN sed -i 's/\r$//' /usr/local/bin/postfix-entry.sh /usr/local/bin/fetchmail-entry.sh && \
+    chmod +x /usr/local/bin/postfix-entry.sh /usr/local/bin/fetchmail-entry.sh
 
 COPY mailhub/postfix/supervisord.conf /etc/supervisord.conf
 
