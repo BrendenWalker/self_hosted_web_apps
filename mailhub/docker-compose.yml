@@ -2,8 +2,6 @@
 # From repo root: docker compose -f mailhub/docker-compose.yml up --build
 # Build context is repo root so COPY mailhub/postfix/... in Dockerfiles resolves.
 
-version: '3.8'
-
 services:
   mailhub-postfix:
     build:
@@ -44,6 +42,7 @@ services:
       - "10025:10025"
     environment:
       POSTFIX_HOST: mailhub-postfix
+      AMAVISD_MYHOSTNAME: ${AMAVISD_MYHOSTNAME:-mailhub-amavisd.local}
     volumes:
       - ${MAILHUB_DATA_ROOT:-./mailhub-data}/mailhub-amavisd:/home/mailhub-amavisd
     networks:
@@ -59,6 +58,7 @@ services:
     hostname: mailhub-dovecot
     ports:
       - "${IMAPS_PORT:-993}:993"
+      - "${IMAP_PORT:-143}:143"
       - "${MANAGESIEVE_PORT:-4190}:4190"
       - "${POP3S_PORT:-995}:995"
     environment:
