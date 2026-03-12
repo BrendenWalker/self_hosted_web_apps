@@ -1,0 +1,10 @@
+# Local aliases — copy to aliases. Entrypoint runs newaliases on start.
+# Format: alias: recipient[, recipient...]
+
+# --- Common aliases (uncomment/edit) ---
+# MAILER-DAEMON: postmaster
+# postmaster: root
+# root: your-local-user@localhost
+# abuse: postmaster
+# hostmaster: postmaster
+# webmaster: postmaster

@@ -1,0 +1,9 @@
+# Dovecot passwd-file — copy to "users" and add your accounts.
+# Format: user:password:uid:gid:gecos:home:shell
+# Use local part as user (e.g. braindead for braindead@localhost).
+# Password: {PLAIN}secret or {BLF-CRYPT}$2y$05$...
+# No colons in password. Use LF line endings.
+
+# Example (uid/gid 5000 = vmail in image):
+# braindead:{PLAIN}yourpassword:5000:5000::/home/mailhub-dovecot/maildir/braindead::
+# admin:{PLAIN}adminpass:5000:5000::/home/mailhub-dovecot/maildir/admin::

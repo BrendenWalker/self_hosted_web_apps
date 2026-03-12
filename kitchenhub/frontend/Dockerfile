@@ -1,4 +1,5 @@
-FROM node:18-alpine AS build
+# Pin to version tag for reproducible builds (avoid floating tag drift)
+FROM node:18.20.0-alpine3.19 AS build
 
 # Version injected at build (e.g. from CI tag or pr-N); Vite inlines VITE_* at build time
 ARG VERSION=dev
@@ -18,8 +19,8 @@ COPY kitchenhub/frontend/ .
 # Build application
 RUN npm run build
 
-# Production stage
-FROM nginx:alpine
+# Production stage; pin to version tag for reproducible builds
+FROM nginx:1.27.0-alpine
 
 # Copy built files from build stage
 COPY --from=build /app/dist /usr/share/nginx/html

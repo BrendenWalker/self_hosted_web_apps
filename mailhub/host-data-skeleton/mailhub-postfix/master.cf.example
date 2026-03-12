@@ -1,0 +1,14 @@
+# Postfix master.cf — copy to master.cf to override image default.
+# Default already wires Amavisd content filter (10024/10025) and LMTP to Dovecot.
+# Uncomment/edit only if you need to change services or content filter.
+
+# --- Content filter (default: amavis unix → mailhub-amavisd:10024) ---
+# amavis    unix  -  -  n  -  2  lmtp
+#   -o disable_dns_lookups=yes
+#   -o lmtp_send_xforward_command=yes
+#   -o lmtp_data_done_timeout=1200
+
+# --- SMTP service (default uses content_filter=amavis) ---
+# smtp  inet  n  -  n  -  2  smtpd
+#   -o content_filter=amavis:mailhub-amavisd:10024
+#   -o receive_override_options=no_address_mappings
