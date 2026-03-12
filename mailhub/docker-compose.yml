@@ -21,6 +21,7 @@ services:
       DOVECOT_HOST: mailhub-dovecot
       DOVECOT_LMTP_PORT: ${DOVECOT_LMTP_PORT:-24}
       FETCHMAIL_POLL: ${FETCHMAIL_POLL:-60}
+      FETCHMAIL_VERBOSE: ${FETCHMAIL_VERBOSE:-}
     volumes:
       - ${MAILHUB_DATA_ROOT:-./mailhub-data}/mailhub-postfix:/home/mailhub-postfix
     depends_on:
@@ -42,7 +43,15 @@ services:
       - "10025:10025"
     environment:
       POSTFIX_HOST: mailhub-postfix
+      MYDOMAIN: ${MYDOMAIN:-}
+      AMAVISD_LOCAL_DOMAINS: ${AMAVISD_LOCAL_DOMAINS:- }
       AMAVISD_MYHOSTNAME: ${AMAVISD_MYHOSTNAME:-mailhub-amavisd.local}
+      AMAVISD_SPAM_QUARANTINE_TO: ${AMAVISD_SPAM_QUARANTINE_TO:-}
+      AMAVISD_VIRUS_QUARANTINE_TO: ${AMAVISD_VIRUS_QUARANTINE_TO:-}
+      AMAVISD_SPAM_KILL_LEVEL: ${AMAVISD_SPAM_KILL_LEVEL:-}
+      AMAVISD_SPAM_SUBJECT_TAG: ${AMAVISD_SPAM_SUBJECT_TAG:-}
+      AMAVISD_SPAM_TAG_LEVEL: ${AMAVISD_SPAM_TAG_LEVEL:-}
+      AMAVISD_SPAM_TAG2_LEVEL: ${AMAVISD_SPAM_TAG2_LEVEL:-}
     volumes:
       - ${MAILHUB_DATA_ROOT:-./mailhub-data}/mailhub-amavisd:/home/mailhub-amavisd
     networks:
