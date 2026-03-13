@@ -256,7 +256,7 @@ function ShoppingListPage() {
   }, [highlightItemId]);
 
   return (
-    <div className="shopping-list-page">
+    <div className="shopping-list-page page-scroll">
       <div className="page-header">
         <h1>Shopping List</h1>
         <div className="header-actions">
