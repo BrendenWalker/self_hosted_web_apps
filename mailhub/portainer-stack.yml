@@ -40,6 +40,7 @@ services:
     environment:
       - POSTFIX_HOST=mailhub-postfix
       - MYDOMAIN=${MYDOMAIN}
+      - AMAVISD_LOCAL_DOMAINS=${AMAVISD_LOCAL_DOMAINS:-}
       - AMAVISD_MYHOSTNAME=${AMAVISD_MYHOSTNAME:-mailhub-amavisd.local}
       - AMAVISD_INET_ACL=${AMAVISD_INET_ACL:-127.0.0.1 [::1] 172.16.0.0/12}
       - AMAVISD_SPAM_QUARANTINE_TO=${AMAVISD_SPAM_QUARANTINE_TO:-}
