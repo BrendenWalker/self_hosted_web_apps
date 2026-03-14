@@ -21,6 +21,7 @@ services:
       DOVECOT_HOST: mailhub-dovecot
       DOVECOT_LMTP_PORT: ${DOVECOT_LMTP_PORT:-24}
       FETCHMAIL_POLL: ${FETCHMAIL_POLL:-60}
+      FETCHMAIL_VERBOSE: ${FETCHMAIL_VERBOSE:-}
     volumes:
       - ${MAILHUB_DATA_ROOT:-./mailhub-data}/mailhub-postfix:/home/mailhub-postfix
     depends_on:

@@ -31,9 +31,9 @@ All config and variable data lives under `**/home/<container_name>`** on the hos
   - `DOCKER_HUB_REGISTRY_USERNAME`, `IMAGE_TAG`
   - `MYHOSTNAME`, `MYDOMAIN`, `RELAYHOST`
   - `MAILHUB_DATA_ROOT` = host path to the data dir (e.g. `/host/data/mailhub` or `./mailhub-data`).
-  - **Outbound (fetchmail / relay)**: The stack attaches `mailhub-postfix` to an external network named `public` so the container can reach the internet. Create it once before deploying (or ensure a network with that name exists):  
+  - **Outbound (fetchmail / relay)**: All services attach to an external network named `public` so the stack declares networks consistently and `mailhub-postfix` can reach the internet. Create it once before deploying:  
   `docker network create public`  
-  If your host already allows outbound from custom bridges, you can create `public` anyway (no harm). If you use a different network for outbound, change the name in the stack’s `networks` section and under `mailhub-postfix`’s `networks`.
+  If you use a different network for outbound, change the name in the stack’s `networks` section and under each service’s `networks`.
 4. **ManageSieve**: Connect mail clients to ManageSieve (port 4190) with the same credentials as IMAP to manage Sieve filters remotely.
 
 ## Env vars (see .env.example)
