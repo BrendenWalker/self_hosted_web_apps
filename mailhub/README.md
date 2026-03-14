@@ -92,6 +92,8 @@ With `AMAVISD_SPAM_QUARANTINE_TO` and/or `AMAVISD_VIRUS_QUARANTINE_TO` set, amav
 
 **Sending test mail**: From the host you can use `swaks` (e.g. `swaks --to user@yourdomain --from test@external --server localhost -p 25 --body '...'`) or any SMTP client. Ensure the message is accepted by Postfix and then check amavisd logs (`docker logs mailhub-amavisd`) and the quarantine mailbox.
 
+**Log line “extra modules loaded”**: Amavisd lazily loads some Perl modules on first use and logs them at debug level. Harmless; you can ignore it or set a lower log level to reduce such lines.
+
 ## Reference configs
 
 Legacy Gentoo configs are in `reference-config/` for comparison when tuning the Docker setup.
