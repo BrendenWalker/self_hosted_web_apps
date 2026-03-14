@@ -155,7 +155,7 @@ function ShoppingPage() {
   });
 
   return (
-    <div className="shopping-page">
+    <div className="shopping-page page-scroll">
       <div className="shopping-header">
         <h1>Shopping List</h1>
         <div className="store-selector">
