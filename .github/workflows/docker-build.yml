@@ -301,7 +301,7 @@ jobs:
 
       - name: Build and push backend image
         if: github.event_name == 'pull_request' || env.TARGET_SERVICE == '' || matrix.project == env.TARGET_SERVICE
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@v7
         with:
           context: ${{ env.BACKEND_CONTEXT }}
           file: ./${{ env.PROJECT_SUBFOLDER }}/backend/Dockerfile
@@ -314,7 +314,7 @@ jobs:
 
       - name: Build and push frontend image
         if: github.event_name == 'pull_request' || env.TARGET_SERVICE == '' || matrix.project == env.TARGET_SERVICE
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@v7
         with:
           context: ${{ env.FRONTEND_CONTEXT }}
           file: ./${{ env.PROJECT_SUBFOLDER }}/frontend/Dockerfile
