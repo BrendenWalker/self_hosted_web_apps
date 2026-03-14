@@ -31,14 +31,18 @@ All config and variable data lives under `**/home/<container_name>`** on the hos
   - `DOCKER_HUB_REGISTRY_USERNAME`, `IMAGE_TAG`
   - `MYHOSTNAME`, `MYDOMAIN`, `RELAYHOST`
   - `MAILHUB_DATA_ROOT` = host path to the data dir (e.g. `/host/data/mailhub` or `./mailhub-data`).
+  - **Outbound (fetchmail / relay)**: The stack attaches `mailhub-postfix` to an external network named `public` so the container can reach the internet. Create it once before deploying (or ensure a network with that name exists):  
+  `docker network create public`  
+  If your host already allows outbound from custom bridges, you can create `public` anyway (no harm). If you use a different network for outbound, change the name in the stack’s `networks` section and under `mailhub-postfix`’s `networks`.
 4. **ManageSieve**: Connect mail clients to ManageSieve (port 4190) with the same credentials as IMAP to manage Sieve filters remotely.
 
 ## Env vars (see .env.example)
 
-- Registry/images: `DOCKER_HUB_REGISTRY_USERNAME`, `DOCKER_HUB_POSTFIX_IMAGE_NAME`, etc., `IMAGE_TAGf`
+- Registry/images: `DOCKER_HUB_REGISTRY_USERNAME`, `DOCKER_HUB_POSTFIX_IMAGE_NAME`, etc., `IMAGE_TAG`
 - Data root: `MAILHUB_DATA_ROOT`
-- Postfix: `MYHOSTNAME`, `MYDOMAIN`, `RELAYHOST`, `FETCHMAIL_POLL`
+- Postfix: `MYHOSTNAME`, `MYDOMAIN`, `RELAYHOST`, `FETCHMAIL_POLL` (default 60). Optional: `FETCHMAIL_VERBOSE=1` to log fetchmail connection/auth to container stdout for debugging.
 - Ports: `SMTP_PORT`, `SMTPS_PORT`, `IMAPS_PORT`, `IMAP_PORT` (143 for plain IMAP, e.g. localhost), `MANAGESIEVE_PORT`, `POP3S_PORT`
+- Amavisd: `AMAVISD_MYHOSTNAME`, `AMAVISD_INET_ACL` (optional; space-separated IPs/CIDRs allowed to connect to the content filter, e.g. `127.0.0.1 [::1] 172.16.0.0/12`; default covers localhost and Docker 172.16.0.0/12), quarantine recipients optional
 
 ## Migrating from Courier (or other) Maildir
 
@@ -61,6 +65,12 @@ docker exec mailhub-dovecot regenerate-dovecot-subscriptions /home/mailhub-dovec
 Then in the mail client, **refresh folder list** (e.g. right‑click account → “Refresh” or “Get Messages”). If the client has “Show only subscribed folders” enabled, turn it off to see all, or leave it on and the new `subscriptions` will make all folders appear as subscribed.
 
 **Optional:** Clear Dovecot’s list index so it rescans dirs: remove (or rename) `dovecot.list.index.log` and `dovecot.index.cache` in the user’s maildir root, then reconnect; Dovecot will rebuild them.
+
+## Fetchmail not fetching?
+
+- **Logs**: `docker logs mailhub-postfix` shows fetchmail output. Set env `FETCHMAIL_VERBOSE=1` on the stack and restart to see connection/auth details.
+- **First fetch**: The container runs one fetch immediately at startup, then polls every `FETCHMAIL_POLL` seconds (default 60).
+- **UID tracking**: Fetchmail uses `/home/mailhub-postfix/.fetchids` so it doesn’t re-fetch the same messages. If the remote mailbox or config changed, remove that file on the host (in the postfix data dir) and restart so fetchmail rescans: e.g. `rm /path/to/mailhub-data/mailhub-postfix/.fetchids`.
 
 ## Reference configs
 

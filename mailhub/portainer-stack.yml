@@ -3,6 +3,10 @@ version: '3.8'
 # Mailhub stack: Postfix (+ fetchmail) -> Amavisd (ClamAV + SpamAssassin) -> Dovecot LMTP/IMAP/Sieve
 # All config and variable data lives under /home/<container_name> (bind from host for backup/edit).
 # Set env vars in Portainer stack or use a .env file (see .env.example).
+#
+# Outbound (fetchmail, relay): mailhub-postfix is attached to external network "public" so it can
+# reach the internet. Create it once if needed: docker network create public
+# If your outbound network has another name, change "public" below and in mailhub-postfix networks.
 
 services:
   mailhub-postfix:
@@ -27,6 +31,7 @@ services:
       - mailhub-dovecot
     networks:
       - mailhub-network
+      - public
     restart: unless-stopped
 
   mailhub-amavisd:
@@ -39,6 +44,7 @@ services:
     environment:
       - POSTFIX_HOST=mailhub-postfix
       - AMAVISD_MYHOSTNAME=${AMAVISD_MYHOSTNAME:-mailhub-amavisd.local}
+      - AMAVISD_INET_ACL=${AMAVISD_INET_ACL}
     volumes:
       - ${MAILHUB_DATA_ROOT:-./mailhub-data}/mailhub-amavisd:/home/mailhub-amavisd
     networks:
@@ -66,3 +72,5 @@ services:
 networks:
   mailhub-network:
     driver: bridge
+  public:
+    external: true

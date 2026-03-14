@@ -9,7 +9,7 @@ Files here are bind-mounted into the container as `/home/mailhub-postfix`. Any f
 | `main.cf`   | Postfix main config. Env vars `MYHOSTNAME`, `MYDOMAIN`, `RELAYHOST` are applied at runtime even if you override this file. |
 | `master.cf` | Postfix master config (services, content filter). |
 | `aliases`   | Local aliases; run `newaliases` after editing (or let entrypoint do it on start). |
-| `fetchmailrc` | Fetchmail config (poll external mailboxes). **Must be mode 700** — container sets this at startup if needed. |
+| `fetchmailrc` | Fetchmail config (poll external mailboxes). **Must be mode 700** — container sets this at startup if needed. `.fetchids` in this dir tracks fetched UIDs; remove it to force a full rescan if fetchmail stops picking up mail. |
 | `sasl_passwd` | Relay SMTP auth: one line `[relayhost] username:password`. Then inside container run `postmap /home/mailhub-postfix/sasl_passwd` and ensure `main.cf` has `smtp_sasl_password_maps = hash:/etc/postfix/sasl_passwd.db`. |
 
 ## Steps
