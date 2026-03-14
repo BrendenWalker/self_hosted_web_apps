@@ -1,5 +1,5 @@
-import React from 'react';
-import { Routes, Route, Link } from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
+import { Routes, Route, Link, useLocation } from 'react-router-dom';
 import HomePage from './pages/HomePage';
 import ShoppingPage from './pages/ShoppingPage';
 import ShoppingListPage from './pages/ShoppingListPage';
@@ -11,17 +11,41 @@ import VersionFooter from './components/VersionFooter';
 import './App.css';
 
 function App() {
+  const [navOpen, setNavOpen] = useState(false);
+  const location = useLocation();
+
+  useEffect(() => setNavOpen(false), [location.pathname]);
+
+  const closeNav = () => setNavOpen(false);
+
+  const navLinks = (
+    <>
+      <Link to="/" className="nav-link" onClick={closeNav}>Home</Link>
+      <Link to="/shopping" className="nav-link" onClick={closeNav}>In-Store</Link>
+      <Link to="/list" className="nav-link" onClick={closeNav}>Shopping List</Link>
+      <Link to="/recipes" className="nav-link" onClick={closeNav}>Recipes</Link>
+      <Link to="/stores" className="nav-link" onClick={closeNav}>Stores</Link>
+    </>
+  );
+
   return (
     <div className="app">
         <nav className="navbar">
           <div className="nav-container">
-            <Link to="/" className="nav-logo">KitchenHub</Link>
-            <div className="nav-links">
-              <Link to="/" className="nav-link">Home</Link>
-              <Link to="/shopping" className="nav-link">In-Store</Link>
-              <Link to="/list" className="nav-link">Shopping List</Link>
-              <Link to="/recipes" className="nav-link">Recipes</Link>
-              <Link to="/stores" className="nav-link">Stores</Link>
+            <Link to="/" className="nav-logo" onClick={closeNav}>KitchenHub</Link>
+            <button
+              type="button"
+              className="nav-toggle"
+              aria-label={navOpen ? 'Close menu' : 'Open menu'}
+              aria-expanded={navOpen}
+              onClick={() => setNavOpen((o) => !o)}
+            >
+              <span className="nav-toggle-bar" />
+              <span className="nav-toggle-bar" />
+              <span className="nav-toggle-bar" />
+            </button>
+            <div className={`nav-links ${navOpen ? 'nav-links-open' : ''}`}>
+              {navLinks}
             </div>
           </div>
         </nav>
