@@ -21,7 +21,8 @@ All config and variable data lives under **`/home/<container_name>`** on the hos
      `docker compose -f mailhub/docker-compose.yml up --build`.
 
 2. **Prepare host data dirs** (e.g. `./mailhub-data` or `/host/data/mailhub`):
-   - `mailhub-postfix`: optional `main.cf`, `master.cf`, `aliases`, `fetchmailrc` (CHMOD 700). For relayhost SMTP auth put `sasl_passwd` here, then inside the container run `postmap /home/mailhub-postfix/sasl_passwd` and set `smtp_sasl_password_maps` in `main.cf`.
+   - **Skeleton**: Copy `mailhub/host-data-skeleton` to your data root for a ready-made directory layout and commented example configs (`.example` files). Copy only the examples you need to the real filenames and edit.
+   - `mailhub-postfix`: optional `main.cf`, `master.cf`, `aliases`, `fetchmailrc`, `sasl_passwd`. **fetchmailrc** must be mode 700 — the container sets this at startup if you forget. For relayhost SMTP auth put `sasl_passwd` here, then inside the container run `postmap /home/mailhub-postfix/sasl_passwd` and set `smtp_sasl_password_maps` in `main.cf`.
    - `mailhub-amavisd`: optional `amavisd.conf`, `clamd.conf`, `local.cf`; ClamAV DB and SpamAssassin Bayes live here. ClamAV DB is downloaded on first container start; to update it periodically run `docker exec mailhub-amavisd freshclam` (e.g. from cron).
    - `mailhub-dovecot`: **required** `users` (passwd-file format: `user:password:uid:gid:gecos:home:shell`). Use the **local part** as `user` (e.g. `braindead`); LMTP recipient `braindead@localhost` will match via `auth_username_format`. For **plaintext** passwords use the `{PLAIN}` prefix in the password field. Example:  
      `braindead:{PLAIN}yourpassword:5000:5000::/home/mailhub-dovecot/maildir/braindead::`  
