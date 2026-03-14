@@ -42,7 +42,7 @@ All config and variable data lives under `**/home/<container_name>`** on the hos
 - Data root: `MAILHUB_DATA_ROOT`
 - Postfix: `MYHOSTNAME`, `MYDOMAIN`, `RELAYHOST`, `FETCHMAIL_POLL` (default 60). Optional: `FETCHMAIL_VERBOSE=1` to log fetchmail connection/auth to container stdout for debugging.
 - Ports: `SMTP_PORT`, `SMTPS_PORT`, `IMAPS_PORT`, `IMAP_PORT` (143 for plain IMAP, e.g. localhost), `MANAGESIEVE_PORT`, `POP3S_PORT`
-- Amavisd: `AMAVISD_MYHOSTNAME`, `AMAVISD_INET_ACL` (optional; space-separated IPs/CIDRs allowed to connect to the content filter, e.g. `127.0.0.1 [::1] 172.16.0.0/12`; default covers localhost and Docker 172.16.0.0/12), quarantine recipients optional
+- Amavisd: `AMAVISD_MYHOSTNAME`, `AMAVISD_INET_ACL` (optional; space-separated IPs/CIDRs allowed to connect to the content filter, e.g. `127.0.0.1 [::1] 172.16.0.0/12`; default covers localhost and Docker 172.16.0.0/12). Quarantine recipients: `AMAVISD_SPAM_QUARANTINE_TO` and `AMAVISD_VIRUS_QUARANTINE_TO` (optional; set to the recipient address for spam/virus quarantine, or leave blank/unset to disable). When spam quarantine is enabled, `AMAVISD_SPAM_KILL_LEVEL` (default 5.0) sets the SpamAssassin score at/above which mail is blocked and quarantined.
 
 ## Migrating from Courier (or other) Maildir
 
@@ -71,6 +71,26 @@ Then in the mail client, **refresh folder list** (e.g. right‑click account →
 - **Logs**: `docker logs mailhub-postfix` shows fetchmail output. Set env `FETCHMAIL_VERBOSE=1` on the stack and restart to see connection/auth details.
 - **First fetch**: The container runs one fetch immediately at startup, then polls every `FETCHMAIL_POLL` seconds (default 60).
 - **UID tracking**: Fetchmail uses `/home/mailhub-postfix/.fetchids` so it doesn’t re-fetch the same messages. If the remote mailbox or config changed, remove that file on the host (in the postfix data dir) and restart so fetchmail rescans: e.g. `rm /path/to/mailhub-data/mailhub-postfix/.fetchids`.
+
+## Testing quarantine
+
+With `AMAVISD_SPAM_QUARANTINE_TO` and/or `AMAVISD_VIRUS_QUARANTINE_TO` set, amavisd sends copies of detected spam/virus to those addresses. The recipient must be a valid local address that Dovecot delivers to (add a user in `users` or use an alias). Spam is only quarantined when the message’s SpamAssassin score reaches the **kill level** (5.0 when spam quarantine is enabled); virus mail is always blocked and quarantined when virus quarantine is set.
+
+1. **Add a quarantine mailbox** (optional but recommended): In Dovecot’s `users` file add a user that will receive quarantined mail, e.g. `spam-q` or `virus-q`. Set the env vars to the matching address, e.g. `spam-q@yourdomain.com` (or `spam-q@localhost` if that’s how you receive).
+
+2. **Spam test** — SpamAssassin treats the **GTUBE** string as spam. Send an email (to any local user) whose **body or subject** contains this exact line:
+   ```
+   XJS*C4JDBQADN1.NSBN3*2IDNEN*GTUBE-STANDARD-ANTI-UBE-TEST-EMAIL*C.34X
+   ```
+   If spam quarantine is enabled, a copy should be delivered to `AMAVISD_SPAM_QUARANTINE_TO`. Check that mailbox via IMAP.
+
+3. **Virus test** — ClamAV treats the **EICAR** test string as a known virus. Send an email with the EICAR content as **body** or **attachment** (plain text):
+   ```
+   X5O!P%@AP[4\PZX54(P^)7CC)7}$EICAR-STANDARD-ANTIVIRUS-TEST-FILE!$H+H*
+   ```
+   If virus quarantine is enabled, a copy should be delivered to `AMAVISD_VIRUS_QUARANTINE_TO`.
+
+**Sending test mail**: From the host you can use `swaks` (e.g. `swaks --to user@yourdomain --from test@external --server localhost -p 25 --body '...'`) or any SMTP client. Ensure the message is accepted by Postfix and then check amavisd logs (`docker logs mailhub-amavisd`) and the quarantine mailbox.
 
 ## Reference configs
 

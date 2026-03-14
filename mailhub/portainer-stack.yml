@@ -41,6 +41,9 @@ services:
       - POSTFIX_HOST=mailhub-postfix
       - AMAVISD_MYHOSTNAME=${AMAVISD_MYHOSTNAME:-mailhub-amavisd.local}
       - AMAVISD_INET_ACL=${AMAVISD_INET_ACL:-127.0.0.1 [::1] 172.16.0.0/12}
+      - AMAVISD_SPAM_QUARANTINE_TO=${AMAVISD_SPAM_QUARANTINE_TO:-}
+      - AMAVISD_VIRUS_QUARANTINE_TO=${AMAVISD_VIRUS_QUARANTINE_TO:-}
+      - AMAVISD_SPAM_KILL_LEVEL=${AMAVISD_SPAM_KILL_LEVEL:-}
     volumes:
       - ${MAILHUB_DATA_ROOT:-./mailhub-data}/mailhub-amavisd:/home/mailhub-amavisd
     networks:
