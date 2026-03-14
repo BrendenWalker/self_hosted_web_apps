@@ -2,6 +2,18 @@
 
 A monorepo containing multiple self-hosted web applications, each following a consistent architecture pattern with Docker containerization.
 
+These started out decades ago as desktop/mobile apps for the most part.  
+
+The KitchenHub includes a shopping list system with store layout so that the items in the list sort based on the way you walk the store.. I hate backtracking. 
+
+VehicleHub is my vehicle maintenence tracking system.
+
+RetirementHub is my attempt to streamline a rather clunky spreadsheet I used for tracking progress toward eventual retirement.  
+
+MailHub is perhaps a tad different being composed of multiple dockers.  This is essentially my internal mail server which handles our email collecting from multiple accounts and sorting into local accounts where procmailrc organizes further.  I wanted to migrate to Sieve but courier-imap doesn't have that so if I'm going to migrate to dovecot.. why not dockerize as well.  
+
+RPGHub is for tabletop RPG campaign and character tracking (when it lands in this repo).
+
 ## Overview
 
 This repository contains several independent web applications, each with its own backend API, frontend interface, and database schema. All services are designed to run on a single Docker host with centralized routing and TLS termination.
@@ -10,11 +22,12 @@ This repository contains several independent web applications, each with its own
 
 - **KitchenHub** - Shopping list management with store layout organization
 - **VehicleHub** - Vehicle maintenance and service log tracking
-- More services coming soon...
+- **RetirementHub** - Retirement budget and planning (household, income, expenses, savings limits, projections)
+- **MailHub** - Internal mail server (multi-container: collection, delivery, IMAP; procmail/sieve-style organization). Different architecture from the other hubs.
 
 ## Architecture
 
-Each service follows a consistent architecture:
+KitchenHub, VehicleHub, and RetirementHub follow a consistent architecture:
 
 - **Backend**: Node.js/Express REST API
 - **Frontend**: React + Vite, served by nginx
@@ -27,7 +40,8 @@ To avoid conflicts, each service uses unique ports:
 
 - **KitchenHub**: Backend `8080`, Frontend `8081`
 - **VehicleHub**: Backend `8090`, Frontend `8091`
-- Future services: Increment by 10 (8100/8110, 8120/8130, etc.)
+- **RetirementHub**: Backend `8100`, Frontend `8110`
+- Future services: Increment by 10 (8120/8130, 8140/8150, etc.)
 
 ## Deployment Infrastructure
 
@@ -148,6 +162,11 @@ All backend services implement a health check endpoint at `/api/health`:
 │   ├── frontend/       # React + Vite application
 │   ├── database/       # PostgreSQL schema
 │   └── docker-compose.yml
+├── retirementhub/      # RetirementHub service
+│   ├── backend/        # Node.js/Express API
+│   ├── frontend/       # React + Vite application
+│   ├── database/       # PostgreSQL schema + migrations
+│   └── docker-compose.yml
 └── README.md           # This file
 ```
 
@@ -156,6 +175,7 @@ All backend services implement a health check endpoint at `/api/health`:
 See individual service README files for development setup instructions:
 - [KitchenHub README](kitchenhub/README.md)
 - [VehicleHub README](vehiclehub/README.md)
+- [RetirementHub README](retirementhub/README.md)
 
 ## Shared Code
 
