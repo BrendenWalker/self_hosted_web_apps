@@ -76,6 +76,8 @@ Then in the mail client, **refresh folder list** (e.g. right‑click account →
 
 With `AMAVISD_SPAM_QUARANTINE_TO` and/or `AMAVISD_VIRUS_QUARANTINE_TO` set, amavisd sends copies of detected spam/virus to those addresses. The recipient must be a valid local address that Dovecot delivers to (add a user in `users` or use an alias). Spam is only quarantined when the message’s SpamAssassin score reaches the **kill level** (5.0 when spam quarantine is enabled); virus mail is always blocked and quarantined when virus quarantine is set.
 
+**Spam shows "DiscardedOpenRelay" and never reaches quarantine:** Amavisd treats the message as "nonlocal" and discards it instead of quarantining. Set **`MYDOMAIN`** to the domain used for your local recipients (e.g. `plud.org` so that `user@muletrain.plud.org` is considered local). Amavisd uses `MYDOMAIN` for `@local_domains_acl`; if it's wrong or unset (e.g. defaulting to the amavisd hostname), mail to `user@yourdomain` is seen as open relay and discarded. Use the same value you use for Postfix (e.g. `plud.org` or `muletrain.plud.org`).
+
 1. **Add a quarantine mailbox** (optional but recommended): In Dovecot’s `users` file add a user that will receive quarantined mail, e.g. `spam-q` or `virus-q`. Set the env vars to the matching address, e.g. `spam-q@yourdomain.com` (or `spam-q@localhost` if that’s how you receive).
 
 2. **Spam test** — SpamAssassin treats the **GTUBE** string as spam. Send an email (to any local user) whose **body or subject** contains this exact line:
@@ -84,11 +86,11 @@ With `AMAVISD_SPAM_QUARANTINE_TO` and/or `AMAVISD_VIRUS_QUARANTINE_TO` set, amav
    ```
    If spam quarantine is enabled, a copy should be delivered to `AMAVISD_SPAM_QUARANTINE_TO`. Check that mailbox via IMAP.
 
-3. **Virus test** — ClamAV treats the **EICAR** test string as a known virus. Send an email with the EICAR content as **body** or **attachment** (plain text):
+3. **Virus test** — ClamAV treats the **EICAR** test string as a known virus. For reliable detection, send it as a **plain-text attachment**. Use the repo file `mailhub/eicar-test.txt` as the attachment, or create a file with exactly this line (no spaces/newlines before it):
    ```
    X5O!P%@AP[4\PZX54(P^)7CC)7}$EICAR-STANDARD-ANTIVIRUS-TEST-FILE!$H+H*
    ```
-   If virus quarantine is enabled, a copy should be delivered to `AMAVISD_VIRUS_QUARANTINE_TO`.
+   EICAR in the **body** alone often is not detected (encoding/newlines/context), so attachment is recommended. If virus quarantine is enabled, a copy should be delivered to `AMAVISD_VIRUS_QUARANTINE_TO`. If virus mail still passes, check `docker logs mailhub-amavisd` for `run_av` / `ClamAV` to see whether the scan ran and what it returned.
 
 **Sending test mail**: From the host you can use `swaks` (e.g. `swaks --to user@yourdomain --from test@external --server localhost -p 25 --body '...'`) or any SMTP client. Ensure the message is accepted by Postfix and then check amavisd logs (`docker logs mailhub-amavisd`) and the quarantine mailbox.
 
