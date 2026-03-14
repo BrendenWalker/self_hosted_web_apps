@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+#!/usr/bin/env sh
 # Regenerate Dovecot 'subscriptions' from maildir folders (e.g. after migrating from Courier).
 # Run on the host; MAILROOT = path to the user's maildir (e.g. .../mailhub-dovecot/maildir/braindead).
 # Usage: ./regenerate-dovecot-subscriptions.sh <MAILROOT> [uid:gid]
