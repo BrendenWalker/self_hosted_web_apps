@@ -43,6 +43,28 @@ All config and variable data lives under **`/home/<container_name>`** on the hos
 - Postfix: `MYHOSTNAME`, `MYDOMAIN`, `RELAYHOST`, `FETCHMAIL_POLL`
 - Ports: `SMTP_PORT`, `SMTPS_PORT`, `IMAPS_PORT`, `IMAP_PORT` (143 for plain IMAP, e.g. localhost), `MANAGESIEVE_PORT`, `POP3S_PORT`
 
+## Migrating from Courier (or other) Maildir
+
+If you copy an existing Maildir (e.g. from Courier) into Dovecot’s user directory, **IMAP clients often show only “subscribed” folders** (LSUB). Dovecot’s folder list is built from the filesystem, but the client’s visible list comes from the **`subscriptions`** file in the user’s maildir root. If that file doesn’t list the migrated folders, they won’t appear until you subscribe to them or fix the file.
+
+**Fix: regenerate `subscriptions`** so every maildir folder is subscribed.
+
+**From inside the Dovecot container** (script is in the image):
+
+```bash
+docker exec mailhub-dovecot regenerate-dovecot-subscriptions /home/mailhub-dovecot/maildir/braindead 5000:5000
+```
+
+**From the host** (using the script in the repo):
+
+```bash
+./mailhub/scripts/regenerate-dovecot-subscriptions.sh /path/to/mailhub-dovecot/maildir/braindead 5000:5000
+```
+
+Then in the mail client, **refresh folder list** (e.g. right‑click account → “Refresh” or “Get Messages”). If the client has “Show only subscribed folders” enabled, turn it off to see all, or leave it on and the new `subscriptions` will make all folders appear as subscribed.
+
+**Optional:** Clear Dovecot’s list index so it rescans dirs: remove (or rename) `dovecot.list.index.log` and `dovecot.index.cache` in the user’s maildir root, then reconnect; Dovecot will rebuild them.
+
 ## Reference configs
 
 Legacy Gentoo configs are in `reference-config/` for comparison when tuning the Docker setup.
