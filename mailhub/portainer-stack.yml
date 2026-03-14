@@ -39,11 +39,15 @@ services:
       - "10025:10025"
     environment:
       - POSTFIX_HOST=mailhub-postfix
+      - MYDOMAIN=${MYDOMAIN}
       - AMAVISD_MYHOSTNAME=${AMAVISD_MYHOSTNAME:-mailhub-amavisd.local}
       - AMAVISD_INET_ACL=${AMAVISD_INET_ACL:-127.0.0.1 [::1] 172.16.0.0/12}
       - AMAVISD_SPAM_QUARANTINE_TO=${AMAVISD_SPAM_QUARANTINE_TO:-}
       - AMAVISD_VIRUS_QUARANTINE_TO=${AMAVISD_VIRUS_QUARANTINE_TO:-}
       - AMAVISD_SPAM_KILL_LEVEL=${AMAVISD_SPAM_KILL_LEVEL:-}
+      - AMAVISD_SPAM_SUBJECT_TAG=${AMAVISD_SPAM_SUBJECT_TAG:-}
+      - AMAVISD_SPAM_TAG_LEVEL=${AMAVISD_SPAM_TAG_LEVEL:-}
+      - AMAVISD_SPAM_TAG2_LEVEL=${AMAVISD_SPAM_TAG2_LEVEL:-}
     volumes:
       - ${MAILHUB_DATA_ROOT:-./mailhub-data}/mailhub-amavisd:/home/mailhub-amavisd
     networks:

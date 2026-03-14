@@ -42,7 +42,7 @@ All config and variable data lives under `**/home/<container_name>`** on the hos
 - Data root: `MAILHUB_DATA_ROOT`
 - Postfix: `MYHOSTNAME`, `MYDOMAIN`, `RELAYHOST`, `FETCHMAIL_POLL` (default 60). Optional: `FETCHMAIL_VERBOSE=1` to log fetchmail connection/auth to container stdout for debugging.
 - Ports: `SMTP_PORT`, `SMTPS_PORT`, `IMAPS_PORT`, `IMAP_PORT` (143 for plain IMAP, e.g. localhost), `MANAGESIEVE_PORT`, `POP3S_PORT`
-- Amavisd: `AMAVISD_MYHOSTNAME`, `AMAVISD_INET_ACL` (optional; space-separated IPs/CIDRs allowed to connect to the content filter, e.g. `127.0.0.1 [::1] 172.16.0.0/12`; default covers localhost and Docker 172.16.0.0/12). Quarantine recipients: `AMAVISD_SPAM_QUARANTINE_TO` and `AMAVISD_VIRUS_QUARANTINE_TO` (optional; set to the recipient address for spam/virus quarantine, or leave blank/unset to disable). When spam quarantine is enabled, `AMAVISD_SPAM_KILL_LEVEL` (default 5.0) sets the SpamAssassin score at/above which mail is blocked and quarantined.
+- Amavisd: `AMAVISD_MYHOSTNAME`, `AMAVISD_INET_ACL` (optional; space-separated IPs/CIDRs allowed to connect to the content filter, e.g. `127.0.0.1 [::1] 172.16.0.0/12`; default covers localhost and Docker 172.16.0.0/12). Quarantine: `AMAVISD_SPAM_QUARANTINE_TO`, `AMAVISD_VIRUS_QUARANTINE_TO` (optional); `AMAVISD_SPAM_KILL_LEVEL` (default 5.0) — mail at/above this score is blocked and quarantined. Spam tagging: `AMAVISD_SPAM_SUBJECT_TAG` (default `***SPAM*** `), `AMAVISD_SPAM_TAG_LEVEL` (score above which Subject gets the tag; default -999), `AMAVISD_SPAM_TAG2_LEVEL` (optional; score above which X-Spam-Flag etc. are added). See `reference-config/README.md` for the legacy Gentoo behavior these map to.
 
 ## Migrating from Courier (or other) Maildir
 
