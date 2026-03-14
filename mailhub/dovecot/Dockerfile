@@ -2,7 +2,8 @@
 # Config and data in /home/mailhub-dovecot (bind from host).
 # Provide: users (passwd-file), maildir/<user> per user, sieve/default.sieve.
 
-FROM alpine:3.20
+# Pin digest to avoid unnecessary re-pulls and improve cache; matches alpine:3.20
+FROM alpine:3.20@sha256:b0cb30c51c47cdfde647364301758b14c335dea2fddc9490d4f007d67ecb2538
 
 ARG VERSION=dev
 ENV VERSION=$VERSION

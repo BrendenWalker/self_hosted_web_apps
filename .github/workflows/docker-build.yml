@@ -136,6 +136,14 @@ jobs:
         with:
           fetch-depth: 0  # Full history required to verify tag branch ancestry
 
+      # Require Docker Hub login to avoid anonymous pull rate limit (100/6hr). Authenticated free accounts get 200/6hr.
+      - name: Ensure Docker Hub credentials are set
+        run: |
+          if [ -z "${{ secrets.DOCKER_HUB_USERNAME }}" ] || [ -z "${{ secrets.DOCKER_HUB_TOKEN }}" ]; then
+            echo "::error::Docker Hub rate limit: add repository secrets DOCKER_HUB_USERNAME and DOCKER_HUB_TOKEN so base image pulls use your account limit (see https://docs.docker.com/docker-hub/download-rate-limit/)."
+            exit 1
+          fi
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4
 
