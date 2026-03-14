@@ -1,5 +1,5 @@
-# Pin digest to avoid unnecessary re-pulls and improve cache; matches node:18-alpine
-FROM node:18-alpine@sha256:70649fe1a0d792c12299abc78e1bc691884f8a7b519a294c351caa0748531b7c
+# Pin to version tag for reproducible builds (avoid floating tag drift)
+FROM node:18.20.0-alpine3.19
 
 ARG VERSION=dev
 ENV VERSION=$VERSION

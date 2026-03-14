@@ -1,8 +1,8 @@
 # Mailhub Amavisd + ClamAV + SpamAssassin (file-based Bayes)
 # Config/variable data in /home/mailhub-amavisd (bind from host).
 
-# Pin digest to avoid unnecessary re-pulls and improve cache; matches debian:bookworm-slim
-FROM debian:bookworm-slim@sha256:546fc136c89a1b0554689e33bfe000687048faddee5157844b374acc03d773fd
+# Pin to release tag for reproducible builds (bookworm = Debian 12)
+FROM debian:bookworm-slim
 
 ARG VERSION=dev
 ENV VERSION=$VERSION

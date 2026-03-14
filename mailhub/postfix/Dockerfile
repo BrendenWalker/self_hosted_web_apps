@@ -2,8 +2,8 @@
 # Config/variable data in /home/mailhub-postfix (bind from host).
 # Optional: .fetchids, main.cf, master.cf, aliases, fetchmailrc, sasl_passwd.db
 
-# Pin digest to avoid unnecessary re-pulls and improve cache; matches alpine:3.20
-FROM alpine:3.20@sha256:b0cb30c51c47cdfde647364301758b14c335dea2fddc9490d4f007d67ecb2538
+# Pin to version tag for reproducible builds
+FROM alpine:3.20
 
 ARG VERSION=dev
 ENV VERSION=$VERSION
