@@ -75,11 +75,10 @@
   color: #666;
 }
 
+/* Single scroll: body flows with content; only .page-scroll scrolls (no nested scroll) */
 .shopping-page-body {
   flex: 1;
-  min-height: 0;
-  overflow-y: auto;
-  -webkit-overflow-scrolling: touch;
+  min-width: 0;
 }
 
 .shopping-list-container {
