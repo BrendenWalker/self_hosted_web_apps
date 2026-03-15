@@ -24,7 +24,11 @@ fi
 
 # Set runtime options from env
 [ -n "$MYHOSTNAME" ] && postconf -e myhostname="$MYHOSTNAME"
-[ -n "$MYDOMAIN" ] && postconf -e mydomain="$MYDOMAIN" myorigin="\$mydomain"
+if [ -n "$MYDOMAIN" ]; then
+  postconf -e mydomain="$MYDOMAIN" myorigin="\$mydomain"
+  # Include $mydomain in mydestination so mail to user@$mydomain (e.g. quarantine@muletrain.plud.org) is delivered locally via Dovecot.
+  postconf -e 'mydestination = $myhostname, localhost, $mydomain'
+fi
 [ -n "$RELAYHOST" ] && postconf -e relayhost="[$RELAYHOST]"
 # SASL for relay (optional): set smtp_sasl_password_maps if sasl_passwd.db exists in data dir
 if [ -f "$DATA_DIR/sasl_passwd.db" ]; then

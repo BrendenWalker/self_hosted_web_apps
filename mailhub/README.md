@@ -67,6 +67,20 @@ Then in the mail client, **refresh folder list** (e.g. right‑click account →
 
 **Optional:** Clear Dovecot’s list index so it rescans dirs: remove (or rename) `dovecot.list.index.log` and `dovecot.index.cache` in the user’s maildir root, then reconnect; Dovecot will rebuild them.
 
+## 500 error when updating the image on your local Docker host
+
+If the image built and was pushed to Docker Hub but you get a **500 Internal Server Error** when updating (pull/redeploy) on your **local Docker host**:
+
+- **Log in on the Docker host**: So pulls use your account instead of anonymous (avoids rate limits and some registry errors). On the machine where Docker runs (or where Portainer runs), run:  
+  `docker login`  
+  Use the same Docker Hub username (and token/password) as the one that pushed the image. Then retry the update.
+
+- **Check Docker Hub status**: [status.docker.com](https://status.docker.com) — 500s are often temporary; wait for any incident to clear and try again.
+
+- **Verify pull from the host**: SSH or open a shell on the Docker host and run:  
+  `docker pull YOUR_USERNAME/mailhub-amavisd:YOUR_TAG`  
+  Replace with your `DOCKER_HUB_REGISTRY_USERNAME` and `IMAGE_TAG`. If this succeeds, retry the update in Portainer (or your UI). If this also returns 500, the error is from Docker Hub or the network; retry later.
+
 ## Fetchmail not fetching?
 
 - **Logs**: `docker logs mailhub-postfix` shows fetchmail output. Set env `FETCHMAIL_VERBOSE=1` on the stack and restart to see connection/auth details.
@@ -75,7 +89,7 @@ Then in the mail client, **refresh folder list** (e.g. right‑click account →
 
 ## Testing quarantine
 
-With `AMAVISD_SPAM_QUARANTINE_TO` and/or `AMAVISD_VIRUS_QUARANTINE_TO` set, amavisd sends copies of detected spam/virus to those addresses. The recipient must be a valid local address that Dovecot delivers to (add a user in `users` or use an alias). Spam is only quarantined when the message’s SpamAssassin score reaches the **kill level** (5.0 when spam quarantine is enabled); virus mail is always blocked and quarantined when virus quarantine is set.
+With `AMAVISD_SPAM_QUARANTINE_TO` and/or `AMAVISD_VIRUS_QUARANTINE_TO` set, amavisd sends copies of detected spam/virus to those addresses. The recipient must be a valid local address that Dovecot delivers to (add a user in `users` or use an alias). **Postfix must consider the quarantine domain local:** set **`MYDOMAIN`** to the exact domain you receive mail at (e.g. `muletrain.plud.org`), so that `mydestination` includes it and mail to `spam@muletrain.plud.org` is delivered via Dovecot instead of being relayed or bounced. Spam is only quarantined when the message’s SpamAssassin score reaches the **kill level** (5.0 when spam quarantine is enabled); virus mail is always blocked and quarantined when virus quarantine is set.
 
 **Spam/virus shows "DiscardedOpenRelay" or "DiscardedOutbound" and never reaches quarantine:** Amavisd treats the recipient as non-local (outbound) and discards instead of quarantining. Set **`AMAVISD_LOCAL_DOMAINS`** to the **parent domain** of your local recipients (e.g. `plud.org` so that `user@muletrain.plud.org` is considered local). Use a single value; avoid extra words (e.g. use `plud.org`, not `plud.org and muletrain.plud.org`). In the stack env set e.g. `AMAVISD_LOCAL_DOMAINS=plud.org`, then **restart** the amavisd container (no image rebuild—config is read at startup). If `AMAVISD_LOCAL_DOMAINS` is unset, amavisd falls back to `MYDOMAIN` (e.g. set `MYDOMAIN=plud.org` so it matches). To confirm the variable in the container: `docker exec mailhub-amavisd env | grep AMAVISD_LOCAL_DOMAINS`. **Portainer users (env vars not in container):** (1) Ensure the stack’s **Compose content** is the latest `portainer-stack.yml`—the `mailhub-amavisd` service must list every env var (MYDOMAIN, AMAVISD_LOCAL_DOMAINS, AMAVISD_SPAM_QUARANTINE_TO, etc.) in its `environment:` section, or they will not be passed into the container even if set in Environment variables. (2) Add `AMAVISD_LOCAL_DOMAINS=plud.org` and the rest under the stack’s **Environment variables**. (3) Redeploy the stack so the amavisd container is recreated with the new env. If you override config via a file in the amavisd data dir (`amavisd.conf`), ensure it does not clear or override `@local_domains_acl` / `@local_domains_maps`, as 50-user.conf sets these after that file is loaded. If the stack never passes these env vars into the container (e.g. Portainer), use **stack.env**: in the amavisd data dir copy `stack.env.example` to `stack.env`, set `AMAVISD_LOCAL_DOMAINS=plud.org`, `MYDOMAIN=plud.org`, quarantine addresses, etc., then restart the amavisd container; the entrypoint sources `stack.env` at startup. See `host-data-skeleton/mailhub-amavisd/README.md`.
 
