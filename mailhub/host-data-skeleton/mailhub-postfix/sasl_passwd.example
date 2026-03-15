@@ -1,0 +1,7 @@
+# SMTP relay SASL — copy to sasl_passwd, edit, then inside container:
+#   postmap /home/mailhub-postfix/sasl_passwd
+# Ensure main.cf has: smtp_sasl_password_maps = hash:/etc/postfix/sasl_passwd.db
+# One line per relay: [host] username:password
+
+# [smtp.example.com]:587    youruser:yourpassword
+# [smtp.gmail.com]:587      you@gmail.com:app-password

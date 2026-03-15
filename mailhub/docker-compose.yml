@@ -1,0 +1,90 @@
+# Local testing: build images (no registry). Use portainer-stack.yml for deploy.
+# From repo root: docker compose -f mailhub/docker-compose.yml up --build
+# Build context is repo root so COPY mailhub/postfix/... in Dockerfiles resolves.
+
+services:
+  mailhub-postfix:
+    build:
+      context: ..
+      dockerfile: mailhub/postfix/Dockerfile
+    image: mailhub-postfix:local
+    container_name: mailhub-postfix
+    hostname: ${MYHOSTNAME:-mailhub}
+    ports:
+      - "${SMTP_PORT:-25}:25"
+      - "${SMTPS_PORT:-465}:465"
+    environment:
+      MYHOSTNAME: ${MYHOSTNAME:-mailhub}
+      MYDOMAIN: ${MYDOMAIN:-}
+      RELAYHOST: ${RELAYHOST:-}
+      AMAVISD_HOST: mailhub-amavisd
+      DOVECOT_HOST: mailhub-dovecot
+      DOVECOT_LMTP_PORT: ${DOVECOT_LMTP_PORT:-24}
+      FETCHMAIL_POLL: ${FETCHMAIL_POLL:-60}
+      FETCHMAIL_VERBOSE: ${FETCHMAIL_VERBOSE:-}
+    volumes:
+      - ${MAILHUB_DATA_ROOT:-./mailhub-data}/mailhub-postfix:/home/mailhub-postfix
+    depends_on:
+      - mailhub-amavisd
+      - mailhub-dovecot
+    networks:
+      - mailhub-network
+    restart: unless-stopped
+    mem_limit: 512m
+
+  mailhub-amavisd:
+    build:
+      context: ..
+      dockerfile: mailhub/amavisd/Dockerfile
+    image: mailhub-amavisd:local
+    container_name: mailhub-amavisd
+    hostname: mailhub-amavisd
+    ports:
+      - "10024:10024"
+      - "10025:10025"
+    environment:
+      POSTFIX_HOST: mailhub-postfix
+      MYDOMAIN: ${MYDOMAIN:-}
+      AMAVISD_LOCAL_DOMAINS: ${AMAVISD_LOCAL_DOMAINS:- }
+      AMAVISD_MYHOSTNAME: ${AMAVISD_MYHOSTNAME:-mailhub-amavisd.local}
+      AMAVISD_SPAM_QUARANTINE_TO: ${AMAVISD_SPAM_QUARANTINE_TO:-}
+      AMAVISD_VIRUS_QUARANTINE_TO: ${AMAVISD_VIRUS_QUARANTINE_TO:-}
+      AMAVISD_SPAM_KILL_LEVEL: ${AMAVISD_SPAM_KILL_LEVEL:-}
+      AMAVISD_SPAM_SUBJECT_TAG: ${AMAVISD_SPAM_SUBJECT_TAG:-}
+      AMAVISD_SPAM_TAG_LEVEL: ${AMAVISD_SPAM_TAG_LEVEL:-}
+      AMAVISD_SPAM_TAG2_LEVEL: ${AMAVISD_SPAM_TAG2_LEVEL:-}
+      SALEARN_USER_MAILDIRS: ${SALEARN_USER_MAILDIRS:-}
+      SALEARN_SA_USER: ${SALEARN_SA_USER:-amavis}
+    volumes:
+      - ${MAILHUB_DATA_ROOT:-./mailhub-data}/mailhub-amavisd:/home/mailhub-amavisd
+      - ${MAILHUB_DATA_ROOT:-./mailhub-data}/mailhub-dovecot:/home/mailhub-dovecot
+    networks:
+      - mailhub-network
+    restart: unless-stopped
+    mem_limit: 512m
+
+  mailhub-dovecot:
+    build:
+      context: ..
+      dockerfile: mailhub/dovecot/Dockerfile
+    image: mailhub-dovecot:local
+    container_name: mailhub-dovecot
+    hostname: mailhub-dovecot
+    ports:
+      - "${IMAPS_PORT:-993}:993"
+      - "${IMAP_PORT:-143}:143"
+      - "${MANAGESIEVE_PORT:-4190}:4190"
+      - "${POP3S_PORT:-995}:995"
+    environment:
+      POSTFIX_HOST: mailhub-postfix
+      LMTP_LISTEN: ${LMTP_LISTEN:-24}
+    volumes:
+      - ${MAILHUB_DATA_ROOT:-./mailhub-data}/mailhub-dovecot:/home/mailhub-dovecot
+    networks:
+      - mailhub-network
+    restart: unless-stopped
+    mem_limit: 512m
+
+networks:
+  mailhub-network:
+    driver: bridge

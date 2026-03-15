@@ -1,0 +1,25 @@
+# Postfix main.cf — copy to main.cf to override image default.
+# Env MYHOSTNAME, MYDOMAIN, RELAYHOST are applied at runtime by the entrypoint.
+
+# --- Common overrides (uncomment and set as needed) ---
+# myhostname = mail.example.com
+# mydomain = example.com
+# myorigin = $mydomain
+# relayhost = [smtp.example.com]:587
+
+# Domains accepted for local delivery (user@domain → Dovecot LMTP).
+# Add domains you receive mail for (e.g. from Fetchmail).
+# mydestination = $myhostname, localhost, $mydomain
+
+# --- Optional: SMTP relay auth (use with relayhost) ---
+# smtp_sasl_password_maps = hash:/etc/postfix/sasl_passwd.db
+# smtp_sasl_security_options = noanonymous
+# smtp_sasl_auth_enable = yes
+
+# --- Optional: restrict who can send via this server ---
+# mynetworks = 127.0.0.0/8, 10.0.0.0/8, 172.16.0.0/12
+# smtpd_recipient_restrictions = permit_mynetworks, reject_unauth_destination
+
+# --- Optional: size / rate ---
+# message_size_limit = 52428800
+# mailbox_size_limit = 0
