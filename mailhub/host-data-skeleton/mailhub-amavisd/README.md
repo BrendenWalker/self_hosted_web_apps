@@ -2,6 +2,14 @@
 
 This directory is bind-mounted as `/home/mailhub-amavisd`. ClamAV virus DB and SpamAssassin Bayes data are stored here.
 
+## Env vars when the stack doesn't pass them
+
+If the amavisd container does not receive `AMAVISD_LOCAL_DOMAINS`, `MYDOMAIN`, quarantine addresses, etc. from the orchestrator (e.g. Portainer stack env not applied to this service), use **stack.env**:
+
+1. Copy `stack.env.example` to `stack.env` in this directory (same folder as `bayes/`, on the host under your mailhub-amavisd data path).
+2. Edit `stack.env`: uncomment and set the variables you need (e.g. `AMAVISD_LOCAL_DOMAINS=plud.org`, `MYDOMAIN=plud.org`, `AMAVISD_SPAM_QUARANTINE_TO=...`, `AMAVISD_VIRUS_QUARANTINE_TO=...`).
+3. Restart the amavisd container. The entrypoint sources `stack.env` before starting supervisord, so amavisd gets these values.
+
 ## Contents (created at runtime if missing)
 
 - **ClamAV DB** — Downloaded on first start (`freshclam`). Update periodically:  
