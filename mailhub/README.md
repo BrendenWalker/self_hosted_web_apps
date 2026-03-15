@@ -8,7 +8,7 @@ Dockerized mail stack: **Postfix** (+ Fetchmail) → **Amavisd** (ClamAV + SpamA
 - **mailhub-amavisd**: Content filter (ports 10024/10025); runs ClamAV and SpamAssassin (file-based Bayes). Receives from Postfix, reinjects to Postfix after scanning.
 - **mailhub-dovecot**: LMTP (port 24) for delivery + Sieve; IMAPS (993), ManageSieve (4190), POP3S (995). Maildir under `/home/mailhub-dovecot`; users via passwd-file.
 
-All config and variable data lives under `**/home/<container_name>`** on the host (bind-mounted). Back up and edit these dirs as needed.
+All config and variable data lives under `**/home/<container_name>`** on the host (bind-mounted). Back up and edit these dirs as needed. The **SpamAssassin Bayes database** is stored in `mailhub-amavisd/bayes/` inside the amavisd data dir, so backing up `MAILHUB_DATA_ROOT/mailhub-amavisd` (e.g. `./mailhub-data/mailhub-amavisd` or `/host/data/mailhub/mailhub-amavisd`) includes the Bayes data for restore.
 
 ## Deploy (Portainer stack)
 
@@ -23,7 +23,7 @@ All config and variable data lives under `**/home/<container_name>`** on the hos
 2. **Prepare host data dirs** (e.g. `./mailhub-data` or `/host/data/mailhub`):
   - **Skeleton**: Copy `mailhub/host-data-skeleton` to your data root for a ready-made directory layout and commented example configs (`.example` files). Copy only the examples you need to the real filenames and edit.
   - `mailhub-postfix`: optional `main.cf`, `master.cf`, `aliases`, `fetchmailrc`, `sasl_passwd`. **fetchmailrc** must be mode 700 — the container sets this at startup if you forget. For relayhost SMTP auth put `sasl_passwd` here, then inside the container run `postmap /home/mailhub-postfix/sasl_passwd` and set `smtp_sasl_password_maps` in `main.cf`.
-  - `mailhub-amavisd`: optional `amavisd.conf`, `clamd.conf`, `local.cf`; ClamAV DB and SpamAssassin Bayes live here. ClamAV DB is downloaded on first container start; to update it periodically run `docker exec mailhub-amavisd freshclam` (e.g. from cron).
+  - `mailhub-amavisd`: optional `amavisd.conf`, `clamd.conf`, `local.cf`; ClamAV DB and SpamAssassin Bayes live here (Bayes in `bayes/` on the host for backup). ClamAV DB is downloaded on first container start; to update it periodically run `docker exec mailhub-amavisd freshclam` (e.g. from cron).
   - `mailhub-dovecot`: **required** `users` (passwd-file format: `user:password:uid:gid:gecos:home:shell`). Use the **local part** as `user` (e.g. `braindead`); LMTP recipient `braindead@localhost` will match via `auth_username_format`. For **plaintext** passwords use the `{PLAIN}` prefix in the password field. Example:  
   `braindead:{PLAIN}yourpassword:5000:5000::/home/mailhub-dovecot/maildir/braindead::`  
   Or use a hash: `{BLF-CRYPT}$2y$05$...`. The entrypoint creates `maildir/<user>/cur`, `new`, `tmp` from `users` and chowns to the file’s uid:gid (use 5000:5000 to match the image’s `vmail` user). Sieve scripts in `sieve/` or per-user `~/sieve`, active script `~/.dovecot.sieve`.  
@@ -37,13 +37,31 @@ All config and variable data lives under `**/home/<container_name>`** on the hos
   If you use a different network for outbound, change the name in the stack’s `networks` section and under each service’s `networks`.
 4. **ManageSieve**: Connect mail clients to ManageSieve (port 4190) with the same credentials as IMAP to manage Sieve filters remotely.
 
+## SpamAssassin learning (sa-learn)
+
+To improve spam filtering over time, you can train SpamAssassin from messages in specific maildir folders. When **`SALEARN_USER_MAILDIRS`** is set, the amavisd container runs a daily job (03:00) that:
+
+1. Scans the given path (a directory containing **one subdir per user**, each subdir being that user’s maildir root).
+2. For each user, looks for either:
+   - **`.Admin.Spam.Ham`** and **`.Admin.Spam.DefinateSpam`** — trains ham from the first, spam from the second, then deletes the contents of both folders.
+   - **`.spam`** — trains spam only, then deletes the folder contents.
+3. Runs **`sa-learn`** as the amavis user so the Bayes data in the amavisd data dir is updated.
+
+**Setup:** Set `SALEARN_USER_MAILDIRS=/home/mailhub-dovecot/maildir` in the stack env (and ensure the stack mounts the dovecot data dir into the amavisd service, as in the repo’s `docker-compose.yml` and `portainer-stack.yml`). Create the folders in each user’s maildir as needed (e.g. `.Admin.Spam.Ham`, `.Admin.Spam.DefinateSpam`, or `.spam`). Move messages into those folders (via Sieve or your client), then let the daily job train and clean.
+
+**Manual run:**  
+`docker exec mailhub-amavisd /usr/local/bin/salearn-from-maildirs.sh`  
+(ensure `USER_MAILDIRS` is set in the container, e.g. via stack env `SALEARN_USER_MAILDIRS`).
+
+**Logs:** Cron output is appended to `/var/log/salearn.log` inside the container; inspect with `docker exec mailhub-amavisd cat /var/log/salearn.log`.
+
 ## Env vars (see .env.example)
 
 - Registry/images: `DOCKER_HUB_REGISTRY_USERNAME`, `DOCKER_HUB_POSTFIX_IMAGE_NAME`, etc., `IMAGE_TAG`
 - Data root: `MAILHUB_DATA_ROOT`
 - Postfix: `MYHOSTNAME`, `MYDOMAIN`, `RELAYHOST`, `FETCHMAIL_POLL` (default 60). Optional: `FETCHMAIL_VERBOSE=1` to log fetchmail connection/auth to container stdout for debugging.
 - Ports: `SMTP_PORT`, `SMTPS_PORT`, `IMAPS_PORT`, `IMAP_PORT` (143 for plain IMAP, e.g. localhost), `MANAGESIEVE_PORT`, `POP3S_PORT`
-- Amavisd: `AMAVISD_MYHOSTNAME`, `AMAVISD_INET_ACL` (optional; space-separated IPs/CIDRs allowed to connect to the content filter, e.g. `127.0.0.1 [::1] 172.16.0.0/12`; default covers localhost and Docker 172.16.0.0/12). Quarantine: `AMAVISD_SPAM_QUARANTINE_TO`, `AMAVISD_VIRUS_QUARANTINE_TO` (optional); `AMAVISD_SPAM_KILL_LEVEL` (default 5.0) — mail at/above this score is blocked and quarantined. Spam tagging: `AMAVISD_SPAM_SUBJECT_TAG` (default `***SPAM*** `), `AMAVISD_SPAM_TAG_LEVEL` (score above which Subject gets the tag; default -999), `AMAVISD_SPAM_TAG2_LEVEL` (optional; score above which X-Spam-Flag etc. are added). See `reference-config/README.md` for the legacy Gentoo behavior these map to.
+- Amavisd: `AMAVISD_MYHOSTNAME`, `AMAVISD_INET_ACL` (optional; space-separated IPs/CIDRs allowed to connect to the content filter, e.g. `127.0.0.1 [::1] 172.16.0.0/12`; default covers localhost and Docker 172.16.0.0/12). Quarantine: `AMAVISD_SPAM_QUARANTINE_TO`, `AMAVISD_VIRUS_QUARANTINE_TO` (optional); `AMAVISD_SPAM_KILL_LEVEL` (default 5.0) — mail at/above this score is blocked and quarantined. Spam tagging: `AMAVISD_SPAM_SUBJECT_TAG` (default `***SPAM*** `), `AMAVISD_SPAM_TAG_LEVEL` (score above which Subject gets the tag; default -999), `AMAVISD_SPAM_TAG2_LEVEL` (optional; score above which X-Spam-Flag etc. are added). See `reference-config/README.md` for the legacy Gentoo behavior these map to. **Sa-learn:** `SALEARN_USER_MAILDIRS` (optional; path inside container to directory of user maildirs, e.g. `/home/mailhub-dovecot/maildir` — when set, cron runs sa-learn daily at 03:00 and cleans processed messages), `SALEARN_SA_USER` (optional; default `amavis`).
 
 ## Migrating from Courier (or other) Maildir
 
