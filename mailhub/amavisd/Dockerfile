@@ -15,6 +15,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     clamav-daemon \
     spamassassin \
     supervisor \
+    cron \
     netbase \
     gzip \
     xz-utils \
@@ -45,10 +46,12 @@ COPY mailhub/amavisd/clamd.conf /etc/clamav/clamd.conf
 COPY mailhub/amavisd/local.cf /etc/spamassassin/local.cf
 COPY mailhub/amavisd/supervisord.conf /etc/supervisord.conf
 COPY mailhub/amavisd/amavisd-entry.sh /usr/local/bin/amavisd-entry.sh
+COPY mailhub/scripts/salearn-from-maildirs.sh /usr/local/bin/salearn-from-maildirs.sh
 RUN sed -i 's/\r$//' /etc/amavis/amavisd.conf /etc/amavis/conf.d/50-user.conf \
     /etc/clamav/clamd.conf /etc/spamassassin/local.cf /etc/supervisord.conf \
     /usr/local/bin/amavisd-entry.sh \
-    && chmod +x /usr/local/bin/amavisd-entry.sh
+    /usr/local/bin/salearn-from-maildirs.sh \
+    && chmod +x /usr/local/bin/amavisd-entry.sh /usr/local/bin/salearn-from-maildirs.sh
 
 RUN mkdir -p /home/mailhub-amavisd/bayes && chown amavis:amavis /home/mailhub-amavisd/bayes
 

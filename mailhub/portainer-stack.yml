@@ -50,8 +50,11 @@ services:
       AMAVISD_SPAM_SUBJECT_TAG: "${AMAVISD_SPAM_SUBJECT_TAG:-}"
       AMAVISD_SPAM_TAG_LEVEL: "${AMAVISD_SPAM_TAG_LEVEL:-}"
       AMAVISD_SPAM_TAG2_LEVEL: "${AMAVISD_SPAM_TAG2_LEVEL:-}"
+      SALEARN_USER_MAILDIRS: "${SALEARN_USER_MAILDIRS:-}"
+      SALEARN_SA_USER: "${SALEARN_SA_USER:-amavis}"
     volumes:
       - ${MAILHUB_DATA_ROOT:-./mailhub-data}/mailhub-amavisd:/home/mailhub-amavisd
+      - ${MAILHUB_DATA_ROOT:-./mailhub-data}/mailhub-dovecot:/home/mailhub-dovecot
     networks:
       - mailhub-network
     restart: unless-stopped

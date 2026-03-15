@@ -1,6 +1,6 @@
 # mailhub-amavisd data directory
 
-This directory is bind-mounted as `/home/mailhub-amavisd`. ClamAV virus DB and SpamAssassin Bayes data are stored here.
+This directory is bind-mounted as `/home/mailhub-amavisd`. ClamAV virus DB and SpamAssassin Bayes data are stored here. **Back up this directory** (including the `bayes/` subdir) to preserve the SpamAssassin database.
 
 ## Env vars when the stack doesn't pass them
 
@@ -14,7 +14,7 @@ If the amavisd container does not receive `AMAVISD_LOCAL_DOMAINS`, `MYDOMAIN`, q
 
 - **ClamAV DB** — Downloaded on first start (`freshclam`). Update periodically:  
   `docker exec mailhub-amavisd freshclam` (e.g. from cron).
-- **Bayes** — SpamAssassin file-based Bayes under `bayes/` (created by image).
+- **Bayes** — SpamAssassin file-based Bayes under `bayes/` (created at runtime). This lives on the host so backups of this data dir include the SpamAssassin database.
 
 ## Optional config overrides
 
