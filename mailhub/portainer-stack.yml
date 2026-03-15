@@ -29,6 +29,10 @@ services:
     networks:
       - mailhub-network
     restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 512M
 
   mailhub-amavisd:
     image: ${DOCKER_HUB_REGISTRY_USERNAME}/${DOCKER_HUB_AMAVISD_IMAGE_NAME:-mailhub-amavisd}:${IMAGE_TAG:-latest}
@@ -58,6 +62,10 @@ services:
     networks:
       - mailhub-network
     restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 512M
 
   mailhub-dovecot:
     image: ${DOCKER_HUB_REGISTRY_USERNAME}/${DOCKER_HUB_DOVECOT_IMAGE_NAME:-mailhub-dovecot}:${IMAGE_TAG:-latest}
@@ -76,6 +84,10 @@ services:
     networks:
       - mailhub-network
     restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 512M
 
 networks:
   mailhub-network:
