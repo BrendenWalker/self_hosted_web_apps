@@ -30,6 +30,7 @@ services:
     networks:
       - mailhub-network
     restart: unless-stopped
+    mem_limit: 512m
 
   mailhub-amavisd:
     build:
@@ -60,6 +61,7 @@ services:
     networks:
       - mailhub-network
     restart: unless-stopped
+    mem_limit: 512m
 
   mailhub-dovecot:
     build:
@@ -81,6 +83,7 @@ services:
     networks:
       - mailhub-network
     restart: unless-stopped
+    mem_limit: 512m
 
 networks:
   mailhub-network:

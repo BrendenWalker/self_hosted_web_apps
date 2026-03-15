@@ -22,4 +22,11 @@ The image uses built-in amavisd/ClamAV/SpamAssassin config. To customize without
 
 - Copy `local.cf.example` to `local.cf` to tune SpamAssassin (scores, Bayes, etc.). If the container does not yet load `local.cf` from this dir, you can copy it into the container or use a custom entrypoint.
 
+### ClamAV (clamd) memory tuning
+
+The image’s built-in `clamd.conf` is tuned for **low memory and minimal mail volume**: `MaxThreads 2`, `MaxQueue 8`, `ConcurrentDatabaseReload no`, and lower scan limits (`MaxFileSize`, `MaxScanSize`, `MaxRecursion`, `MaxFiles`, `CacheSize`). If you need to reduce memory further:
+
+- **Docker/Compose**: set a memory limit on the amavisd service (e.g. `mem_limit: 512m`) so the container is capped.
+- **Bytecode**: adding `Bytecode no` to a custom `clamd.conf` (mounted or copied into the container) saves RAM but reduces detection for some newer threats; only consider for very low-priority or low-volume scanning.
+
 For now, use this folder mainly for **persistent data** (ClamAV DB, Bayes). Reference `.example` files are for local editing and copying into the container if needed.
