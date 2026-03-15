@@ -1,7 +1,8 @@
 # Mailhub Amavisd + ClamAV + SpamAssassin (file-based Bayes)
 # Config/variable data in /home/mailhub-amavisd (bind from host).
 
-# Pin to release tag for reproducible builds (bookworm = Debian 12)
+# Pin to release tag for reproducible builds (bookworm = Debian 12).
+# If you hit Docker Hub 429 rate limit, run: docker login (free account raises limit).
 FROM debian:bookworm-slim
 
 ARG VERSION=dev

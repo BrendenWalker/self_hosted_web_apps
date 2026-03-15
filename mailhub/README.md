@@ -17,6 +17,7 @@ All config and variable data lives under `**/home/<container_name>`** on the hos
   - Or build locally from repo root:  
   `docker build -t youruser/mailhub-postfix:latest -f mailhub/postfix/Dockerfile .`  
   (and same for `mailhub/amavisd/Dockerfile`, `mailhub/dovecot/Dockerfile`).
+  - **Docker Hub rate limit**: If you see `429 Too Many Requests` or "pull rate limit" when building, log in first: `docker login`. Anonymous pulls are limited (100/6 hr); a free Docker Hub account gives 200/6 hr. CI uses `DOCKER_HUB_USERNAME` and `DOCKER_HUB_TOKEN` secrets.
   - **Local testing without registry**: from repo root run  
   `docker compose -f mailhub/docker-compose.yml up --build`.
 2. **Prepare host data dirs** (e.g. `./mailhub-data` or `/host/data/mailhub`):
