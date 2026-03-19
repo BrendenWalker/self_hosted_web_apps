@@ -6,7 +6,7 @@ if [ ! -f /home/mailhub-postfix/fetchmailrc ]; then
 fi
 # Fetchmail requires fetchmailrc to be mode 700 (baked into image so host-created files work)
 chmod 700 /home/mailhub-postfix/fetchmailrc
-POLL=${FETCHMAIL_POLL:-60}
+POLL=${FETCHMAIL_POLL:-300}
 VERBOSE=""
 [ -n "$FETCHMAIL_VERBOSE" ] && VERBOSE="-v"
 

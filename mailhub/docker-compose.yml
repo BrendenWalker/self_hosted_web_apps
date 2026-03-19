@@ -20,7 +20,7 @@ services:
       AMAVISD_HOST: mailhub-amavisd
       DOVECOT_HOST: mailhub-dovecot
       DOVECOT_LMTP_PORT: ${DOVECOT_LMTP_PORT:-24}
-      FETCHMAIL_POLL: ${FETCHMAIL_POLL:-60}
+      FETCHMAIL_POLL: ${FETCHMAIL_POLL:-300}
       FETCHMAIL_VERBOSE: ${FETCHMAIL_VERBOSE:-}
     volumes:
       - ${MAILHUB_DATA_ROOT:-./mailhub-data}/mailhub-postfix:/home/mailhub-postfix
@@ -31,6 +31,7 @@ services:
       - mailhub-network
     restart: unless-stopped
     mem_limit: 512m
+    cpus: '0.5'
 
   mailhub-amavisd:
     build:
@@ -61,7 +62,9 @@ services:
     networks:
       - mailhub-network
     restart: unless-stopped
-    mem_limit: 512m
+    # ClamAV + amavisd + SpamAssassin need more than 512M; OOM kills clamd otherwise
+    mem_limit: 768m
+    cpus: '0.5'
 
   mailhub-dovecot:
     build:
@@ -84,6 +87,7 @@ services:
       - mailhub-network
     restart: unless-stopped
     mem_limit: 512m
+    cpus: '0.5'
 
 networks:
   mailhub-network:

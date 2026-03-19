@@ -59,7 +59,7 @@ To improve spam filtering over time, you can train SpamAssassin from messages in
 
 - Registry/images: `DOCKER_HUB_REGISTRY_USERNAME`, `DOCKER_HUB_POSTFIX_IMAGE_NAME`, etc., `IMAGE_TAG`
 - Data root: `MAILHUB_DATA_ROOT`
-- Postfix: `MYHOSTNAME`, `MYDOMAIN`, `RELAYHOST`, `FETCHMAIL_POLL` (default 60). Optional: `FETCHMAIL_VERBOSE=1` to log fetchmail connection/auth to container stdout for debugging.
+- Postfix: `MYHOSTNAME`, `MYDOMAIN`, `RELAYHOST`, `FETCHMAIL_POLL` (default 300). Optional: `FETCHMAIL_VERBOSE=1` to log fetchmail connection/auth to container stdout for debugging.
 - Ports: `SMTP_PORT`, `SMTPS_PORT`, `IMAPS_PORT`, `IMAP_PORT` (143 for plain IMAP, e.g. localhost), `MANAGESIEVE_PORT`, `POP3S_PORT`
 - Amavisd: `AMAVISD_MYHOSTNAME`, `AMAVISD_INET_ACL` (optional; space-separated IPs/CIDRs allowed to connect to the content filter, e.g. `127.0.0.1 [::1] 172.16.0.0/12`; default covers localhost and Docker 172.16.0.0/12). Quarantine: `AMAVISD_SPAM_QUARANTINE_TO`, `AMAVISD_VIRUS_QUARANTINE_TO` (optional); `AMAVISD_SPAM_KILL_LEVEL` (default 5.0) — mail at/above this score is blocked and quarantined. Spam tagging: `AMAVISD_SPAM_SUBJECT_TAG` (default `***SPAM*** `), `AMAVISD_SPAM_TAG_LEVEL` (score above which Subject gets the tag; default -999), `AMAVISD_SPAM_TAG2_LEVEL` (optional; score above which X-Spam-Flag etc. are added). See `reference-config/README.md` for the legacy Gentoo behavior these map to. **Sa-learn:** `SALEARN_USER_MAILDIRS` (optional; path inside container to directory of user maildirs, e.g. `/home/mailhub-dovecot/maildir` — when set, cron runs sa-learn daily at 03:00 and cleans processed messages), `SALEARN_SA_USER` (optional; default `amavis`).
 
@@ -99,10 +99,32 @@ If the image built and was pushed to Docker Hub but you get a **500 Internal Ser
   `docker pull YOUR_USERNAME/mailhub-amavisd:YOUR_TAG`  
   Replace with your `DOCKER_HUB_REGISTRY_USERNAME` and `IMAGE_TAG`. If this succeeds, retry the update in Portainer (or your UI). If this also returns 500, the error is from Docker Hub or the network; retry later.
 
+## High CPU when idle?
+
+The stack is tuned to reduce idle CPU: clamd uses a single thread, `IdleTimeout`, and `SelfCheck` once per day; fetchmail defaults to a 5‑minute poll. Clamd runs with `nice -n 19`. Each container is limited to 512 MB and 0.5 CPU. Rebuild and redeploy so the updated `clamd.conf` and resource limits are in use.
+
+If **clamd still uses high CPU with no mail traffic** (no scans requested), it may be a busy-wait bug in the ClamAV version in the image. From the **host** (strace is not in the container), find clamd’s PID then trace it:
+
+```bash
+docker top mailhub-amavisd
+# Pick the PID of the clamd process (e.g. 12345), then:
+strace -p 12345 -f 2>&1 | head -50
+```
+
+Repeated `epoll_pwait` or similar with no sleep suggests an upstream issue; try a newer image (or different base) or report to the ClamAV project.
+
+**If clamd’s PID keeps changing** (PPID stable), supervisord is restarting clamd in a loop—that restart loop can cause high CPU. Find why clamd exits:
+
+- **Container logs:** `docker logs mailhub-amavisd 2>&1` — look for repeated clamd startup lines or errors.
+- **Clamd log:** `docker exec mailhub-amavisd tail -100 /var/log/clamav/clamd.log` — look for out-of-memory, fatal errors, or “Can’t connect to socket” (amavisd holding the socket).
+- **OOM:** `docker inspect mailhub-amavisd --format '{{.State.OOMKilled}}'` — if `true`, the container hit the 512M limit; raise `mem_limit` for the amavisd service or tighten clamd/SpamAssassin further.
+
+Fix the underlying exit cause (e.g. OOM, missing DB, config error); once clamd stays up, the restart loop and extra CPU stop.
+
 ## Fetchmail not fetching?
 
 - **Logs**: `docker logs mailhub-postfix` shows fetchmail output. Set env `FETCHMAIL_VERBOSE=1` on the stack and restart to see connection/auth details.
-- **First fetch**: The container runs one fetch immediately at startup, then polls every `FETCHMAIL_POLL` seconds (default 60).
+- **First fetch**: The container runs one fetch immediately at startup, then polls every `FETCHMAIL_POLL` seconds (default 300).
 - **UID tracking**: Fetchmail uses `/home/mailhub-postfix/.fetchids` so it doesn’t re-fetch the same messages. If the remote mailbox or config changed, remove that file on the host (in the postfix data dir) and restart so fetchmail rescans: e.g. `rm /path/to/mailhub-data/mailhub-postfix/.fetchids`.
 
 ## Testing quarantine
