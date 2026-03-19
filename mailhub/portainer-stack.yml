@@ -19,7 +19,7 @@ services:
       - AMAVISD_HOST=mailhub-amavisd
       - DOVECOT_HOST=mailhub-dovecot
       - DOVECOT_LMTP_PORT=${DOVECOT_LMTP_PORT:-24}
-      - FETCHMAIL_POLL=${FETCHMAIL_POLL:-60}
+      - FETCHMAIL_POLL=${FETCHMAIL_POLL:-300}
       - FETCHMAIL_VERBOSE=${FETCHMAIL_VERBOSE:-}
     volumes:
       - ${MAILHUB_DATA_ROOT:-./mailhub-data}/mailhub-postfix:/home/mailhub-postfix
@@ -33,11 +33,18 @@ services:
       resources:
         limits:
           memory: 512M
+          cpus: '0.5'
 
   mailhub-amavisd:
     image: ${DOCKER_HUB_REGISTRY_USERNAME}/${DOCKER_HUB_AMAVISD_IMAGE_NAME:-mailhub-amavisd}:${IMAGE_TAG:-latest}
     container_name: mailhub-amavisd
     hostname: mailhub-amavisd
+    # ClamAV + amavisd + SpamAssassin need more than 512M; OOM kills clamd otherwise
+    deploy:
+      resources:
+        limits:
+          memory: 768M
+          cpus: '0.5'
     ports:
       - "10024:10024"
       - "10025:10025"
@@ -62,10 +69,6 @@ services:
     networks:
       - mailhub-network
     restart: unless-stopped
-    deploy:
-      resources:
-        limits:
-          memory: 512M
 
   mailhub-dovecot:
     image: ${DOCKER_HUB_REGISTRY_USERNAME}/${DOCKER_HUB_DOVECOT_IMAGE_NAME:-mailhub-dovecot}:${IMAGE_TAG:-latest}
@@ -88,6 +91,7 @@ services:
       resources:
         limits:
           memory: 512M
+          cpus: '0.5'
 
 networks:
   mailhub-network:
