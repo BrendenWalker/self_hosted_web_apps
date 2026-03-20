@@ -28,15 +28,28 @@ CREATE TABLE IF NOT EXISTS storezones (
 CREATE INDEX IF NOT EXISTS idx_storezones_storeid ON storezones(storeid);
 CREATE INDEX IF NOT EXISTS idx_storezones_deptid ON storezones(departmentid);
 
+-- Ingredient / nutrition fields on items (see migrations 008+ for existing DBs).
+CREATE TABLE IF NOT EXISTS common.ingredient_measurements (
+    id SERIAL PRIMARY KEY,
+    name VARCHAR(80) NOT NULL UNIQUE,
+    to_grams NUMERIC(10, 2)
+);
+CREATE INDEX IF NOT EXISTS idx_common_ingredient_measurements_name ON common.ingredient_measurements(name);
+
 CREATE TABLE IF NOT EXISTS items (
     id SERIAL PRIMARY KEY,
     name VARCHAR(80) NOT NULL UNIQUE,
     department INTEGER REFERENCES common.department(id),
     qty REAL DEFAULT 0,
-    changed INTEGER DEFAULT 0
+    details VARCHAR(255),
+    kcal INTEGER,
+    kcal_qty NUMERIC(10, 2),
+    measurement_id INTEGER REFERENCES common.ingredient_measurements(id) ON DELETE SET NULL,
+    shopping_measure VARCHAR(255),
+    shopping_measure_grams NUMERIC(10, 2)
 );
 CREATE INDEX IF NOT EXISTS idx_items_department ON items(department);
-CREATE INDEX IF NOT EXISTS idx_items_changed ON items(changed);
+CREATE INDEX IF NOT EXISTS idx_items_measurement_id ON items(measurement_id);
 
 -- ========== CONFIG ==========
 CREATE SCHEMA IF NOT EXISTS config;

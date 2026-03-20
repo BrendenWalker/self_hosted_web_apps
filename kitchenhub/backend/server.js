@@ -292,9 +292,10 @@ app.post('/api/departments', async (req, res) => {
 app.get('/api/items', async (req, res) => {
   try {
     const result = await pool.query(
-      `SELECT i.*, d.name as department_name 
+      `SELECT i.*, d.name as department_name, m.name as measurement_name
        FROM items i 
        LEFT JOIN common.department d ON i.department = d.id 
+       LEFT JOIN common.ingredient_measurements m ON i.measurement_id = m.id
        ORDER BY d.name, i.name`
     );
     res.json(result.rows);
@@ -308,9 +309,10 @@ app.get('/api/items', async (req, res) => {
 app.get('/api/items/:id', async (req, res) => {
   try {
     const result = await pool.query(
-      `SELECT i.*, d.name as department_name 
+      `SELECT i.*, d.name as department_name, m.name as measurement_name
        FROM items i 
        LEFT JOIN common.department d ON i.department = d.id 
+       LEFT JOIN common.ingredient_measurements m ON i.measurement_id = m.id
        WHERE i.id = $1`,
       [req.params.id]
     );
@@ -333,7 +335,16 @@ app.post('/api/items', async (req, res) => {
     if (!name) {
       return res.status(400).json({ error: 'Validation failed', detail: 'Item name is required' });
     }
-    const { department, qty } = req.body;
+    const {
+      department,
+      qty,
+      details,
+      kcal,
+      measurement_id,
+      shopping_measure,
+      shopping_measure_grams,
+      kcal_qty,
+    } = req.body;
     // Case-insensitive duplicate check (DB may have "parsley" while user adds "Parsley")
     const existing = await pool.query(
       'SELECT id, name FROM items WHERE LOWER(name) = LOWER($1)',
@@ -348,9 +359,37 @@ app.post('/api/items', async (req, res) => {
           : 'An item with this name already exists'
       });
     }
+    const kcalVal = kcal != null && kcal !== '' ? parseInt(kcal, 10) : null;
+    const kcalQtyVal =
+      kcal_qty != null && kcal_qty !== '' ? parseFloat(kcal_qty) : null;
+    const measureId =
+      measurement_id != null && measurement_id !== '' ? parseInt(measurement_id, 10) : null;
+    const shopGrams =
+      shopping_measure_grams != null && shopping_measure_grams !== ''
+        ? parseFloat(shopping_measure_grams)
+        : null;
+    const detailsTrim = details != null && String(details).trim() !== '' ? String(details).trim() : null;
+    const shopMeasureTrim =
+      shopping_measure != null && String(shopping_measure).trim() !== ''
+        ? String(shopping_measure).trim()
+        : null;
+
     const result = await pool.query(
-      'INSERT INTO items (name, department, qty) VALUES ($1, $2, $3) RETURNING *',
-      [name, department || null, qty || 0]
+      `INSERT INTO items (
+         name, department, qty, details, kcal, kcal_qty, measurement_id,
+         shopping_measure, shopping_measure_grams
+       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING *`,
+      [
+        name,
+        department || null,
+        qty != null && qty !== '' ? parseFloat(qty) : 0,
+        detailsTrim,
+        Number.isNaN(kcalVal) ? null : kcalVal,
+        Number.isNaN(kcalQtyVal) ? null : kcalQtyVal,
+        Number.isNaN(measureId) ? null : measureId,
+        shopMeasureTrim,
+        Number.isNaN(shopGrams) ? null : shopGrams,
+      ]
     );
     res.status(201).json(result.rows[0]);
   } catch (error) {
@@ -400,7 +439,15 @@ app.put('/api/items/:id', async (req, res) => {
     if (!name) {
       return res.status(400).json({ error: 'Validation failed', detail: 'Item name is required' });
     }
-    const { department, qty } = req.body;
+    const {
+      department,
+      details,
+      kcal,
+      measurement_id,
+      shopping_measure,
+      shopping_measure_grams,
+      kcal_qty,
+    } = req.body;
     const id = req.params.id;
     // Case-insensitive duplicate check, excluding current item
     const existing = await pool.query(
@@ -416,9 +463,44 @@ app.put('/api/items/:id', async (req, res) => {
           : 'An item with this name already exists'
       });
     }
+    const kcalVal = kcal != null && kcal !== '' ? parseInt(kcal, 10) : null;
+    const kcalQtyVal =
+      kcal_qty != null && kcal_qty !== '' ? parseFloat(kcal_qty) : null;
+    const measureId =
+      measurement_id != null && measurement_id !== '' ? parseInt(measurement_id, 10) : null;
+    const shopGrams =
+      shopping_measure_grams != null && shopping_measure_grams !== ''
+        ? parseFloat(shopping_measure_grams)
+        : null;
+    const detailsTrim = details != null && String(details).trim() !== '' ? String(details).trim() : null;
+    const shopMeasureTrim =
+      shopping_measure != null && String(shopping_measure).trim() !== ''
+        ? String(shopping_measure).trim()
+        : null;
+
+    // Do not update qty here — shopping list quantity is managed separately.
     const result = await pool.query(
-      'UPDATE items SET name = $1, department = $2, qty = $3 WHERE id = $4 RETURNING *',
-      [name, department || null, qty || 0, id]
+      `UPDATE items SET
+         name = $1,
+         department = $2,
+         details = $3,
+         kcal = $4,
+         kcal_qty = $5,
+         measurement_id = $6,
+         shopping_measure = $7,
+         shopping_measure_grams = $8
+       WHERE id = $9 RETURNING *`,
+      [
+        name,
+        department || null,
+        detailsTrim,
+        Number.isNaN(kcalVal) ? null : kcalVal,
+        Number.isNaN(kcalQtyVal) ? null : kcalQtyVal,
+        Number.isNaN(measureId) ? null : measureId,
+        shopMeasureTrim,
+        Number.isNaN(shopGrams) ? null : shopGrams,
+        id,
+      ]
     );
     if (result.rows.length === 0) {
       return res.status(404).json({ error: 'Item not found' });
@@ -674,7 +756,7 @@ app.get('/api/ingredient-measurements', async (req, res) => {
 app.get('/api/ingredients', async (req, res) => {
   try {
     const result = await pool.query(
-      `SELECT i.id, i.name, i.details, i.kcal, i.qty, i.measurement_id, i.department as department_id, i.shopping_measure, i.shopping_measure_grams,
+      `SELECT i.id, i.name, i.details, i.kcal, i.kcal_qty, i.qty, i.measurement_id, i.department as department_id, i.shopping_measure, i.shopping_measure_grams,
               d.name as department_name, m.name as measurement_name
        FROM items i
        LEFT JOIN common.department d ON i.department = d.id
@@ -691,7 +773,7 @@ app.get('/api/ingredients', async (req, res) => {
 app.get('/api/ingredients/:id', async (req, res) => {
   try {
     const result = await pool.query(
-      `SELECT i.id, i.name, i.details, i.kcal, i.qty, i.measurement_id, i.department as department_id, i.shopping_measure, i.shopping_measure_grams,
+      `SELECT i.id, i.name, i.details, i.kcal, i.kcal_qty, i.qty, i.measurement_id, i.department as department_id, i.shopping_measure, i.shopping_measure_grams,
               d.name as department_name, m.name as measurement_name
        FROM items i
        LEFT JOIN common.department d ON i.department = d.id
@@ -711,18 +793,31 @@ app.get('/api/ingredients/:id', async (req, res) => {
 
 app.post('/api/ingredients', async (req, res) => {
   try {
-    const { name, details, kcal, qty, measurement_id, department_id, shopping_measure, shopping_measure_grams } = req.body;
+    const {
+      name,
+      details,
+      kcal,
+      kcal_qty,
+      qty,
+      measurement_id,
+      department_id,
+      shopping_measure,
+      shopping_measure_grams,
+    } = req.body;
     if (!name || !department_id) {
       return res.status(400).json({ error: 'name and department_id are required' });
     }
+    const kcalQtyParsed =
+      kcal_qty != null && kcal_qty !== '' ? parseFloat(kcal_qty) : null;
     const result = await pool.query(
-      `INSERT INTO items (name, details, kcal, qty, measurement_id, department, shopping_measure, shopping_measure_grams)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-       RETURNING id, name, details, kcal, qty, measurement_id, department as department_id, shopping_measure, shopping_measure_grams`,
+      `INSERT INTO items (name, details, kcal, kcal_qty, qty, measurement_id, department, shopping_measure, shopping_measure_grams)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+       RETURNING id, name, details, kcal, kcal_qty, qty, measurement_id, department as department_id, shopping_measure, shopping_measure_grams`,
       [
         name.trim(),
         details ? details.trim() : null,
         kcal != null ? parseInt(kcal, 10) : null,
+        Number.isNaN(kcalQtyParsed) ? null : kcalQtyParsed,
         qty != null ? parseFloat(qty) : 0,
         measurement_id || null,
         department_id,
@@ -745,19 +840,32 @@ app.post('/api/ingredients', async (req, res) => {
 
 app.put('/api/ingredients/:id', async (req, res) => {
   try {
-    const { name, details, kcal, qty, measurement_id, department_id, shopping_measure, shopping_measure_grams } = req.body;
+    const {
+      name,
+      details,
+      kcal,
+      kcal_qty,
+      qty,
+      measurement_id,
+      department_id,
+      shopping_measure,
+      shopping_measure_grams,
+    } = req.body;
     if (!name || !department_id) {
       return res.status(400).json({ error: 'name and department_id are required' });
     }
+    const kcalQtyParsed =
+      kcal_qty != null && kcal_qty !== '' ? parseFloat(kcal_qty) : null;
     const result = await pool.query(
       `UPDATE items
-       SET name = $1, details = $2, kcal = $3, qty = $4, measurement_id = $5, department = $6, shopping_measure = $7, shopping_measure_grams = $8
-       WHERE id = $9
-       RETURNING id, name, details, kcal, qty, measurement_id, department as department_id, shopping_measure, shopping_measure_grams`,
+       SET name = $1, details = $2, kcal = $3, kcal_qty = $4, qty = $5, measurement_id = $6, department = $7, shopping_measure = $8, shopping_measure_grams = $9
+       WHERE id = $10
+       RETURNING id, name, details, kcal, kcal_qty, qty, measurement_id, department as department_id, shopping_measure, shopping_measure_grams`,
       [
         name.trim(),
         details ? details.trim() : null,
         kcal != null ? parseInt(kcal, 10) : null,
+        Number.isNaN(kcalQtyParsed) ? null : kcalQtyParsed,
         qty != null ? parseFloat(qty) : 0,
         measurement_id || null,
         department_id,

@@ -1,0 +1,85 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuites name="jest tests" tests="40" failures="0" errors="0" time="0.787">
+  <testsuite name="KitchenHub API" errors="0" failures="0" skipped="0" timestamp="2026-03-19T23:19:00" time="0.738" tests="40">
+    <testcase classname="KitchenHub API GET /api/health returns 200 with status, timestamp, and version" name="KitchenHub API GET /api/health returns 200 with status, timestamp, and version" time="0.03">
+    </testcase>
+    <testcase classname="KitchenHub API Stores GET /api/stores returns All store first then DB stores" name="KitchenHub API Stores GET /api/stores returns All store first then DB stores" time="0.004">
+    </testcase>
+    <testcase classname="KitchenHub API Stores GET /api/stores/:id returns All store for id -1" name="KitchenHub API Stores GET /api/stores/:id returns All store for id -1" time="0.003">
+    </testcase>
+    <testcase classname="KitchenHub API Stores GET /api/stores/:id returns 404 when store not found" name="KitchenHub API Stores GET /api/stores/:id returns 404 when store not found" time="0.002">
+    </testcase>
+    <testcase classname="KitchenHub API Stores GET /api/stores/:id returns store when found" name="KitchenHub API Stores GET /api/stores/:id returns store when found" time="0.003">
+    </testcase>
+    <testcase classname="KitchenHub API Stores POST /api/stores creates store" name="KitchenHub API Stores POST /api/stores creates store" time="0.01">
+    </testcase>
+    <testcase classname="KitchenHub API Stores PUT /api/stores/-1 returns 403 for All store" name="KitchenHub API Stores PUT /api/stores/-1 returns 403 for All store" time="0.002">
+    </testcase>
+    <testcase classname="KitchenHub API Stores DELETE /api/stores/-1 returns 403 for All store" name="KitchenHub API Stores DELETE /api/stores/-1 returns 403 for All store" time="0.003">
+    </testcase>
+    <testcase classname="KitchenHub API Stores PUT /api/stores/:id returns 404 when store not found" name="KitchenHub API Stores PUT /api/stores/:id returns 404 when store not found" time="0.002">
+    </testcase>
+    <testcase classname="KitchenHub API Stores DELETE /api/stores/:id returns 404 when store not found" name="KitchenHub API Stores DELETE /api/stores/:id returns 404 when store not found" time="0.002">
+    </testcase>
+    <testcase classname="KitchenHub API Store zones GET /api/stores/-1/zones returns synthetic General zones" name="KitchenHub API Store zones GET /api/stores/-1/zones returns synthetic General zones" time="0.001">
+    </testcase>
+    <testcase classname="KitchenHub API Store zones GET /api/stores/1/zones returns zones from DB" name="KitchenHub API Store zones GET /api/stores/1/zones returns zones from DB" time="0.002">
+    </testcase>
+    <testcase classname="KitchenHub API Store zones POST /api/stores/-1/zones returns 403 for All store" name="KitchenHub API Store zones POST /api/stores/-1/zones returns 403 for All store" time="0.002">
+    </testcase>
+    <testcase classname="KitchenHub API Store zones POST /api/stores/1/zones creates zone" name="KitchenHub API Store zones POST /api/stores/1/zones creates zone" time="0.002">
+    </testcase>
+    <testcase classname="KitchenHub API Store zones POST /api/stores/1/zones returns 400 for invalid store id" name="KitchenHub API Store zones POST /api/stores/1/zones returns 400 for invalid store id" time="0.002">
+    </testcase>
+    <testcase classname="KitchenHub API Store zones POST /api/stores/1/zones/swap returns 403 for All store" name="KitchenHub API Store zones POST /api/stores/1/zones/swap returns 403 for All store" time="0.002">
+    </testcase>
+    <testcase classname="KitchenHub API Store zones POST /api/stores/1/zones/swap returns 400 when seqA/seqB missing" name="KitchenHub API Store zones POST /api/stores/1/zones/swap returns 400 when seqA/seqB missing" time="0.002">
+    </testcase>
+    <testcase classname="KitchenHub API Store zones POST /api/stores/1/zones/swap succeeds" name="KitchenHub API Store zones POST /api/stores/1/zones/swap succeeds" time="0.002">
+    </testcase>
+    <testcase classname="KitchenHub API Store zones DELETE /api/stores/-1/zones/1/1 returns 403 for All store" name="KitchenHub API Store zones DELETE /api/stores/-1/zones/1/1 returns 403 for All store" time="0.002">
+    </testcase>
+    <testcase classname="KitchenHub API Store zones DELETE /api/stores/1/zones/1/1 deletes zone" name="KitchenHub API Store zones DELETE /api/stores/1/zones/1/1 deletes zone" time="0.002">
+    </testcase>
+    <testcase classname="KitchenHub API Departments GET /api/departments returns list" name="KitchenHub API Departments GET /api/departments returns list" time="0.002">
+    </testcase>
+    <testcase classname="KitchenHub API Departments POST /api/departments creates department" name="KitchenHub API Departments POST /api/departments creates department" time="0.002">
+    </testcase>
+    <testcase classname="KitchenHub API Items GET /api/items returns list" name="KitchenHub API Items GET /api/items returns list" time="0.002">
+    </testcase>
+    <testcase classname="KitchenHub API Items GET /api/items/:id returns 404 when not found" name="KitchenHub API Items GET /api/items/:id returns 404 when not found" time="0.001">
+    </testcase>
+    <testcase classname="KitchenHub API Items GET /api/items/1 returns item" name="KitchenHub API Items GET /api/items/1 returns item" time="0.002">
+    </testcase>
+    <testcase classname="KitchenHub API Items POST /api/items creates item" name="KitchenHub API Items POST /api/items creates item" time="0.002">
+    </testcase>
+    <testcase classname="KitchenHub API Items PUT /api/items/:id returns 404 when not found" name="KitchenHub API Items PUT /api/items/:id returns 404 when not found" time="0.002">
+    </testcase>
+    <testcase classname="KitchenHub API Items DELETE /api/items/:id returns 404 when not found" name="KitchenHub API Items DELETE /api/items/:id returns 404 when not found" time="0.002">
+    </testcase>
+    <testcase classname="KitchenHub API Shopping list GET /api/shopping-list/-1 returns list for All store" name="KitchenHub API Shopping list GET /api/shopping-list/-1 returns list for All store" time="0.001">
+    </testcase>
+    <testcase classname="KitchenHub API Shopping list GET /api/shopping-list/1 returns list for store" name="KitchenHub API Shopping list GET /api/shopping-list/1 returns list for store" time="0.002">
+    </testcase>
+    <testcase classname="KitchenHub API Shopping list GET /api/shopping-list returns all items" name="KitchenHub API Shopping list GET /api/shopping-list returns all items" time="0.001">
+    </testcase>
+    <testcase classname="KitchenHub API Shopping list POST /api/shopping-list adds item" name="KitchenHub API Shopping list POST /api/shopping-list adds item" time="0.002">
+    </testcase>
+    <testcase classname="KitchenHub API Shopping list PUT /api/shopping-list/:name returns 400 when no fields to update" name="KitchenHub API Shopping list PUT /api/shopping-list/:name returns 400 when no fields to update" time="0.002">
+    </testcase>
+    <testcase classname="KitchenHub API Shopping list PUT /api/shopping-list/:name updates quantity" name="KitchenHub API Shopping list PUT /api/shopping-list/:name updates quantity" time="0.002">
+    </testcase>
+    <testcase classname="KitchenHub API Shopping list PUT /api/shopping-list/:name returns 404 when not found" name="KitchenHub API Shopping list PUT /api/shopping-list/:name returns 404 when not found" time="0.002">
+    </testcase>
+    <testcase classname="KitchenHub API Shopping list PATCH /api/shopping-list/:name/purchased updates purchased" name="KitchenHub API Shopping list PATCH /api/shopping-list/:name/purchased updates purchased" time="0.002">
+    </testcase>
+    <testcase classname="KitchenHub API Shopping list PATCH /api/shopping-list/:name/purchased returns 404 when not found" name="KitchenHub API Shopping list PATCH /api/shopping-list/:name/purchased returns 404 when not found" time="0.001">
+    </testcase>
+    <testcase classname="KitchenHub API Shopping list DELETE /api/shopping-list/:name removes item" name="KitchenHub API Shopping list DELETE /api/shopping-list/:name removes item" time="0.002">
+    </testcase>
+    <testcase classname="KitchenHub API Shopping list DELETE /api/shopping-list/:name returns 404 when not found" name="KitchenHub API Shopping list DELETE /api/shopping-list/:name returns 404 when not found" time="0.001">
+    </testcase>
+    <testcase classname="KitchenHub API Error handling GET /api/stores returns 500 on DB error" name="KitchenHub API Error handling GET /api/stores returns 500 on DB error" time="0.013">
+    </testcase>
+  </testsuite>
+</testsuites>

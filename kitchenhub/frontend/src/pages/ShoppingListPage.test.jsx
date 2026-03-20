@@ -12,6 +12,7 @@ describe('ShoppingListPage', () => {
     vi.mocked(api.getAllShoppingList).mockResolvedValue({ data: [] });
     vi.mocked(api.getItems).mockResolvedValue({ data: [] });
     vi.mocked(api.getDepartments).mockResolvedValue({ data: [] });
+    vi.mocked(api.getIngredientMeasurements).mockResolvedValue({ data: [] });
   });
 
   it('loads data and renders tabs', async () => {
