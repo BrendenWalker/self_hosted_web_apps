@@ -46,8 +46,21 @@ function defaultQueryHandler(sql, params) {
   if (s.includes('FROM items i') && s.includes('storezones sz') && s.includes('WHERE i.qty > 0')) {
     return { rows: [{ name: 'Milk', quantity: '1', department_id: 1, item_id: 1, zone: 'Aisle 1', zone_seq: 1, department_name: 'Produce' }] };
   }
-  if (s.includes('INSERT INTO items')) return { rows: [{ id: 1, name: params?.[0], department: params?.[1], qty: params?.[2] ?? 0 }] };
-  if (s.includes('UPDATE items SET name = $1, department = $2, qty = $3')) return { rows: [{ id: params?.[3], name: params?.[0], department: params?.[1], qty: params?.[2] }] };
+  if (s.includes('INSERT INTO items') && s.includes('RETURNING *')) {
+    return {
+      rows: [
+        {
+          id: 1,
+          name: params?.[0],
+          department: params?.[1],
+          qty: params?.[2] ?? 0,
+        },
+      ],
+    };
+  }
+  if (s.includes('UPDATE items SET') && s.includes('kcal_qty') && s.includes('WHERE id = $9')) {
+    return { rows: [{ id: params?.[8], name: params?.[0], department: params?.[1], qty: 0 }] };
+  }
   // Shopping list: increment qty (POST add)
   if (s.includes('UPDATE items SET qty = COALESCE(qty, 0) + $1')) {
     const name = params?.[1]; // name or id; when by name params are [addQty, name]
