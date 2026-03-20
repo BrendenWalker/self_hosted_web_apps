@@ -191,7 +191,8 @@
 }
 
 .form-group input,
-.form-group select {
+.form-group select,
+.form-group textarea {
   width: 100%;
   padding: 0.75rem;
   border: 2px solid #ddd;
@@ -201,9 +202,57 @@
 }
 
 .form-group input:focus,
-.form-group select:focus {
+.form-group select:focus,
+.form-group textarea:focus {
   outline: none;
   border-color: #3498db;
+}
+
+.kcal-row-label {
+  margin-bottom: 0.5rem;
+}
+
+.kcal-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 0.65rem;
+}
+
+.kcal-row-text {
+  font-size: 0.95rem;
+  color: #2c3e50;
+  white-space: nowrap;
+}
+
+.kcal-row-per {
+  font-weight: 500;
+}
+
+.kcal-row-input {
+  width: auto;
+  min-width: 4.5rem;
+  max-width: 7rem;
+  padding: 0.6rem 0.5rem;
+}
+
+.kcal-row-input-kcal {
+  max-width: 6rem;
+}
+
+.kcal-row-input-qty {
+  max-width: 5.5rem;
+}
+
+.kcal-row-select {
+  flex: 1 1 10rem;
+  min-width: 8rem;
+  max-width: 100%;
+  padding: 0.6rem 0.5rem;
+}
+
+.kcal-row-hint {
+  margin-top: 0.5rem;
 }
 
 .form-row {
@@ -219,6 +268,16 @@
   display: flex;
   justify-content: flex-end;
   gap: 1rem;
+}
+
+.form-help-text.subtle {
+  margin-top: 0.35rem;
+  margin-bottom: 0;
+  font-size: 0.8rem;
+  color: #666;
+  font-style: normal;
+  padding: 0;
+  line-height: 1.4;
 }
 
 .form-help-text {

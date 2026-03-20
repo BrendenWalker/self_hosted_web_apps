@@ -1,5 +1,16 @@
 import React, { useState, useEffect } from 'react';
-import { getAllShoppingList, getItems, getDepartments, createItem, updateItem, deleteItem, addToShoppingList, removeFromShoppingList, updateShoppingListItem } from '../api/api';
+import {
+  getAllShoppingList,
+  getItems,
+  getDepartments,
+  getIngredientMeasurements,
+  createItem,
+  updateItem,
+  deleteItem,
+  addToShoppingList,
+  removeFromShoppingList,
+  updateShoppingListItem,
+} from '../api/api';
 import './ShoppingListPage.css';
 
 function ShoppingListPage() {
@@ -12,9 +23,16 @@ function ShoppingListPage() {
   const [activeTab, setActiveTab] = useState('shopping-list'); // 'items' or 'shopping-list'
   const [showItemForm, setShowItemForm] = useState(false);
   const [editingItem, setEditingItem] = useState(null);
+  const [measurements, setMeasurements] = useState([]);
   const [itemForm, setItemForm] = useState({
     name: '',
-    department: null
+    department: null,
+    details: '',
+    kcal: '',
+    kcal_qty: '',
+    measurement_id: '',
+    shopping_measure: '',
+    shopping_measure_grams: '',
   });
   const [highlightItemId, setHighlightItemId] = useState(null);
   const itemRowRefs = React.useRef({});
@@ -23,6 +41,23 @@ function ShoppingListPage() {
   useEffect(() => {
     loadData();
   }, []);
+
+  useEffect(() => {
+    if (!showItemForm) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await getIngredientMeasurements();
+        if (!cancelled) setMeasurements(res.data || []);
+      } catch (err) {
+        console.error('Failed to load measurements', err);
+        if (!cancelled) setMeasurements([]);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [showItemForm]);
 
   const loadData = async () => {
     setLoading(true);
@@ -153,12 +188,24 @@ function ShoppingListPage() {
     handleAddToShoppingList(item);
   };
 
+  const itemToFormFields = (item) => ({
+    name: item?.name || '',
+    department: item?.department ?? null,
+    details: item?.details ?? '',
+    kcal: item?.kcal != null && item.kcal !== '' ? String(item.kcal) : '',
+    kcal_qty: item?.kcal_qty != null && item.kcal_qty !== '' ? String(item.kcal_qty) : '',
+    measurement_id:
+      item?.measurement_id != null && item.measurement_id !== '' ? String(item.measurement_id) : '',
+    shopping_measure: item?.shopping_measure ?? '',
+    shopping_measure_grams:
+      item?.shopping_measure_grams != null && item.shopping_measure_grams !== ''
+        ? String(item.shopping_measure_grams)
+        : '',
+  });
+
   const handleEditItem = (item) => {
     setEditingItem(item);
-    setItemForm({
-      name: item.name || '',
-      department: item.department || null
-    });
+    setItemForm(itemToFormFields(item));
     setShowItemForm(true);
   };
 
@@ -166,7 +213,13 @@ function ShoppingListPage() {
     setEditingItem(null);
     setItemForm({
       name: '',
-      department: null
+      department: null,
+      details: '',
+      kcal: '',
+      kcal_qty: '',
+      measurement_id: '',
+      shopping_measure: '',
+      shopping_measure_grams: '',
     });
     setShowItemForm(true);
   };
@@ -179,16 +232,29 @@ function ShoppingListPage() {
     }
 
     try {
-      const itemData = {
-        name: itemForm.name,
-        department: itemForm.department || null,
-        qty: 0
+      const optional = {
+        details: itemForm.details?.trim() || null,
+        kcal: itemForm.kcal === '' ? null : itemForm.kcal,
+        kcal_qty: itemForm.kcal_qty === '' ? null : itemForm.kcal_qty,
+        measurement_id: itemForm.measurement_id === '' ? null : itemForm.measurement_id,
+        shopping_measure: itemForm.shopping_measure?.trim() || null,
+        shopping_measure_grams:
+          itemForm.shopping_measure_grams === '' ? null : itemForm.shopping_measure_grams,
       };
 
       if (editingItem) {
-        await updateItem(editingItem.id, itemData);
+        await updateItem(editingItem.id, {
+          name: itemForm.name.trim(),
+          department: itemForm.department || null,
+          ...optional,
+        });
       } else {
-        await createItem(itemData);
+        await createItem({
+          name: itemForm.name.trim(),
+          department: itemForm.department || null,
+          qty: 0,
+          ...optional,
+        });
       }
       
       setShowItemForm(false);
@@ -324,9 +390,80 @@ function ShoppingListPage() {
                 </select>
               </div>
               <div className="form-group">
+                <label>Details (brand, package, variant)</label>
+                <textarea
+                  rows={3}
+                  value={itemForm.details}
+                  onChange={(e) => setItemForm({ ...itemForm, details: e.target.value })}
+                  placeholder="e.g. Brand X, 12 oz can"
+                />
+              </div>
+              <div className="form-group">
+                <label className="kcal-row-label">Calories (optional)</label>
+                <div className="kcal-row" role="group" aria-label="Calories per amount and unit">
+                  <span className="kcal-row-text">Kcal</span>
+                  <input
+                    type="number"
+                    min={0}
+                    step={1}
+                    className="kcal-row-input kcal-row-input-kcal"
+                    value={itemForm.kcal}
+                    onChange={(e) => setItemForm({ ...itemForm, kcal: e.target.value })}
+                    placeholder="—"
+                    aria-label="Kilocalories"
+                  />
+                  <span className="kcal-row-text kcal-row-per">per</span>
+                  <input
+                    type="number"
+                    min={0}
+                    step="any"
+                    className="kcal-row-input kcal-row-input-qty"
+                    value={itemForm.kcal_qty}
+                    onChange={(e) => setItemForm({ ...itemForm, kcal_qty: e.target.value })}
+                    placeholder="qty"
+                    aria-label="Amount for kcal"
+                  />
+                  <select
+                    className="kcal-row-select"
+                    value={itemForm.measurement_id}
+                    onChange={(e) => setItemForm({ ...itemForm, measurement_id: e.target.value })}
+                    aria-label="Measurement unit"
+                  >
+                    <option value="">unit…</option>
+                    {measurements.map((m) => (
+                      <option key={m.id} value={m.id}>
+                        {m.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <p className="form-help-text subtle kcal-row-hint">
+                  Example: 50 kcal per 2 tbsp → 50, 2, tablespoon.
+                </p>
+              </div>
+              <div className="form-group">
+                <label>Shopping measure (how you buy it)</label>
+                <input
+                  type="text"
+                  value={itemForm.shopping_measure}
+                  onChange={(e) => setItemForm({ ...itemForm, shopping_measure: e.target.value })}
+                  placeholder="e.g. each, 12 oz can, bunch, loaf"
+                />
+              </div>
+              <div className="form-group">
+                <label>Grams in shopping measure</label>
+                <input
+                  type="number"
+                  min={0}
+                  step="any"
+                  value={itemForm.shopping_measure_grams}
+                  onChange={(e) => setItemForm({ ...itemForm, shopping_measure_grams: e.target.value })}
+                  placeholder="Grams per unit above"
+                />
+              </div>
+              <div className="form-group">
                 <p className="form-help-text">
-                  <strong>Note:</strong> Include quantity and unit information in the item name (e.g., "Tomato Sauce 40 oz").
-                  For future recipe/meal planning features, items will be atomic and quantities will be specified in shopping list entries.
+                  <strong>Shopping list:</strong> quantity is adjusted with +/− on the list, not in this form.
                 </p>
               </div>
               <div className="form-actions">
