@@ -115,10 +115,7 @@ function IngredientsCatalogPage() {
   const filteredIngredients = searchText
     ? ingredients.filter((ing) => {
         const name = (ing.name || '').toLowerCase();
-        const details = (ing.details || '').toLowerCase();
-        const dept = (ing.department_name || '').toLowerCase();
-        const shopping = (ing.shopping_measure || '').toLowerCase();
-        return name.includes(searchText) || details.includes(searchText) || dept.includes(searchText) || shopping.includes(searchText);
+        return name.includes(searchText);
       })
     : ingredients;
 
@@ -255,7 +252,7 @@ function IngredientsCatalogPage() {
           <div className="filter-section">
             <input
               type="text"
-              placeholder="Filter by name, details, department, or shopping measure..."
+              placeholder="Filter by ingredient name..."
               value={ingredientFilter}
               onChange={(e) => setIngredientFilter(e.target.value)}
               className="filter-input"
