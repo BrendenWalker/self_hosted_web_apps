@@ -12,6 +12,7 @@ import {
   updateRecipeIngredient,
   removeRecipeIngredient,
 } from '../api/api';
+import { formatRecipeQuantity } from '../utils/recipeQuantity';
 import './RecipeDetailPage.css';
 
 function RecipeDetailPage() {
@@ -199,7 +200,7 @@ function RecipeDetailPage() {
 
   const formatIngredientLine = (row) => {
     const name = row.ingredient_details ? `${row.ingredient_name} (${row.ingredient_details})` : row.ingredient_name;
-    const qty = row.qty != null ? String(row.qty) : '';
+    const qty = row.qty != null ? formatRecipeQuantity(row.qty) : '';
     const measure = row.measurement_name || '';
     const part = [qty, measure].filter(Boolean).join(' ');
     return part ? `${part} ${name}` : name;
@@ -475,13 +476,6 @@ function RecipeDetailPage() {
               </form>
             ) : (
               <>
-                {recipe.instructions && (
-                  <div className="recipe-instructions">
-                    <h2>Instructions</h2>
-                    <pre className="recipe-instructions-text">{recipe.instructions}</pre>
-                  </div>
-                )}
-
                 <div className="recipe-ingredients-section">
                   <h2>Ingredients</h2>
                   {recipe.ingredients && recipe.ingredients.length > 0 ? (
@@ -505,6 +499,13 @@ function RecipeDetailPage() {
                     <p className="recipe-no-ingredients">No ingredients yet.</p>
                   )}
                 </div>
+
+                {recipe.instructions && (
+                  <div className="recipe-instructions">
+                    <h2>Instructions</h2>
+                    <pre className="recipe-instructions-text">{recipe.instructions}</pre>
+                  </div>
+                )}
               </>
             )}
           </>
