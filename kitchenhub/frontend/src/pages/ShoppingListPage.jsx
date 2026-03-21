@@ -290,13 +290,10 @@ function ShoppingListPage() {
     }
   };
 
-  // Filter items based on search text
-  const filteredItems = items.filter(item => {
+  // Filter items by name only (department/category is for grouping, not search)
+  const filteredItems = items.filter((item) => {
     const searchText = itemFilter.toLowerCase();
-    return (
-      item.name.toLowerCase().includes(searchText) ||
-      (item.department_name && item.department_name.toLowerCase().includes(searchText))
-    );
+    return item.name.toLowerCase().includes(searchText);
   });
 
   // Group items by department for better organization
@@ -488,7 +485,7 @@ function ShoppingListPage() {
           <div className="filter-section">
             <input
               type="text"
-              placeholder="Filter items by name or department..."
+              placeholder="Filter items by name..."
               value={itemFilter}
               onChange={(e) => setItemFilter(e.target.value)}
               className="filter-input"

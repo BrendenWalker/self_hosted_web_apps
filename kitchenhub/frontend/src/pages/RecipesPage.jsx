@@ -48,8 +48,7 @@ function RecipesPage() {
   const filteredRecipes = searchText
     ? recipes.filter((r) => {
         const name = (r.name || '').toLowerCase();
-        const cats = (r.category_names || '').toLowerCase();
-        return name.includes(searchText) || cats.includes(searchText);
+        return name.includes(searchText);
       })
     : recipes;
 
@@ -81,7 +80,7 @@ function RecipesPage() {
           </select>
           <input
             type="text"
-            placeholder="Filter by name or category..."
+            placeholder="Filter by recipe name..."
             value={recipeFilter}
             onChange={(e) => setRecipeFilter(e.target.value)}
             className="recipes-filter-input"
