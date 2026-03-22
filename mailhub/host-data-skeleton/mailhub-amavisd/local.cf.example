@@ -1,0 +1,18 @@
+# SpamAssassin local.cf — reference for tuning. Copy into container or use if image loads from this dir.
+# File-based Bayes (no MySQL); Bayes data lives under /home/mailhub-amavisd/bayes
+
+# --- Bayes (default in image) ---
+# use_bayes 1
+# bayes_auto_learn 1
+# bayes_auto_expire 1
+# bayes_path /home/mailhub-amavisd/bayes
+
+# --- Common score overrides (uncomment to tweak) ---
+# score BAYES_99 5.0
+# score BAYES_50 0.5
+# score SPF_FAIL 3.0
+# score RDNS_NONE 1.0
+
+# --- Optional: whitelist/blacklist ---
+# whitelist_from *@trusted.com
+# blacklist_from *@spam.com
