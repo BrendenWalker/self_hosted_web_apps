@@ -44,6 +44,7 @@ export const swapStoreZones = (storeId, seqA, seqB) =>
 // Departments
 export const getDepartments = () => api.get('/departments');
 export const createDepartment = (data) => api.post('/departments', data);
+export const patchDepartment = (id, data) => api.patch(`/departments/${id}`, data);
 
 // Items
 export const getItems = () => api.get('/items');
@@ -71,7 +72,9 @@ export const getRecipeCategories = () => api.get('/recipe-categories');
 export const getIngredientMeasurements = () => api.get('/ingredient-measurements');
 
 // Ingredients catalog (for adding to recipes; includes shopping_measure for future shopping list)
-export const getIngredients = () => api.get('/ingredients');
+// Pass { for_recipe: 1 } to list only items in departments with ingredient=true.
+export const getIngredients = (params) =>
+  api.get('/ingredients', params != null && Object.keys(params).length ? { params } : undefined);
 export const getIngredient = (id) => api.get(`/ingredients/${id}`);
 export const createIngredient = (data) => api.post('/ingredients', data);
 export const updateIngredient = (id, data) => api.put(`/ingredients/${id}`, data);

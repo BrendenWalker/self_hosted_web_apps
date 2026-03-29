@@ -230,6 +230,10 @@ function ShoppingListPage() {
       setError('Item name is required');
       return;
     }
+    if (itemForm.department == null || itemForm.department === '') {
+      setError('Department is required');
+      return;
+    }
 
     try {
       const optional = {
@@ -245,13 +249,13 @@ function ShoppingListPage() {
       if (editingItem) {
         await updateItem(editingItem.id, {
           name: itemForm.name.trim(),
-          department: itemForm.department || null,
+          department: itemForm.department,
           ...optional,
         });
       } else {
         await createItem({
           name: itemForm.name.trim(),
-          department: itemForm.department || null,
+          department: itemForm.department,
           qty: 0,
           ...optional,
         });
@@ -375,12 +379,13 @@ function ShoppingListPage() {
                 />
               </div>
               <div className="form-group">
-                <label>Department</label>
+                <label>Department *</label>
                 <select
                   value={itemForm.department || ''}
                   onChange={(e) => setItemForm({ ...itemForm, department: e.target.value ? parseInt(e.target.value) : null })}
+                  required
                 >
-                  <option value="">None</option>
+                  <option value="" disabled>Select department…</option>
                   {departments.map(dept => (
                     <option key={dept.id} value={dept.id}>{dept.name}</option>
                   ))}
