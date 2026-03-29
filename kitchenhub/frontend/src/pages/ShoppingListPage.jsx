@@ -12,6 +12,12 @@ import {
   updateShoppingListItem,
 } from '../api/api';
 import './ShoppingListPage.css';
+import {
+  gramsToDisplayUnits,
+  formatShoppingUnitsDisplay,
+  itemDisplayName,
+  parseShoppingMeasureGrams,
+} from '../utils/shoppingQuantity';
 
 function ShoppingListPage() {
   const [shoppingList, setShoppingList] = useState([]);
@@ -30,7 +36,7 @@ function ShoppingListPage() {
     details: '',
     kcal: '',
     kcal_qty: '',
-    measurement_id: '',
+    kcal_measurement_id: '',
     shopping_measure: '',
     shopping_measure_grams: '',
   });
@@ -91,6 +97,28 @@ function ShoppingListPage() {
     return shoppingList.find(slItem => slItem.name === itemName);
   };
 
+  const smgForRow = (listRow, catalogItem) =>
+    catalogItem?.shopping_measure_grams ?? listRow?.shopping_measure_grams;
+
+  const displayQtyString = (listRow, catalogItem) => {
+    const smg = smgForRow(listRow, catalogItem);
+    return formatShoppingUnitsDisplay(
+      gramsToDisplayUnits(listRow.quantity, smg)
+    );
+  };
+
+  const mergeListResponse = (row) => ({
+    name: row.name,
+    description: row.description ?? row.name,
+    quantity: row.quantity,
+    department_id: row.department_id,
+    item_id: row.item_id,
+    department_name: row.department_name,
+    purchased: row.purchased ?? 0,
+    shopping_measure: row.shopping_measure,
+    shopping_measure_grams: row.shopping_measure_grams,
+  });
+
   const handleAddToShoppingList = async (item) => {
     const key = item.name;
     if (addInProgressRef.current === key) return;
@@ -98,13 +126,22 @@ function ShoppingListPage() {
     try {
       const existingItem = getShoppingListItem(item.name);
       if (existingItem) {
-        const currentQty = parseInt(existingItem.quantity) || 1;
-        const newQuantity = String(currentQty + 1);
+        const grams = parseFloat(existingItem.quantity);
+        const currentDisplay = gramsToDisplayUnits(grams, smgForRow(existingItem, item));
+        const nextUnits = currentDisplay + 1;
+        const newQuantity = String(nextUnits);
+        const smg = parseShoppingMeasureGrams(smgForRow(existingItem, item));
+        const optimisticQty =
+          smg != null ? String(nextUnits * smg) : newQuantity;
         setShoppingList((prev) =>
-          prev.map((i) => (i.name === item.name ? { ...i, quantity: newQuantity } : i))
+          prev.map((i) => (i.name === item.name ? { ...i, quantity: optimisticQty } : i))
         );
         try {
-          await updateShoppingListItem(item.name, { quantity: newQuantity });
+          const res = await updateShoppingListItem(item.name, { quantity: newQuantity });
+          const merged = mergeListResponse(res.data);
+          setShoppingList((prev) =>
+            prev.map((i) => (i.name === item.name ? { ...i, ...merged } : i))
+          );
         } catch (err) {
           setError('Failed to add item to shopping list');
           console.error(err);
@@ -120,10 +157,16 @@ function ShoppingListPage() {
         item_id: item.id,
         department_name: departments.find((d) => d.id === item.department)?.name || null,
         purchased: 0,
+        shopping_measure: item.shopping_measure,
+        shopping_measure_grams: item.shopping_measure_grams,
       };
       setShoppingList((prev) => [...prev, newEntry]);
       try {
-        await addToShoppingList(newEntry);
+        const res = await addToShoppingList(newEntry);
+        const merged = mergeListResponse(res.data);
+        setShoppingList((prev) =>
+          prev.map((i) => (i.name === item.name ? { ...i, ...merged } : i))
+        );
       } catch (err) {
         setError('Failed to add item to shopping list');
         console.error(err);
@@ -146,17 +189,26 @@ function ShoppingListPage() {
   };
 
   const handleUpdateQuantity = async (itemName, newQuantity) => {
-    const num = parseInt(String(newQuantity), 10);
+    const num = parseFloat(String(newQuantity).trim());
     if (num === 0) {
       await handleRemoveFromShoppingList(itemName);
       return;
     }
-    if (Number.isNaN(num) || num < 1) return;
+    if (Number.isNaN(num) || num < 0) return;
+    const row = getShoppingListItem(itemName);
+    const catalog = items.find((it) => it.name === itemName);
+    const smg = parseShoppingMeasureGrams(smgForRow(row, catalog));
+    const optimisticQty =
+      smg != null ? String(num * smg) : String(num);
     setShoppingList((prev) =>
-      prev.map((i) => (i.name === itemName ? { ...i, quantity: String(num) } : i))
+      prev.map((i) => (i.name === itemName ? { ...i, quantity: optimisticQty } : i))
     );
     try {
-      await updateShoppingListItem(itemName, { quantity: String(num) });
+      const res = await updateShoppingListItem(itemName, { quantity: String(num) });
+      const merged = mergeListResponse(res.data);
+      setShoppingList((prev) =>
+        prev.map((i) => (i.name === itemName ? { ...i, ...merged } : i))
+      );
     } catch (err) {
       setError('Failed to update quantity');
       console.error(err);
@@ -165,21 +217,21 @@ function ShoppingListPage() {
   };
 
   const handleIncrementQuantity = (item) => {
-    const current = parseInt(item.quantity, 10) || 1;
+    const grams = parseFloat(item.quantity);
+    const current = gramsToDisplayUnits(grams, item.shopping_measure_grams);
     const next = current + 1;
-    setShoppingList((prev) =>
-      prev.map((i) => (i.name === item.name ? { ...i, quantity: String(next) } : i))
-    );
     handleUpdateQuantity(item.name, next);
   };
 
   const handleDecrementQuantity = (item, quantityFromButton) => {
-    const parsed = parseInt(String(quantityFromButton ?? item.quantity ?? 1), 10);
-    if (Number.isNaN(parsed) || parsed < 1) return;
+    const grams = parseFloat(String(quantityFromButton ?? item.quantity ?? 0));
+    const parsed = gramsToDisplayUnits(grams, item.shopping_measure_grams);
+    if (Number.isNaN(parsed) || parsed <= 0) return;
     const next = parsed - 1;
-    setShoppingList((prev) =>
-      prev.map((i) => (i.name === item.name ? { ...i, quantity: String(next) } : i))
-    );
+    if (next <= 1e-9) {
+      handleRemoveFromShoppingList(item.name);
+      return;
+    }
     handleUpdateQuantity(item.name, next);
   };
 
@@ -194,8 +246,10 @@ function ShoppingListPage() {
     details: item?.details ?? '',
     kcal: item?.kcal != null && item.kcal !== '' ? String(item.kcal) : '',
     kcal_qty: item?.kcal_qty != null && item.kcal_qty !== '' ? String(item.kcal_qty) : '',
-    measurement_id:
-      item?.measurement_id != null && item.measurement_id !== '' ? String(item.measurement_id) : '',
+    kcal_measurement_id:
+      item?.kcal_measurement_id != null && item.kcal_measurement_id !== ''
+        ? String(item.kcal_measurement_id)
+        : '',
     shopping_measure: item?.shopping_measure ?? '',
     shopping_measure_grams:
       item?.shopping_measure_grams != null && item.shopping_measure_grams !== ''
@@ -217,7 +271,7 @@ function ShoppingListPage() {
       details: '',
       kcal: '',
       kcal_qty: '',
-      measurement_id: '',
+      kcal_measurement_id: '',
       shopping_measure: '',
       shopping_measure_grams: '',
     });
@@ -240,7 +294,8 @@ function ShoppingListPage() {
         details: itemForm.details?.trim() || null,
         kcal: itemForm.kcal === '' ? null : itemForm.kcal,
         kcal_qty: itemForm.kcal_qty === '' ? null : itemForm.kcal_qty,
-        measurement_id: itemForm.measurement_id === '' ? null : itemForm.measurement_id,
+        kcal_measurement_id:
+          itemForm.kcal_measurement_id === '' ? null : itemForm.kcal_measurement_id,
         shopping_measure: itemForm.shopping_measure?.trim() || null,
         shopping_measure_grams:
           itemForm.shopping_measure_grams === '' ? null : itemForm.shopping_measure_grams,
@@ -427,8 +482,10 @@ function ShoppingListPage() {
                   />
                   <select
                     className="kcal-row-select"
-                    value={itemForm.measurement_id}
-                    onChange={(e) => setItemForm({ ...itemForm, measurement_id: e.target.value })}
+                    value={itemForm.kcal_measurement_id}
+                    onChange={(e) =>
+                      setItemForm({ ...itemForm, kcal_measurement_id: e.target.value })
+                    }
                     aria-label="Measurement unit"
                   >
                     <option value="">unit…</option>
@@ -466,6 +523,7 @@ function ShoppingListPage() {
               <div className="form-group">
                 <p className="form-help-text">
                   <strong>Shopping list:</strong> quantity is adjusted with +/− on the list, not in this form.
+                  When “grams in shopping measure” is set, the list shows and edits amounts in those units (stored as grams).
                 </p>
               </div>
               <div className="form-actions">
@@ -526,7 +584,7 @@ function ShoppingListPage() {
                             title="Double-click to add/remove from shopping list"
                           >
                             <div className="item-info">
-                              <div className="item-name">{item.name}</div>
+                              <div className="item-name">{itemDisplayName(item)}</div>
                             </div>
                             <div className="item-actions">
                               <div className="quantity-control">
@@ -540,7 +598,12 @@ function ShoppingListPage() {
                                     if (!inList) return;
                                     const q = e.currentTarget.getAttribute('data-quantity');
                                     handleDecrementQuantity(
-                                      { name: item.name, quantity: shoppingListItem?.quantity },
+                                      {
+                                        name: item.name,
+                                        quantity: shoppingListItem?.quantity,
+                                        shopping_measure: item.shopping_measure,
+                                        shopping_measure_grams: item.shopping_measure_grams,
+                                      },
                                       q
                                     );
                                   }}
@@ -552,7 +615,11 @@ function ShoppingListPage() {
                                 <input
                                   type="text"
                                   className="quantity-input"
-                                  value={inList ? (shoppingListItem?.quantity || '') : '0'}
+                                  value={
+                                    inList && shoppingListItem
+                                      ? displayQtyString(shoppingListItem, item)
+                                      : '0'
+                                  }
                                   onChange={(e) => inList && handleUpdateQuantity(item.name, e.target.value)}
                                   onClick={(e) => e.stopPropagation()}
                                   onDoubleClick={(e) => e.stopPropagation()}
@@ -631,7 +698,7 @@ function ShoppingListPage() {
                   unpurchasedList.map(item => (
                     <div key={item.name} className="list-item">
                       <div className="list-item-main">
-                        <div className="list-item-name">{item.name}</div>
+                        <div className="list-item-name">{itemDisplayName(item)}</div>
                         {item.description && item.description !== item.name && (
                           <div className="list-item-desc">{item.description}</div>
                         )}
@@ -657,7 +724,7 @@ function ShoppingListPage() {
                           <input
                             type="text"
                             className="quantity-input"
-                            value={item.quantity || ''}
+                            value={displayQtyString(item, item)}
                             onChange={(e) => handleUpdateQuantity(item.name, e.target.value)}
                             placeholder="Qty"
                           />

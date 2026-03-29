@@ -22,6 +22,7 @@ import {
   updateShoppingListItem,
   markPurchased,
   removeFromShoppingList,
+  addRecipeToShoppingList,
 } from './api';
 
 const { mockInstance } = vi.hoisted(() => {
@@ -168,5 +169,10 @@ describe('api', () => {
   it('removeFromShoppingList calls DELETE with encoded name', async () => {
     await removeFromShoppingList('Milk');
     expect(mockInstance.delete).toHaveBeenCalledWith('/shopping-list/Milk');
+  });
+
+  it('addRecipeToShoppingList calls POST /recipes/:id/shopping-list', async () => {
+    await addRecipeToShoppingList(7);
+    expect(mockInstance.post).toHaveBeenCalledWith('/recipes/7/shopping-list');
   });
 });

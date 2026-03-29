@@ -1,5 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { getStores, getShoppingList, markPurchased } from '../api/api';
+import {
+  gramsToDisplayUnits,
+  formatShoppingUnitsDisplay,
+  itemDisplayName,
+} from '../utils/shoppingQuantity';
 import { queuePurchaseUpdate, subscribePendingCount, flushPurchaseQueue } from '../utils/purchaseSync';
 import './ShoppingPage.css';
 
@@ -117,7 +122,15 @@ function ShoppingPage() {
     if (!currentPurchased) {
       const item = shoppingList.find(i => i.name === itemName);
       if (item) {
-        setConfirmPurchase({ name: item.name, quantity: item.quantity || '1' });
+        setConfirmPurchase({
+        name: item.name,
+        quantity: item.quantity || '1',
+        quantityDisplay:
+          formatShoppingUnitsDisplay(
+            gramsToDisplayUnits(item.quantity, item.shopping_measure_grams)
+          ) || item.quantity || '1',
+        displayName: itemDisplayName(item),
+      });
         return;
       }
     }
@@ -218,8 +231,13 @@ function ShoppingPage() {
                           checked={false}
                           onChange={() => handleTogglePurchased(item.name, false)}
                         />
-                        <span className="item-quantity">{item.quantity || '1'} ×</span>
-                        <span className="item-name">{item.name}</span>
+                        <span className="item-quantity">
+                          {formatShoppingUnitsDisplay(
+                            gramsToDisplayUnits(item.quantity, item.shopping_measure_grams)
+                          ) || item.quantity || '1'}{' '}
+                          ×
+                        </span>
+                        <span className="item-name">{itemDisplayName(item)}</span>
                       </label>
                     </div>
                   ))}
@@ -239,7 +257,7 @@ function ShoppingPage() {
         <div className="purchase-confirm-overlay" role="dialog" aria-modal="true" aria-labelledby="purchase-confirm-title">
           <div className="purchase-confirm-modal">
             <h2 id="purchase-confirm-title" className="purchase-confirm-title">
-              Purchased {confirmPurchase.quantity} × {confirmPurchase.name}?
+              Purchased {confirmPurchase.quantityDisplay} × {confirmPurchase.displayName}?
             </h2>
             <div className="purchase-confirm-actions">
               <button type="button" className="btn btn-primary" onClick={() => doMarkPurchased(confirmPurchase.name, true)}>

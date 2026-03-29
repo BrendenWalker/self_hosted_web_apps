@@ -22,6 +22,26 @@ function createMockPool(queryImpl) {
 /** Default mock: return empty rows for SELECT, one row for INSERT/UPDATE/DELETE RETURNING. Always returns a Promise for pg API. */
 function defaultQueryHandler(sql, params) {
   const s = (sql || '').trim();
+  const txn = s.toUpperCase();
+  if (txn === 'BEGIN' || txn === 'COMMIT' || txn === 'ROLLBACK') {
+    return { rows: [] };
+  }
+  if (s.includes('SELECT id FROM recipe.recipe WHERE id')) {
+    return { rows: params?.[0] == 999 ? [] : [{ id: Number(params[0]) }] };
+  }
+  if (s.includes('FROM recipe.recipe_ingredients ri') && s.includes('common.ingredient_measurements im')) {
+    return {
+      rows: [
+        {
+          ingredient_id: 1,
+          qty: '2',
+          is_optional: false,
+          measurement_id: 1,
+          to_grams: '5',
+        },
+      ],
+    };
+  }
   if (s.includes('SELECT value FROM config.settings')) return { rows: [{ value: null }] };
   if (s.includes('SELECT * FROM store ORDER BY')) return { rows: [{ id: 1, name: 'Store A', modified: null }] };
   if (s.includes('SELECT * FROM store WHERE id')) return { rows: params?.[0] == 1 ? [{ id: 1, name: 'Store A', modified: null }] : [] };
@@ -44,7 +64,23 @@ function defaultQueryHandler(sql, params) {
     if (s.includes('WHERE i.id')) return { rows: params?.[0] == 1 ? [{ id: 1, name: 'Item', department: 1, department_name: 'Produce' }] : [] };
     if (s.includes('WHERE i.qty > 0')) {
       // Shopping list GET (by store or all): return rows with selected columns
-      return { rows: [{ name: 'Milk', description: 'Milk', quantity: '1', purchased: 0, department_id: 1, item_id: 1, zone: 'General', zone_seq: 0, department_name: 'Produce' }] };
+      return {
+        rows: [
+          {
+            name: 'Milk',
+            description: 'Milk',
+            quantity: '1',
+            purchased: 0,
+            department_id: 1,
+            item_id: 1,
+            shopping_measure: null,
+            shopping_measure_grams: null,
+            zone: 'General',
+            zone_seq: 0,
+            department_name: 'Produce',
+          },
+        ],
+      };
     }
     return { rows: [{ id: 1, name: 'Item', department: 1, department_name: 'Produce' }] };
   }
@@ -66,13 +102,55 @@ function defaultQueryHandler(sql, params) {
   if (s.includes('UPDATE items SET') && s.includes('kcal_qty') && s.includes('WHERE id = $9')) {
     return { rows: [{ id: params?.[8], name: params?.[0], department: params?.[1], qty: 0 }] };
   }
+  if (s.includes('SELECT shopping_measure_grams FROM items WHERE')) {
+    return { rows: [{ shopping_measure_grams: null }] };
+  }
+  // Shopping list: set qty by shopping units (PUT)
+  if (s.includes('UPDATE items SET qty = CASE') && s.includes('shopping_measure_grams > 0')) {
+    const nameParam = params?.[1];
+    return {
+      rows:
+        nameParam === 'Nonexistent'
+          ? []
+          : [
+              {
+                id: 1,
+                name: nameParam || 'Milk',
+                department: 1,
+                qty: params?.[0] ?? 2,
+                shopping_measure: null,
+                shopping_measure_grams: null,
+              },
+            ],
+    };
+  }
+  // Shopping list: PATCH purchased / unpurchase
+  if (s.includes('WHEN $1::boolean THEN 0') && s.includes('shopping_measure_grams')) {
+    const nameParam = params?.[1];
+    const purchased = params?.[0];
+    return {
+      rows:
+        nameParam === 'Nonexistent'
+          ? []
+          : [
+              {
+                id: 1,
+                name: nameParam || 'Milk',
+                department: 1,
+                qty: purchased ? 0 : 1,
+                shopping_measure: null,
+                shopping_measure_grams: null,
+              },
+            ],
+    };
+  }
   // Shopping list: increment qty (POST add)
   if (s.includes('UPDATE items SET qty = COALESCE(qty, 0) + $1')) {
     const name = params?.[1]; // name or id; when by name params are [addQty, name]
     return { rows: [{ id: 1, name: typeof name === 'string' ? name : 'Milk', department: 1, qty: params?.[0] ?? 1 }] };
   }
-  // Shopping list: set qty (PUT, PATCH purchased, DELETE remove)
-  if (s.includes('UPDATE items SET qty = $1 WHERE name = $2') || (s.includes('UPDATE items SET qty = 0 WHERE name = $1'))) {
+  // Shopping list: set qty (legacy direct grams), DELETE remove
+  if (s.includes('UPDATE items SET qty = $1 WHERE name = $2') || s.includes('UPDATE items SET qty = 0 WHERE name = $1')) {
     const nameParam = s.includes('WHERE name = $2') ? params?.[1] : params?.[0];
     const qtyParam = s.includes('WHERE name = $2') ? params?.[0] : 0;
     return { rows: nameParam === 'Nonexistent' ? [] : [{ id: 1, name: nameParam || 'Milk', department: 1, qty: qtyParam }] };
@@ -411,6 +489,28 @@ describe('KitchenHub API', () => {
         return Promise.resolve(defaultQueryHandler(sql, params));
       });
       const res = await request(serverModule.app).delete('/api/shopping-list/Nonexistent');
+      expect(res.status).toBe(404);
+    });
+  });
+
+  describe('Recipes — add to shopping list', () => {
+    beforeEach(() => {
+      mockPool.query.mockImplementation(asyncQueryHandler);
+    });
+
+    it('POST /api/recipes/:id/shopping-list increments by qty × to_grams', async () => {
+      const res = await request(serverModule.app).post('/api/recipes/1/shopping-list');
+      expect(res.status).toBe(201);
+      expect(res.body.added).toHaveLength(1);
+      expect(res.body.added[0]).toMatchObject({
+        item_id: 1,
+        grams_added: 10,
+      });
+      expect(res.body.skipped).toEqual([]);
+    });
+
+    it('POST /api/recipes/:id/shopping-list returns 404 when recipe missing', async () => {
+      const res = await request(serverModule.app).post('/api/recipes/999/shopping-list');
       expect(res.status).toBe(404);
     });
   });

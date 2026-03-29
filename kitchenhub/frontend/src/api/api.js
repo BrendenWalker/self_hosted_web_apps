@@ -84,6 +84,8 @@ export const deleteIngredient = (id) => api.delete(`/ingredients/${id}`);
 export const getRecipes = (categoryId) =>
   api.get('/recipes', categoryId != null ? { params: { category_id: categoryId } } : undefined);
 export const getRecipe = (id) => api.get(`/recipes/${id}`);
+/** Increment shopping quantities (items.qty) by grams: Σ (recipe line qty × measurement to_grams). */
+export const addRecipeToShoppingList = (recipeId) => api.post(`/recipes/${recipeId}/shopping-list`);
 export const createRecipe = (data) => api.post('/recipes', data);
 export const updateRecipe = (id, data) => api.put(`/recipes/${id}`, data);
 export const deleteRecipe = (id) => api.delete(`/recipes/${id}`);
