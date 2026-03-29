@@ -57,7 +57,7 @@ function RecipeDetailPage() {
     try {
       const [catRes, ingRes, measRes] = await Promise.all([
         getRecipeCategories(),
-        getIngredients(),
+        getIngredients({ for_recipe: 1 }),
         getIngredientMeasurements(),
       ]);
       setCategories(catRes.data);
@@ -204,6 +204,13 @@ function RecipeDetailPage() {
     const measure = row.measurement_name || '';
     const part = [qty, measure].filter(Boolean).join(' ');
     return part ? `${part} ${name}` : name;
+  };
+
+  /** Prefix * when the catalog row has no kcal (nutrition not filled in). */
+  const formatCatalogIngredientLabel = (i) => {
+    const prefix = i.kcal == null ? '* ' : '';
+    const body = i.details ? `${i.name} (${i.details})` : i.name;
+    return `${prefix}${body}`;
   };
 
   if (loading && !isNew) {
@@ -421,7 +428,7 @@ function RecipeDetailPage() {
                           .filter((i) => !recipe.ingredients?.some((ri) => ri.ingredient_id === i.id))
                           .map((i) => (
                             <option key={i.id} value={i.id}>
-                              {i.details ? `${i.name} (${i.details})` : i.name}
+                              {formatCatalogIngredientLabel(i)}
                             </option>
                           ))}
                       </select>

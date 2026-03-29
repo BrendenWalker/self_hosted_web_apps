@@ -274,15 +274,67 @@ app.get('/api/departments', async (req, res) => {
 // Create department
 app.post('/api/departments', async (req, res) => {
   try {
-    const { name } = req.body;
+    const { name, ingredient } = req.body;
+    if (typeof name !== 'string' || !name.trim()) {
+      return res.status(400).json({ error: 'name is required' });
+    }
     const result = await pool.query(
-      'INSERT INTO common.department (name) VALUES ($1) RETURNING *',
-      [name]
+      'INSERT INTO common.department (name, ingredient) VALUES ($1, $2) RETURNING *',
+      [name.trim(), ingredient === true]
     );
     res.status(201).json(result.rows[0]);
   } catch (error) {
     console.error('Error creating department:', error);
+    if (error.code === '23505') {
+      return res.status(409).json({ error: 'Department name already exists' });
+    }
     res.status(500).json({ error: 'Failed to create department', message: error.message });
+  }
+});
+
+// Update department (e.g. toggle ingredient flag for recipe picker)
+app.patch('/api/departments/:id', async (req, res) => {
+  try {
+    const id = parseInt(req.params.id, 10);
+    if (Number.isNaN(id) || id < 1) {
+      return res.status(400).json({ error: 'Invalid department id' });
+    }
+    const { name, ingredient } = req.body;
+    if (name === undefined && ingredient === undefined) {
+      return res.status(400).json({ error: 'No fields to update' });
+    }
+    const parts = [];
+    const values = [];
+    let n = 1;
+    if (name !== undefined) {
+      if (typeof name !== 'string' || !name.trim()) {
+        return res.status(400).json({ error: 'Invalid name' });
+      }
+      parts.push(`name = $${n++}`);
+      values.push(name.trim());
+    }
+    if (ingredient !== undefined) {
+      if (typeof ingredient !== 'boolean') {
+        return res.status(400).json({ error: 'ingredient must be boolean' });
+      }
+      parts.push(`ingredient = $${n++}`);
+      values.push(ingredient);
+    }
+    values.push(id);
+    const result = await pool.query(
+      `UPDATE common.department SET ${parts.join(', ')} WHERE id = $${n} RETURNING *`,
+      values
+    );
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Department not found' });
+    }
+    res.json(result.rows[0]);
+  } catch (error) {
+    console.error('Error updating department:', error);
+    if (error.code === '23505') {
+      return res.status(409).json({ error: 'Department name already exists' });
+    }
+    res.status(500).json({ error: 'Failed to update department', message: error.message });
   }
 });
 
@@ -345,6 +397,11 @@ app.post('/api/items', async (req, res) => {
       shopping_measure_grams,
       kcal_qty,
     } = req.body;
+    const departmentId =
+      department != null && department !== '' ? parseInt(department, 10) : NaN;
+    if (Number.isNaN(departmentId) || departmentId < 1) {
+      return res.status(400).json({ error: 'Validation failed', detail: 'department is required' });
+    }
     // Case-insensitive duplicate check (DB may have "parsley" while user adds "Parsley")
     const existing = await pool.query(
       'SELECT id, name FROM items WHERE LOWER(name) = LOWER($1)',
@@ -381,7 +438,7 @@ app.post('/api/items', async (req, res) => {
        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING *`,
       [
         name,
-        department || null,
+        departmentId,
         qty != null && qty !== '' ? parseFloat(qty) : 0,
         detailsTrim,
         Number.isNaN(kcalVal) ? null : kcalVal,
@@ -392,8 +449,11 @@ app.post('/api/items', async (req, res) => {
       ]
     );
     res.status(201).json(result.rows[0]);
-  } catch (error) {
+    } catch (error) {
     console.error('Error creating item:', error);
+    if (error.code === '23503') {
+      return res.status(400).json({ error: 'Validation failed', detail: 'Invalid department' });
+    }
     if (error.code === '23505') {
       // Unique violation: look up conflicting row (case-insensitive) for a helpful message
       const attemptedName = typeof req.body?.name === 'string' ? req.body.name.trim() : (name || '');
@@ -448,6 +508,11 @@ app.put('/api/items/:id', async (req, res) => {
       shopping_measure_grams,
       kcal_qty,
     } = req.body;
+    const departmentId =
+      department != null && department !== '' ? parseInt(department, 10) : NaN;
+    if (Number.isNaN(departmentId) || departmentId < 1) {
+      return res.status(400).json({ error: 'Validation failed', detail: 'department is required' });
+    }
     const id = req.params.id;
     // Case-insensitive duplicate check, excluding current item
     const existing = await pool.query(
@@ -492,7 +557,7 @@ app.put('/api/items/:id', async (req, res) => {
        WHERE id = $9 RETURNING *`,
       [
         name,
-        department || null,
+        departmentId,
         detailsTrim,
         Number.isNaN(kcalVal) ? null : kcalVal,
         Number.isNaN(kcalQtyVal) ? null : kcalQtyVal,
@@ -508,6 +573,9 @@ app.put('/api/items/:id', async (req, res) => {
     res.json(result.rows[0]);
   } catch (error) {
     console.error('Error updating item:', error);
+    if (error.code === '23503') {
+      return res.status(400).json({ error: 'Validation failed', detail: 'Invalid department' });
+    }
     if (error.code === '23505') {
       const attemptedName = typeof req.body?.name === 'string' ? req.body.name.trim() : (name || '');
       const id = req.params.id;
@@ -755,13 +823,19 @@ app.get('/api/ingredient-measurements', async (req, res) => {
 
 app.get('/api/ingredients', async (req, res) => {
   try {
+    const forRecipe =
+      req.query.for_recipe === '1' ||
+      req.query.for_recipe === 'true' ||
+      req.query.for_recipe === 'yes';
     const result = await pool.query(
       `SELECT i.id, i.name, i.details, i.kcal, i.kcal_qty, i.qty, i.measurement_id, i.department as department_id, i.shopping_measure, i.shopping_measure_grams,
               d.name as department_name, m.name as measurement_name
        FROM items i
        LEFT JOIN common.department d ON i.department = d.id
        LEFT JOIN common.ingredient_measurements m ON i.measurement_id = m.id
-       ORDER BY i.name, i.details`
+       WHERE (NOT $1::boolean OR d.ingredient IS TRUE)
+       ORDER BY i.name, i.details`,
+      [forRecipe]
     );
     res.json(result.rows);
   } catch (error) {

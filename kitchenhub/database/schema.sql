@@ -6,7 +6,8 @@ CREATE SCHEMA IF NOT EXISTS common;
 
 CREATE TABLE IF NOT EXISTS common.department (
     id SERIAL PRIMARY KEY,
-    name VARCHAR(80) NOT NULL UNIQUE
+    name VARCHAR(80) NOT NULL UNIQUE,
+    ingredient BOOLEAN NOT NULL DEFAULT false
 );
 CREATE INDEX IF NOT EXISTS idx_common_department_name ON common.department(name);
 
@@ -39,7 +40,7 @@ CREATE INDEX IF NOT EXISTS idx_common_ingredient_measurements_name ON common.ing
 CREATE TABLE IF NOT EXISTS items (
     id SERIAL PRIMARY KEY,
     name VARCHAR(80) NOT NULL UNIQUE,
-    department INTEGER REFERENCES common.department(id),
+    department INTEGER NOT NULL REFERENCES common.department(id),
     qty REAL DEFAULT 0,
     details VARCHAR(255),
     kcal INTEGER,

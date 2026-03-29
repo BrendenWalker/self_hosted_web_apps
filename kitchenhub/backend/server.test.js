@@ -33,8 +33,13 @@ function defaultQueryHandler(sql, params) {
   // INSERT/upsert store zone: match RETURNING so we don't match GET zones
   if (s.includes('INSERT INTO storezones') && s.includes('RETURNING *')) return { rows: [{ storeid: 1, zonesequence: 1, zonename: 'General', departmentid: 1 }] };
   if (s.includes('ON CONFLICT (storeid') && s.includes('storezones')) return { rows: [{ storeid: 1, zonesequence: 1, zonename: 'General', departmentid: 1 }] };
-  if (s.includes('SELECT * FROM common.department')) return { rows: [{ id: 1, name: 'Produce' }] };
-  if (s.includes('INSERT INTO common.department')) return { rows: [{ id: 2, name: params?.[0] || 'New' }] };
+  if (s.includes('SELECT * FROM common.department')) return { rows: [{ id: 1, name: 'Produce', ingredient: true }] };
+  if (s.includes('INSERT INTO common.department')) {
+    return { rows: [{ id: 2, name: params?.[0] || 'New', ingredient: params?.[1] === true }] };
+  }
+  if (s.includes('UPDATE common.department SET') && s.includes('RETURNING *')) {
+    return { rows: [{ id: params?.[params.length - 1], name: 'Produce', ingredient: true }] };
+  }
   if (s.includes('FROM items i') && s.includes('LEFT JOIN common.department')) {
     if (s.includes('WHERE i.id')) return { rows: params?.[0] == 1 ? [{ id: 1, name: 'Item', department: 1, department_name: 'Produce' }] : [] };
     if (s.includes('WHERE i.qty > 0')) {
@@ -273,7 +278,13 @@ describe('KitchenHub API', () => {
     it('POST /api/departments creates department', async () => {
       const res = await request(serverModule.app).post('/api/departments').send({ name: 'Dairy' });
       expect(res.status).toBe(201);
-      expect(res.body).toMatchObject({ name: 'Dairy' });
+      expect(res.body).toMatchObject({ name: 'Dairy', ingredient: false });
+    });
+
+    it('PATCH /api/departments/:id updates ingredient flag', async () => {
+      const res = await request(serverModule.app).patch('/api/departments/1').send({ ingredient: true });
+      expect(res.status).toBe(200);
+      expect(res.body).toMatchObject({ id: 1, ingredient: true });
     });
   });
 
@@ -314,7 +325,7 @@ describe('KitchenHub API', () => {
         if (sql && sql.includes('UPDATE items SET')) return Promise.resolve({ rows: [] });
         return Promise.resolve(defaultQueryHandler(sql, params));
       });
-      const res = await request(serverModule.app).put('/api/items/999').send({ name: 'X', department: null, qty: 0 });
+      const res = await request(serverModule.app).put('/api/items/999').send({ name: 'X', department: 1, qty: 0 });
       expect(res.status).toBe(404);
     });
 
