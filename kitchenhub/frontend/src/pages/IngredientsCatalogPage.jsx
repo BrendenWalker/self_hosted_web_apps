@@ -17,7 +17,7 @@ function IngredientsCatalogPage() {
   const [error, setError] = useState(null);
   const [ingredientFilter, setIngredientFilter] = useState('');
   const [form, setForm] = useState({
-    name: '', details: '', kcal: '', qty: '', measurement_id: '', department_id: '',
+    name: '', details: '', kcal: '', qty: '', kcal_measurement_id: '', department_id: '',
     shopping_measure: '', shopping_measure_grams: '',
   });
   const [editingId, setEditingId] = useState(null);
@@ -45,7 +45,7 @@ function IngredientsCatalogPage() {
 
   const resetForm = () => {
     setForm({
-      name: '', details: '', kcal: '', qty: '', measurement_id: '', department_id: '',
+      name: '', details: '', kcal: '', qty: '', kcal_measurement_id: '', department_id: '',
       shopping_measure: '', shopping_measure_grams: '',
     });
     setEditingId(null);
@@ -58,7 +58,8 @@ function IngredientsCatalogPage() {
       details: ing.details || '',
       kcal: ing.kcal != null ? String(ing.kcal) : '',
       qty: ing.qty != null ? String(ing.qty) : '',
-      measurement_id: ing.measurement_id != null ? String(ing.measurement_id) : '',
+      kcal_measurement_id:
+        ing.kcal_measurement_id != null ? String(ing.kcal_measurement_id) : '',
       department_id: ing.department_id != null ? String(ing.department_id) : '',
       shopping_measure: ing.shopping_measure || '',
       shopping_measure_grams: ing.shopping_measure_grams != null ? String(ing.shopping_measure_grams) : '',
@@ -75,7 +76,8 @@ function IngredientsCatalogPage() {
         details: form.details.trim() || null,
         kcal: form.kcal === '' ? null : parseInt(form.kcal, 10),
         qty: form.qty === '' ? 0 : parseFloat(form.qty),
-        measurement_id: form.measurement_id === '' ? null : Number(form.measurement_id),
+        kcal_measurement_id:
+          form.kcal_measurement_id === '' ? null : Number(form.kcal_measurement_id),
         department_id: Number(form.department_id),
         shopping_measure: form.shopping_measure.trim() || null,
         shopping_measure_grams: form.shopping_measure_grams === '' ? null : parseFloat(form.shopping_measure_grams),
@@ -184,8 +186,10 @@ function IngredientsCatalogPage() {
             <div className="form-group">
               <label>Measurement</label>
               <select
-                value={form.measurement_id}
-                onChange={(e) => setForm((f) => ({ ...f, measurement_id: e.target.value }))}
+                value={form.kcal_measurement_id}
+                onChange={(e) =>
+                  setForm((f) => ({ ...f, kcal_measurement_id: e.target.value }))
+                }
               >
                 <option value="">—</option>
                 {measurements.map((m) => (

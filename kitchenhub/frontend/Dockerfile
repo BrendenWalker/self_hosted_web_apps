@@ -5,13 +5,16 @@ FROM node:18.20.0-alpine3.19 AS build
 ARG VERSION=dev
 ENV VITE_VERSION=$VERSION
 
+# Prefer IPv4 for registry.npmjs.org — broken IPv6 in Docker Desktop often causes long hangs with no log output
+ENV NODE_OPTIONS=--dns-result-order=ipv4first
+
 WORKDIR /app
 
-# Copy package files
+# Copy package files (package-lock.json must be committed for reproducible, faster installs)
 COPY kitchenhub/frontend/package*.json ./
 
-# Install dependencies
-RUN npm install
+# Install dependencies: npm ci uses the lockfile (faster than npm install) and streams more reliably with | cat
+RUN npm ci --no-audit --no-fund --loglevel=info 2>&1 | cat
 
 # Copy application files
 COPY kitchenhub/frontend/ .

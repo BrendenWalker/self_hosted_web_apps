@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Link, NavLink } from 'react-router-dom';
-import { getRecipes, getRecipeCategories } from '../api/api';
+import { getRecipes, getRecipeCategories, addRecipeToShoppingList } from '../api/api';
 import './RecipesPage.css';
 
 function RecipesPage() {
@@ -10,6 +10,8 @@ function RecipesPage() {
   const [error, setError] = useState(null);
   const [categoryId, setCategoryId] = useState('');
   const [recipeFilter, setRecipeFilter] = useState('');
+  const [addingShopRecipeId, setAddingShopRecipeId] = useState(null);
+  const [shopNotice, setShopNotice] = useState(null);
 
   useEffect(() => {
     loadRecipes();
@@ -41,6 +43,26 @@ function RecipesPage() {
       setRecipes([]);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleAddRecipeToShoppingList = async (recipeId, recipeName) => {
+    setAddingShopRecipeId(recipeId);
+    setShopNotice(null);
+    setError(null);
+    try {
+      const res = await addRecipeToShoppingList(recipeId);
+      const { added = [], skipped = [] } = res.data || {};
+      const skipHint =
+        skipped.length > 0
+          ? ` ${skipped.length} line(s) skipped (optional lines, or missing unit / grams conversion).`
+          : '';
+      setShopNotice(`“${recipeName}”: added ${added.length} ingredient(s) to the shopping list.${skipHint}`);
+    } catch (err) {
+      const msg = err.response?.data?.error || err.message || 'Failed to add to shopping list';
+      setError(msg);
+    } finally {
+      setAddingShopRecipeId(null);
     }
   };
 
@@ -95,6 +117,12 @@ function RecipesPage() {
         </div>
       )}
 
+      {shopNotice && (
+        <div className="recipes-shop-notice" role="status">
+          {shopNotice}
+        </div>
+      )}
+
       {loading ? (
         <p className="recipes-loading">Loading recipes…</p>
       ) : recipes.length === 0 ? (
@@ -109,11 +137,22 @@ function RecipesPage() {
       ) : (
         <ul className="recipes-list">
           {filteredRecipes.map((r) => (
-            <li key={r.id}>
-              <Link to={`/recipes/${r.id}`} className="recipe-card">
-                <span className="recipe-card-name">{r.name}</span>
-                <span className="recipe-card-meta">{r.category_names || 'Uncategorized'} · {r.servings} servings</span>
-              </Link>
+            <li key={r.id} className="recipe-list-item">
+              <div className="recipe-card-wrap">
+                <Link to={`/recipes/${r.id}`} className="recipe-card">
+                  <span className="recipe-card-name">{r.name}</span>
+                  <span className="recipe-card-meta">{r.category_names || 'Uncategorized'} · {r.servings} servings</span>
+                </Link>
+                <button
+                  type="button"
+                  className="btn btn-secondary recipe-add-shop-btn"
+                  disabled={addingShopRecipeId === r.id}
+                  onClick={() => handleAddRecipeToShoppingList(r.id, r.name)}
+                  aria-label={`Add ${r.name} ingredients to shopping list`}
+                >
+                  {addingShopRecipeId === r.id ? 'Adding…' : 'Add to shopping list'}
+                </button>
+              </div>
             </li>
           ))}
         </ul>

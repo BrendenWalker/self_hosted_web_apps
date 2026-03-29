@@ -45,12 +45,12 @@ CREATE TABLE IF NOT EXISTS items (
     details VARCHAR(255),
     kcal INTEGER,
     kcal_qty NUMERIC(10, 2),
-    measurement_id INTEGER REFERENCES common.ingredient_measurements(id) ON DELETE SET NULL,
+    kcal_measurement_id INTEGER REFERENCES common.ingredient_measurements(id) ON DELETE SET NULL,
     shopping_measure VARCHAR(255),
     shopping_measure_grams NUMERIC(10, 2)
 );
 CREATE INDEX IF NOT EXISTS idx_items_department ON items(department);
-CREATE INDEX IF NOT EXISTS idx_items_measurement_id ON items(measurement_id);
+CREATE INDEX IF NOT EXISTS idx_items_kcal_measurement_id ON items(kcal_measurement_id);
 
 -- ========== CONFIG ==========
 CREATE SCHEMA IF NOT EXISTS config;
