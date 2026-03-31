@@ -20,6 +20,7 @@ const ACCOUNT_TYPES = [
   { value: '401k_traditional', label: '401(k) (traditional)' },
   { value: '401k_roth', label: '401(k) (Roth)' },
   { value: 'taxable', label: 'Taxable (brokerage, etc.)' },
+  { value: 'asset', label: 'Asset (vehicle, property value, etc.)' },
 ];
 
 const OWNER_TYPES = [
@@ -33,9 +34,19 @@ export default function AccountsPage() {
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState(null);
   const [editingId, setEditingId] = useState(null);
-  const [editForm, setEditForm] = useState({ name: '', account_type: 'taxable', owner_type: 'joint' });
+  const [editForm, setEditForm] = useState({
+    name: '',
+    account_type: 'taxable',
+    owner_type: 'joint',
+    expected_depreciation_pct: '',
+  });
   const [showAdd, setShowAdd] = useState(false);
-  const [addForm, setAddForm] = useState({ name: '', account_type: 'taxable', owner_type: 'joint' });
+  const [addForm, setAddForm] = useState({
+    name: '',
+    account_type: 'taxable',
+    owner_type: 'joint',
+    expected_depreciation_pct: '',
+  });
   const [saving, setSaving] = useState(false);
   const [deletingId, setDeletingId] = useState(null);
   const [balanceFormAccountId, setBalanceFormAccountId] = useState(null);
@@ -81,12 +92,17 @@ export default function AccountsPage() {
     setMessage(null);
     setSaving(true);
     try {
-      await createAccount({
+      const payload = {
         name,
         account_type: addForm.account_type,
         owner_type: addForm.owner_type,
-      });
-      setAddForm({ name: '', account_type: 'taxable', owner_type: 'joint' });
+      };
+      if (addForm.account_type === 'asset') {
+        const raw = addForm.expected_depreciation_pct?.trim();
+        payload.expected_depreciation_pct = raw === '' ? null : parseFloat(raw);
+      }
+      await createAccount(payload);
+      setAddForm({ name: '', account_type: 'taxable', owner_type: 'joint', expected_depreciation_pct: '' });
       setShowAdd(false);
       await load();
     } catch (err) {
@@ -102,6 +118,8 @@ export default function AccountsPage() {
       name: acc.name,
       account_type: acc.account_type,
       owner_type: acc.owner_type,
+      expected_depreciation_pct:
+        acc.expected_depreciation_pct != null ? String(acc.expected_depreciation_pct) : '',
     });
   };
 
@@ -115,11 +133,16 @@ export default function AccountsPage() {
     setMessage(null);
     setSaving(true);
     try {
-      await updateAccount(editingId, {
+      const payload = {
         name,
         account_type: editForm.account_type,
         owner_type: editForm.owner_type,
-      });
+      };
+      if (editForm.account_type === 'asset') {
+        const raw = editForm.expected_depreciation_pct?.trim();
+        payload.expected_depreciation_pct = raw === '' ? null : parseFloat(raw);
+      }
+      await updateAccount(editingId, payload);
       setEditingId(null);
       await load();
     } catch (err) {
@@ -229,7 +252,7 @@ export default function AccountsPage() {
     <div className="page-scroll">
       <h1 className="page-title">Accounts</h1>
       <p style={{ marginBottom: '1rem', color: '#5a6b64', fontSize: '0.95rem' }}>
-        Add any number of accounts: savings, checking, HSA, IRA (traditional or Roth), 401(k) (traditional or Roth), and taxable. Record balances with an “as of” date; the latest balance per account is used for projections and history is kept.
+        Add any number of accounts: savings, checking, HSA, IRA (traditional or Roth), 401(k) (traditional or Roth), taxable, and assets (e.g. vehicle or property value). For assets, set expected annual depreciation; projections reduce those balances by that percent each year while portfolio growth applies to other accounts. Record balances with an “as of” date; the latest balance per account is used for projections and history is kept.
       </p>
       {message && <div className="error-message">{message}</div>}
 
@@ -283,6 +306,22 @@ export default function AccountsPage() {
                   ))}
                 </select>
               </div>
+              {addForm.account_type === 'asset' && (
+                <div className="form-group">
+                  <label htmlFor="add_depreciation">Expected depreciation (% / year)</label>
+                  <input
+                    id="add_depreciation"
+                    type="number"
+                    min={0}
+                    max={100}
+                    step={0.1}
+                    value={addForm.expected_depreciation_pct}
+                    onChange={(e) => setAddForm((p) => ({ ...p, expected_depreciation_pct: e.target.value }))}
+                    placeholder="e.g. 10"
+                    title="Used in projections: balance declines by this percent each year"
+                  />
+                </div>
+              )}
               <div className="form-group" style={{ alignSelf: 'flex-end' }}>
                 <button type="submit" className="btn btn-primary" disabled={saving}>
                   {saving ? 'Adding…' : 'Add'}
@@ -322,6 +361,20 @@ export default function AccountsPage() {
                         <option key={o.value} value={o.value}>{o.label}</option>
                       ))}
                     </select>
+                    {editForm.account_type === 'asset' && (
+                      <input
+                        type="number"
+                        min={0}
+                        max={100}
+                        step={0.1}
+                        value={editForm.expected_depreciation_pct}
+                        onChange={(e) => setEditForm((p) => ({ ...p, expected_depreciation_pct: e.target.value }))}
+                        placeholder="% / yr"
+                        className="input-cell"
+                        title="Expected annual depreciation for projections"
+                        style={{ maxWidth: '6rem' }}
+                      />
+                    )}
                     <button type="submit" className="btn btn-primary btn-sm" disabled={saving}>
                       Save
                     </button>
@@ -336,7 +389,17 @@ export default function AccountsPage() {
                 ) : (
                   <>
                     <span className="account-name">{acc.name}</span>
-                    <span className="account-meta">{typeLabel(acc.account_type)} · {ownerLabel(acc.owner_type)}</span>
+                    <span className="account-meta">
+                      {typeLabel(acc.account_type)} · {ownerLabel(acc.owner_type)}
+                      {acc.account_type === 'asset' && (
+                        <>
+                          {' · '}
+                          {acc.expected_depreciation_pct != null && acc.expected_depreciation_pct !== ''
+                            ? `${Number(acc.expected_depreciation_pct)}% dep. / yr`
+                            : 'no depreciation set'}
+                        </>
+                      )}
+                    </span>
                     {balancesByAccount[acc.id] != null && (
                       <span className="account-balance">
                         ${Number(balancesByAccount[acc.id].balance).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 2 })} as of {String(balancesByAccount[acc.id].as_of).slice(0, 10)}

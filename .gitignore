@@ -23,3 +23,5 @@ Thumbs.db
 # Test and coverage output
 test-results/
 coverage/
+/retirementhub/backend/package-lock.json
+/retirementhub/backend/junit.xml

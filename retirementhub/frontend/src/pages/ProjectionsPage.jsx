@@ -9,7 +9,6 @@ import {
   Legend,
   ResponsiveContainer,
   ReferenceLine,
-  BarChart,
   Bar,
   ComposedChart,
 } from 'recharts';
@@ -88,6 +87,13 @@ function ProjectionsSummary({ data }) {
           )}
         </p>
       )}
+      {projection_meta != null && (projection_meta.p1_rmd_start_age != null || projection_meta.p2_rmd_start_age != null) && (
+        <p className="projections-summary-note" style={{ marginTop: '0.5rem' }}>
+          First RMD age (by birth year): {p1Name} age {projection_meta.p1_rmd_start_age ?? '—'} · {p2Name} age {projection_meta.p2_rmd_start_age ?? '—'}.
+          {' '}
+          {projection_meta.rmd_note}
+        </p>
+      )}
     </div>
   );
 }
@@ -147,6 +153,13 @@ function IncomeVsExpensesChart({ data, household }) {
                   <div className="chart-tooltip">
                     <strong>Year {label}</strong>
                     <div>Income: {formatCurrency(p.income)}</div>
+                    {(p.rmd ?? 0) > 0 && (
+                      <div className="tooltip-rmd">
+                        RMD (total): {formatCurrency(p.rmd)}
+                        {(p.rmd_p1 ?? 0) > 0 && ` · ${p1Name}: ${formatCurrency(p.rmd_p1)}`}
+                        {(p.rmd_p2 ?? 0) > 0 && ` · ${p2Name}: ${formatCurrency(p.rmd_p2)}`}
+                      </div>
+                    )}
                     <div>Expenses: {formatCurrency(p.expenses)}</div>
                     <div>Savings: {formatCurrency(p.savings)}</div>
                     {(p.income_ss_p1 > 0 || p.income_ss_p2 > 0) && (
@@ -162,8 +175,9 @@ function IncomeVsExpensesChart({ data, household }) {
               }}
             />
             <Legend />
-            <Bar dataKey="income" name="Income" fill="#0d5c4a" radius={[2, 2, 0, 0]} />
+            <Bar dataKey="income" name="Income (incl. RMD)" fill="#0d5c4a" radius={[2, 2, 0, 0]} />
             <Bar dataKey="expenses" name="Expenses" fill="#5a6b64" radius={[2, 2, 0, 0]} />
+            <Line type="monotone" dataKey="rmd" name="RMD" stroke="#a67c52" strokeWidth={2} dot={{ r: 2 }} />
           </ComposedChart>
         </ResponsiveContainer>
       </div>
@@ -213,6 +227,9 @@ export default function ProjectionsPage() {
     income: row.income,
     expenses: row.expenses,
     savings: row.savings,
+    rmd: row.rmd ?? 0,
+    rmd_p1: row.rmd_p1 ?? 0,
+    rmd_p2: row.rmd_p2 ?? 0,
     p1_retired: row.p1_retired,
     p2_retired: row.p2_retired,
     income_ss_p1: row.income_ss_p1,
@@ -223,7 +240,7 @@ export default function ProjectionsPage() {
     <div className="page-scroll">
       <h1 className="page-title">Projections</h1>
       <p style={{ marginBottom: '1rem', color: '#5a6b64', fontSize: '0.95rem' }}>
-        Net worth and income vs expenses over time. Uses current account balances, income, and expense settings. Set retirement dates on Household and 401(k) on Income for accurate savings. Portfolio growth applies each year; expense growth (COLA) inflates both expenses and Social Security benefits by that % per year.
+        Net worth and income vs expenses over time. Uses current account balances, income, and expense settings. Set retirement dates on Household and 401(k) on Income for accurate savings. Portfolio growth applies each year to non-asset accounts; asset-type accounts use expected depreciation from the Accounts page (balance × (1 − depreciation%) each year). Traditional IRA and traditional 401(k) balances drive projected RMDs (IRS Uniform Lifetime Table; included in income). Expense growth (COLA) inflates both expenses and Social Security benefits by that % per year.
       </p>
 
       <div className="card projections-controls-card">
