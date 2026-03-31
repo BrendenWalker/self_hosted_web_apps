@@ -67,16 +67,18 @@ CREATE INDEX IF NOT EXISTS idx_expense_line_category ON expense_line(expense_cat
 CREATE INDEX IF NOT EXISTS idx_expense_line_as_of ON expense_line(as_of DESC);
 
 -- ==================== ACCOUNTS (user-defined, any number) ====================
--- Types: savings, checking, hsa, ira_traditional, ira_roth, 401k_traditional, 401k_roth, taxable
+-- Types: savings, checking, hsa, ira_traditional, ira_roth, 401k_traditional, 401k_roth, taxable, asset
+-- asset: physical/financial assets valued in balances; expected_depreciation_pct = expected annual decline (%)
 -- Owner: p1, p2, or joint
 CREATE TABLE IF NOT EXISTS account (
     id SERIAL PRIMARY KEY,
     name VARCHAR(120) NOT NULL,
     account_type VARCHAR(40) NOT NULL CHECK (account_type IN (
         'savings', 'checking', 'hsa', 'ira_traditional', 'ira_roth',
-        '401k_traditional', '401k_roth', 'taxable'
+        '401k_traditional', '401k_roth', 'taxable', 'asset'
     )),
     owner_type VARCHAR(20) NOT NULL DEFAULT 'joint' CHECK (owner_type IN ('p1', 'p2', 'joint')),
+    expected_depreciation_pct DECIMAL(5, 2),
     sort_order INTEGER NOT NULL DEFAULT 0,
     modified TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );

@@ -205,18 +205,27 @@ app.get('/api/accounts/:id', async (req, res) => {
   }
 });
 
+function parseExpectedDepreciationPct(raw) {
+  if (raw == null || raw === '') return null;
+  const n = parseFloat(String(raw).trim());
+  if (!Number.isFinite(n) || n < 0) return null;
+  return Math.min(100, Math.round(n * 100) / 100);
+}
+
 app.post('/api/accounts', async (req, res) => {
   try {
-    const { name, account_type, owner_type, sort_order } = req.body;
+    const { name, account_type, owner_type, sort_order, expected_depreciation_pct } = req.body;
     const trimmedName = name != null ? String(name).trim() : '';
     if (!trimmedName) {
       return res.status(400).json({ error: 'Account name is required' });
     }
+    const at = account_type || 'taxable';
+    const dep = at === 'asset' ? parseExpectedDepreciationPct(expected_depreciation_pct) : null;
     const result = await pool.query(
-      `INSERT INTO account (name, account_type, owner_type, sort_order)
-       VALUES ($1, $2, COALESCE($3, 'joint'), COALESCE($4, 0))
+      `INSERT INTO account (name, account_type, owner_type, sort_order, expected_depreciation_pct)
+       VALUES ($1, $2, COALESCE($3, 'joint'), COALESCE($4, 0), $5)
        RETURNING *`,
-      [trimmedName, account_type || 'taxable', owner_type || 'joint', sort_order != null ? parseInt(sort_order, 10) : 0]
+      [trimmedName, at, owner_type || 'joint', sort_order != null ? parseInt(sort_order, 10) : 0, dep]
     );
     res.status(201).json(result.rows[0]);
   } catch (error) {
@@ -230,23 +239,46 @@ app.post('/api/accounts', async (req, res) => {
 
 app.put('/api/accounts/:id', async (req, res) => {
   try {
-    const { name, account_type, owner_type, sort_order } = req.body;
+    const { name, account_type, owner_type, sort_order, expected_depreciation_pct } = req.body;
+    const id = parseInt(req.params.id, 10);
     const trimmedName = name != null ? String(name).trim() : null;
+    const existing = await pool.query(
+      'SELECT account_type, expected_depreciation_pct FROM account WHERE id = $1',
+      [id]
+    );
+    if (existing.rows.length === 0) {
+      return res.status(404).json({ error: 'Account not found' });
+    }
+    const prev = existing.rows[0];
+    const resolvedType =
+      account_type != null ? String(account_type).trim() : prev.account_type;
+    let dep = null;
+    if (resolvedType === 'asset') {
+      if (expected_depreciation_pct !== undefined) {
+        dep = parseExpectedDepreciationPct(expected_depreciation_pct);
+      } else if (prev.account_type === 'asset') {
+        dep = prev.expected_depreciation_pct;
+      } else {
+        dep = null;
+      }
+    }
     const result = await pool.query(
       `UPDATE account SET
         name = COALESCE($1, name),
         account_type = COALESCE($2, account_type),
         owner_type = COALESCE($3, owner_type),
         sort_order = COALESCE($4, sort_order),
+        expected_depreciation_pct = $5,
         modified = CURRENT_TIMESTAMP
-       WHERE id = $5
+       WHERE id = $6
        RETURNING *`,
       [
         trimmedName,
         account_type != null ? String(account_type).trim() : null,
         owner_type != null ? String(owner_type).trim() : null,
         sort_order != null ? parseInt(sort_order, 10) : null,
-        parseInt(req.params.id, 10),
+        dep,
+        id,
       ]
     );
     if (result.rows.length === 0) {
@@ -278,7 +310,8 @@ app.delete('/api/accounts/:id', async (req, res) => {
 app.get('/api/account-balances', async (req, res) => {
   try {
     const result = await pool.query(
-      `SELECT DISTINCT ON (ab.account_id) ab.*, a.name AS account_name, a.account_type, a.owner_type
+      `SELECT DISTINCT ON (ab.account_id) ab.*, a.name AS account_name, a.account_type, a.owner_type,
+              a.expected_depreciation_pct
        FROM account_balance ab
        JOIN account a ON ab.account_id = a.id
        ORDER BY ab.account_id, ab.as_of DESC, ab.id DESC`
@@ -1113,6 +1146,33 @@ function ageAtEoy(birthYear, year) {
   return year - birthYear;
 }
 
+/** IRS Uniform Lifetime Table (2022 revision, Pub. 590-B). Age = age at end of distribution year. */
+const UNIFORM_LIFETIME_DIVISOR = {
+  72: 26.6, 73: 25.5, 74: 24.6, 75: 23.6, 76: 22.7, 77: 21.8, 78: 20.9, 79: 20.0,
+  80: 19.1, 81: 18.2, 82: 17.4, 83: 16.5, 84: 15.7, 85: 14.8, 86: 14.0, 87: 13.2,
+  88: 12.4, 89: 11.7, 90: 11.1, 91: 10.5, 92: 9.9, 93: 9.4, 94: 8.9, 95: 8.4,
+  96: 7.9, 97: 7.4, 98: 7.0, 99: 6.6, 100: 6.2, 101: 5.8, 102: 5.4, 103: 5.1,
+  104: 4.8, 105: 4.5, 106: 4.2, 107: 4.0, 108: 3.7, 109: 3.5, 110: 3.3, 111: 3.1,
+  112: 2.9, 113: 2.8, 114: 2.6, 115: 2.5, 116: 2.3, 117: 2.2, 118: 2.1, 119: 1.9, 120: 1.8,
+};
+
+function uniformLifetimeDivisor(age) {
+  if (age == null || !Number.isInteger(age)) return null;
+  if (age < 72) return null;
+  if (age > 120) return UNIFORM_LIFETIME_DIVISOR[120];
+  return UNIFORM_LIFETIME_DIVISOR[age] ?? null;
+}
+
+/** First calendar year RMD is required (SECURE / SECURE 2.0), by year of birth. */
+function rmdStartAgeFromBirthYear(birthYear) {
+  if (birthYear == null || !Number.isInteger(birthYear)) return null;
+  if (birthYear <= 1950) return 72;
+  if (birthYear <= 1959) return 73;
+  return 75;
+}
+
+const RMD_ACCOUNT_TYPES = new Set(['ira_traditional', '401k_traditional']);
+
 // SSA-style factors for FRA 67: 62 ≈ 70%, 67 = 100%, 70 ≈ 124%. Returns factor for a given age.
 function ssFactorForAge(age) {
   if (age == null || !Number.isInteger(age)) return null;
@@ -1163,7 +1223,7 @@ app.get('/api/projections', async (req, res) => {
       pool.query('SELECT p1_display_name, p2_display_name, p1_birth_year, p2_birth_year, p1_retirement_date, p2_retirement_date, p1_ss_at_fra, p2_ss_at_fra FROM household ORDER BY id LIMIT 1'),
       pool.query('SELECT * FROM income ORDER BY as_of DESC, id DESC LIMIT 1'),
       pool.query(
-        `SELECT DISTINCT ON (ab.account_id) ab.balance, a.name AS account_name
+        `SELECT DISTINCT ON (ab.account_id) ab.balance, a.account_type, a.expected_depreciation_pct, a.owner_type
          FROM account_balance ab
          JOIN account a ON ab.account_id = a.id
          ORDER BY ab.account_id, ab.as_of DESC, ab.id DESC`
@@ -1228,10 +1288,37 @@ app.get('/api/projections', async (req, res) => {
     retirementAnnual += mortgageMonthly * 12;
     const target25xRetirement = Math.round(retirementAnnual * 25 * 100) / 100;
 
-    let startingNetWorth = 0;
-    for (const row of balancesRes.rows) {
-      startingNetWorth += parseFloat(row.balance) || 0;
+    function depPctToFactor(pct) {
+      const p = pct != null && pct !== '' ? parseFloat(pct) : 0;
+      const n = Number.isFinite(p) && p > 0 ? Math.min(100, p) : 0;
+      return 1 - n / 100;
     }
+
+    let tradP1 = 0;
+    let tradP2 = 0;
+    let otherInvest = 0;
+    const assetParts = [];
+    for (const row of balancesRes.rows) {
+      const bal = parseFloat(row.balance) || 0;
+      if (row.account_type === 'asset') {
+        const depPct = row.expected_depreciation_pct != null ? parseFloat(row.expected_depreciation_pct) : 0;
+        assetParts.push({
+          balance: bal,
+          depFactor: depPctToFactor(Number.isFinite(depPct) ? depPct : 0),
+        });
+      } else if (RMD_ACCOUNT_TYPES.has(row.account_type)) {
+        const ot = row.owner_type || 'joint';
+        if (ot === 'p1') tradP1 += bal;
+        else if (ot === 'p2') tradP2 += bal;
+        else {
+          tradP1 += bal * 0.5;
+          tradP2 += bal * 0.5;
+        }
+      } else {
+        otherInvest += bal;
+      }
+    }
+    let startingNetWorth = tradP1 + tradP2 + otherInvest + assetParts.reduce((s, a) => s + a.balance, 0);
     startingNetWorth = Math.round(startingNetWorth * 100) / 100;
 
     const grossP1 = income ? parseFloat(income.gross_salary) || 0 : 0;
@@ -1253,7 +1340,6 @@ app.get('/api/projections', async (req, res) => {
 
     const endYear = startYear + horizonYears;
     const byYear = [];
-    let netWorth = startingNetWorth;
     const growthFactor = 1 + growthPct / 100;
 
     for (let y = startYear; y <= endYear; y++) {
@@ -1272,7 +1358,27 @@ app.get('/api/projections', async (req, res) => {
       const annualSsP1 = p1Retired ? p1SsAnnual * Math.pow(expenseColaFactor, ssColaYearsP1) : 0;
       const annualSsP2 = p2Retired ? p2SsAnnual * Math.pow(expenseColaFactor, ssColaYearsP2) : 0;
       const totalSs = annualSsP1 + annualSsP2;
-      const incomeAmount = Math.round((wageIncome + bonusAnnual + totalSs) * 100) / 100;
+
+      const age1 = ageAtEoy(p1BirthYear, y);
+      const age2 = ageAtEoy(p2BirthYear, y);
+      const rmdStart1 = rmdStartAgeFromBirthYear(p1BirthYear);
+      const rmdStart2 = rmdStartAgeFromBirthYear(p2BirthYear);
+
+      let rmd1 = 0;
+      let rmd2 = 0;
+      if (age1 != null && rmdStart1 != null && age1 >= rmdStart1 && tradP1 > 0) {
+        const div = uniformLifetimeDivisor(age1);
+        if (div != null && div > 0) rmd1 = Math.min(tradP1, tradP1 / div);
+      }
+      if (age2 != null && rmdStart2 != null && age2 >= rmdStart2 && tradP2 > 0) {
+        const div = uniformLifetimeDivisor(age2);
+        if (div != null && div > 0) rmd2 = Math.min(tradP2, tradP2 / div);
+      }
+      tradP1 = Math.max(0, tradP1 - rmd1);
+      tradP2 = Math.max(0, tradP2 - rmd2);
+      const rmdTotal = Math.round((rmd1 + rmd2) * 100) / 100;
+
+      const incomeAmount = Math.round((wageIncome + bonusAnnual + totalSs + rmdTotal) * 100) / 100;
       const expensesUseRetirement = expenseRetirementYear != null && y >= expenseRetirementYear;
       const expenseBase = expensesUseRetirement ? retirementAnnual : currentAnnual;
       const expenseGrowthYears = expensesUseRetirement && expenseRetirementYear != null ? y - expenseRetirementYear : y - startYear;
@@ -1298,8 +1404,32 @@ app.get('/api/projections', async (req, res) => {
         contributions401k = (plannedP1 || 0) + (plannedP2 || 0);
       }
 
-      netWorth = netWorth * growthFactor + savingsAmount;
-      netWorth = Math.round(netWorth * 100) / 100;
+      let invTotal = tradP1 + tradP2 + otherInvest;
+      invTotal = invTotal * growthFactor + savingsAmount;
+      const tradAfterRmd = tradP1 + tradP2;
+      const denom = tradAfterRmd + otherInvest;
+      if (invTotal <= 0) {
+        tradP1 = 0;
+        tradP2 = 0;
+        otherInvest = 0;
+      } else if (denom <= 0) {
+        tradP1 = 0;
+        tradP2 = 0;
+        otherInvest = invTotal;
+      } else {
+        const ratioTrad = tradAfterRmd / denom;
+        const newTrad = invTotal * ratioTrad;
+        const p1Share = tradAfterRmd > 0 ? tradP1 / tradAfterRmd : 0.5;
+        tradP1 = newTrad * p1Share;
+        tradP2 = newTrad * (1 - p1Share);
+        otherInvest = invTotal * (1 - ratioTrad);
+      }
+
+      for (const ap of assetParts) {
+        ap.balance *= ap.depFactor;
+      }
+      const netWorth =
+        Math.round((tradP1 + tradP2 + otherInvest + assetParts.reduce((s, a) => s + a.balance, 0)) * 100) / 100;
 
       byYear.push({
         year: y,
@@ -1307,6 +1437,9 @@ app.get('/api/projections', async (req, res) => {
         income: incomeAmount,
         expenses: expensesAmount,
         savings: savingsAmount,
+        rmd: rmdTotal,
+        rmd_p1: Math.round(rmd1 * 100) / 100,
+        rmd_p2: Math.round(rmd2 * 100) / 100,
         contributions_401k: Math.round(contributions401k * 100) / 100,
         is_retired: isRetired,
         p1_retired: p1Retired,
@@ -1344,6 +1477,10 @@ app.get('/api/projections', async (req, res) => {
         p2_ss_monthly_used: p2SsMonthly,
         p2_uses_spousal: p2UsesSpousal,
         expense_retirement_year: expenseRetirementYear,
+        p1_rmd_start_age: rmdStartAgeFromBirthYear(p1BirthYear),
+        p2_rmd_start_age: rmdStartAgeFromBirthYear(p2BirthYear),
+        rmd_note:
+          'RMD from traditional IRA and traditional 401(k) balances using IRS Uniform Lifetime Table (2022+); joint accounts split 50/50; first RMD age by birth year (72/73/75).',
       },
     });
   } catch (error) {
