@@ -41,7 +41,26 @@ app.get('/api/household', async (req, res) => {
 
 app.put('/api/household', async (req, res) => {
   try {
-    const { p1_display_name, p2_display_name, p1_birth_year, p2_birth_year, p1_retirement_date, p2_retirement_date, p1_ss_monthly_estimate, p2_ss_monthly_estimate, p1_ss_at_fra, p2_ss_at_fra, filing_status } = req.body;
+    const {
+      p1_display_name,
+      p2_display_name,
+      p1_birth_year,
+      p2_birth_year,
+      p1_retirement_date,
+      p2_retirement_date,
+      p1_ss_monthly_estimate,
+      p2_ss_monthly_estimate,
+      p1_ss_at_fra,
+      p2_ss_at_fra,
+      filing_status,
+      required_monthly_income_retirement,
+    } = req.body;
+    const shouldSetRmi = Object.prototype.hasOwnProperty.call(req.body, 'required_monthly_income_retirement');
+    const rmiStored = shouldSetRmi
+      ? required_monthly_income_retirement != null && required_monthly_income_retirement !== ''
+        ? parseFloat(required_monthly_income_retirement)
+        : null
+      : null;
     const result = await pool.query(
       `UPDATE household SET
         p1_display_name = COALESCE($1, p1_display_name),
@@ -55,6 +74,7 @@ app.put('/api/household', async (req, res) => {
         p1_ss_at_fra = $9,
         p2_ss_at_fra = $10,
         filing_status = COALESCE($11, filing_status),
+        required_monthly_income_retirement = CASE WHEN $13::boolean THEN $12 ELSE required_monthly_income_retirement END,
         modified = CURRENT_TIMESTAMP
        WHERE id = (SELECT id FROM household LIMIT 1)
        RETURNING *`,
@@ -70,6 +90,8 @@ app.put('/api/household', async (req, res) => {
         p1_ss_at_fra != null && p1_ss_at_fra !== '' ? parseFloat(p1_ss_at_fra) : null,
         p2_ss_at_fra != null && p2_ss_at_fra !== '' ? parseFloat(p2_ss_at_fra) : null,
         filing_status != null ? String(filing_status).trim() : null,
+        rmiStored,
+        shouldSetRmi,
       ]
     );
     if (result.rows.length === 0) {
@@ -212,20 +234,32 @@ function parseExpectedDepreciationPct(raw) {
   return Math.min(100, Math.round(n * 100) / 100);
 }
 
+const RMD_ACCOUNT_TYPES = new Set(['ira_traditional', '401k_traditional']);
+
+/** Traditional IRA / 401(k) trad: whose balance applies for RMD (null = use owner_type). */
+function parseRmdOwnerType(raw, accountType) {
+  if (!RMD_ACCOUNT_TYPES.has(accountType)) return null;
+  if (raw === undefined || raw === null || raw === '') return null;
+  const s = String(raw).trim();
+  if (s === 'p1' || s === 'p2' || s === 'joint') return s;
+  return null;
+}
+
 app.post('/api/accounts', async (req, res) => {
   try {
-    const { name, account_type, owner_type, sort_order, expected_depreciation_pct } = req.body;
+    const { name, account_type, owner_type, sort_order, expected_depreciation_pct, rmd_owner_type } = req.body;
     const trimmedName = name != null ? String(name).trim() : '';
     if (!trimmedName) {
       return res.status(400).json({ error: 'Account name is required' });
     }
     const at = account_type || 'taxable';
     const dep = at === 'asset' ? parseExpectedDepreciationPct(expected_depreciation_pct) : null;
+    const rmdOt = parseRmdOwnerType(rmd_owner_type, at);
     const result = await pool.query(
-      `INSERT INTO account (name, account_type, owner_type, sort_order, expected_depreciation_pct)
-       VALUES ($1, $2, COALESCE($3, 'joint'), COALESCE($4, 0), $5)
+      `INSERT INTO account (name, account_type, owner_type, sort_order, expected_depreciation_pct, rmd_owner_type)
+       VALUES ($1, $2, COALESCE($3, 'joint'), COALESCE($4, 0), $5, $6)
        RETURNING *`,
-      [trimmedName, at, owner_type || 'joint', sort_order != null ? parseInt(sort_order, 10) : 0, dep]
+      [trimmedName, at, owner_type || 'joint', sort_order != null ? parseInt(sort_order, 10) : 0, dep, rmdOt]
     );
     res.status(201).json(result.rows[0]);
   } catch (error) {
@@ -239,11 +273,11 @@ app.post('/api/accounts', async (req, res) => {
 
 app.put('/api/accounts/:id', async (req, res) => {
   try {
-    const { name, account_type, owner_type, sort_order, expected_depreciation_pct } = req.body;
+    const { name, account_type, owner_type, sort_order, expected_depreciation_pct, rmd_owner_type } = req.body;
     const id = parseInt(req.params.id, 10);
     const trimmedName = name != null ? String(name).trim() : null;
     const existing = await pool.query(
-      'SELECT account_type, expected_depreciation_pct FROM account WHERE id = $1',
+      'SELECT account_type, expected_depreciation_pct, rmd_owner_type, owner_type FROM account WHERE id = $1',
       [id]
     );
     if (existing.rows.length === 0) {
@@ -262,6 +296,16 @@ app.put('/api/accounts/:id', async (req, res) => {
         dep = null;
       }
     }
+    let rmdOt = null;
+    if (RMD_ACCOUNT_TYPES.has(resolvedType)) {
+      if (rmd_owner_type !== undefined) {
+        rmdOt = parseRmdOwnerType(rmd_owner_type, resolvedType);
+      } else if (RMD_ACCOUNT_TYPES.has(prev.account_type)) {
+        rmdOt = prev.rmd_owner_type;
+      } else {
+        rmdOt = null;
+      }
+    }
     const result = await pool.query(
       `UPDATE account SET
         name = COALESCE($1, name),
@@ -269,8 +313,9 @@ app.put('/api/accounts/:id', async (req, res) => {
         owner_type = COALESCE($3, owner_type),
         sort_order = COALESCE($4, sort_order),
         expected_depreciation_pct = $5,
+        rmd_owner_type = $6,
         modified = CURRENT_TIMESTAMP
-       WHERE id = $6
+       WHERE id = $7
        RETURNING *`,
       [
         trimmedName,
@@ -278,6 +323,7 @@ app.put('/api/accounts/:id', async (req, res) => {
         owner_type != null ? String(owner_type).trim() : null,
         sort_order != null ? parseInt(sort_order, 10) : null,
         dep,
+        rmdOt,
         id,
       ]
     );
@@ -311,7 +357,7 @@ app.get('/api/account-balances', async (req, res) => {
   try {
     const result = await pool.query(
       `SELECT DISTINCT ON (ab.account_id) ab.*, a.name AS account_name, a.account_type, a.owner_type,
-              a.expected_depreciation_pct
+              a.expected_depreciation_pct, a.rmd_owner_type
        FROM account_balance ab
        JOIN account a ON ab.account_id = a.id
        ORDER BY ab.account_id, ab.as_of DESC, ab.id DESC`
@@ -1171,7 +1217,111 @@ function rmdStartAgeFromBirthYear(birthYear) {
   return 75;
 }
 
-const RMD_ACCOUNT_TYPES = new Set(['ira_traditional', '401k_traditional']);
+/**
+ * Estimate taxable portion of annual Social Security benefits (IRS Pub. 915–style combined-income tiers).
+ * otherIncome = wages + bonus + taxable RMD + other ordinary income (excludes SS benefits).
+ */
+function estimateTaxableSocialSecurityAnnual(otherIncome, ssAnnual, filingStatus) {
+  if (ssAnnual <= 0) return 0;
+  const halfSs = ssAnnual * 0.5;
+  const combined = otherIncome + halfSs;
+  const fs = filingStatus || 'married_filing_jointly';
+  const mfj = fs === 'married_filing_jointly';
+  const t0 = mfj ? 32000 : 25000;
+  const t1 = mfj ? 44000 : 34000;
+  const bridge = mfj ? 6000 : 4500;
+  if (combined <= t0) return 0;
+  if (combined <= t1) {
+    return Math.round(Math.min(0.5 * ssAnnual, 0.5 * (combined - t0)) * 100) / 100;
+  }
+  const cap = 0.85 * ssAnnual;
+  const alt = 0.85 * (combined - t1) + bridge;
+  return Math.round(Math.min(cap, alt) * 100) / 100;
+}
+
+/** Base year for IRS parameters (indexed ~2%/yr forward in projections). */
+const TAX_PARAM_BASE_YEAR = 2025;
+
+function taxParameterInflationFactor(year) {
+  return Math.pow(1.02, Math.max(0, year - TAX_PARAM_BASE_YEAR));
+}
+
+/** Inflate 2025 dollar amounts. */
+function inflateTaxDollars(amount, year) {
+  const f = taxParameterInflationFactor(year);
+  return Math.round(amount * f * 100) / 100;
+}
+
+/**
+ * 2025 federal ordinary-income brackets (taxable income). Thresholds are lower bounds of each band;
+ * rates[i] applies to income from thresholds[i] to thresholds[i+1].
+ */
+const FEDERAL_ORDINARY_BRACKETS_2025 = {
+  married_filing_jointly: {
+    thresholds: [0, 23850, 96950, 206700, 394600, 501050, 751600, Infinity],
+    rates: [0.1, 0.12, 0.22, 0.24, 0.32, 0.35, 0.37],
+  },
+  single: {
+    thresholds: [0, 11925, 48475, 103350, 197300, 250525, 626350, Infinity],
+    rates: [0.1, 0.12, 0.22, 0.24, 0.32, 0.35, 0.37],
+  },
+  head_of_household: {
+    thresholds: [0, 17000, 64850, 103350, 197300, 256100, 626350, Infinity],
+    rates: [0.1, 0.12, 0.22, 0.24, 0.32, 0.35, 0.37],
+  },
+};
+
+function federalOrdinaryTaxWithBreakdown(taxableIncome, filingStatus, year) {
+  const fs = filingStatus || 'married_filing_jointly';
+  const key = fs === 'head_of_household' ? 'head_of_household' : fs === 'married_filing_jointly' ? 'married_filing_jointly' : 'single';
+  const cfg = FEDERAL_ORDINARY_BRACKETS_2025[key];
+  const f = taxParameterInflationFactor(year);
+  const thresholds = cfg.thresholds.map((t) => (t === Infinity ? Infinity : Math.round(t * f * 100) / 100));
+  const rates = cfg.rates;
+  let remaining = Math.max(0, taxableIncome);
+  let total = 0;
+  const brackets = [];
+  for (let i = 0; i < rates.length; i++) {
+    const low = thresholds[i];
+    const high = thresholds[i + 1];
+    const bandMax = high === Infinity ? remaining : high - low;
+    const take = Math.min(remaining, bandMax);
+    if (take > 0) {
+      const taxAmt = take * rates[i];
+      total += taxAmt;
+      brackets.push({
+        rate_pct: Math.round(rates[i] * 1000) / 10,
+        income_in_band: Math.round(take * 100) / 100,
+        tax: Math.round(taxAmt * 100) / 100,
+      });
+      remaining -= take;
+    }
+    if (remaining <= 0) break;
+  }
+  return { total: Math.round(total * 100) / 100, brackets };
+}
+
+function standardDeductionEstimate(filingStatus, year, age1, age2) {
+  const fs = filingStatus || 'married_filing_jointly';
+  const base2025 = {
+    married_filing_jointly: 31500,
+    single: 15750,
+    head_of_household: 23625,
+    married_filing_separately: 15750,
+  };
+  let b = base2025[fs] ?? base2025.married_filing_jointly;
+  b = inflateTaxDollars(b, year);
+  const addMfj = inflateTaxDollars(1550, year);
+  const addSingle = inflateTaxDollars(1950, year);
+  if (fs === 'married_filing_jointly') {
+    const e1 = age1 != null && age1 >= 65 ? addMfj : 0;
+    const e2 = age2 != null && age2 >= 65 ? addMfj : 0;
+    return Math.round((b + e1 + e2) * 100) / 100;
+  }
+  const age = fs === 'married_filing_separately' ? age1 : age1;
+  const elderly = age != null && age >= 65;
+  return Math.round((b + (elderly ? addSingle : 0)) * 100) / 100;
+}
 
 // SSA-style factors for FRA 67: 62 ≈ 70%, 67 = 100%, 70 ≈ 124%. Returns factor for a given age.
 function ssFactorForAge(age) {
@@ -1220,10 +1370,13 @@ app.get('/api/projections', async (req, res) => {
     const startYear = now.getFullYear();
 
     const [householdRes, incomeRes, balancesRes, summaryRes] = await Promise.all([
-      pool.query('SELECT p1_display_name, p2_display_name, p1_birth_year, p2_birth_year, p1_retirement_date, p2_retirement_date, p1_ss_at_fra, p2_ss_at_fra FROM household ORDER BY id LIMIT 1'),
+      pool.query(
+        'SELECT p1_display_name, p2_display_name, p1_birth_year, p2_birth_year, p1_retirement_date, p2_retirement_date, p1_ss_at_fra, p2_ss_at_fra, filing_status, required_monthly_income_retirement FROM household ORDER BY id LIMIT 1'
+      ),
       pool.query('SELECT * FROM income ORDER BY as_of DESC, id DESC LIMIT 1'),
       pool.query(
-        `SELECT DISTINCT ON (ab.account_id) ab.balance, a.account_type, a.expected_depreciation_pct, a.owner_type
+        `SELECT DISTINCT ON (ab.account_id) ab.balance, a.account_type, a.expected_depreciation_pct, a.owner_type,
+                a.rmd_owner_type
          FROM account_balance ab
          JOIN account a ON ab.account_id = a.id
          ORDER BY ab.account_id, ab.as_of DESC, ab.id DESC`
@@ -1238,6 +1391,7 @@ app.get('/api/projections', async (req, res) => {
 
     const household = householdRes.rows[0] || null;
     const income = incomeRes.rows[0] || null;
+    const filingStatus = household?.filing_status || 'married_filing_jointly';
     const p1BirthYear = household?.p1_birth_year != null ? parseInt(household.p1_birth_year, 10) : null;
     const p2BirthYear = household?.p2_birth_year != null ? parseInt(household.p2_birth_year, 10) : null;
 
@@ -1286,7 +1440,17 @@ app.get('/api/projections', async (req, res) => {
     const mortgageMonthly = mortgageResult.rows.length ? parseFloat(mortgageResult.rows[0].monthly_payment) || 0 : 0;
     currentAnnual += mortgageMonthly * 12;
     retirementAnnual += mortgageMonthly * 12;
-    const target25xRetirement = Math.round(retirementAnnual * 25 * 100) / 100;
+
+    const rmiRaw = household?.required_monthly_income_retirement;
+    const rmiMonthlyParsed =
+      rmiRaw != null && rmiRaw !== '' && Number.isFinite(parseFloat(rmiRaw)) ? parseFloat(rmiRaw) : null;
+    const rmiMonthly =
+      rmiMonthlyParsed != null && rmiMonthlyParsed > 0 ? Math.round(rmiMonthlyParsed * 100) / 100 : null;
+    const useRequiredMonthlyIncome = rmiMonthly != null;
+
+    const target25xRetirement = useRequiredMonthlyIncome
+      ? Math.round(rmiMonthly * 12 * 25 * 100) / 100
+      : Math.round(retirementAnnual * 25 * 100) / 100;
 
     function depPctToFactor(pct) {
       const p = pct != null && pct !== '' ? parseFloat(pct) : 0;
@@ -1307,7 +1471,10 @@ app.get('/api/projections', async (req, res) => {
           depFactor: depPctToFactor(Number.isFinite(depPct) ? depPct : 0),
         });
       } else if (RMD_ACCOUNT_TYPES.has(row.account_type)) {
-        const ot = row.owner_type || 'joint';
+        const ot =
+          row.rmd_owner_type != null && String(row.rmd_owner_type).trim() !== ''
+            ? String(row.rmd_owner_type).trim()
+            : (row.owner_type || 'joint');
         if (ot === 'p1') tradP1 += bal;
         else if (ot === 'p2') tradP2 += bal;
         else {
@@ -1378,21 +1545,71 @@ app.get('/api/projections', async (req, res) => {
       tradP2 = Math.max(0, tradP2 - rmd2);
       const rmdTotal = Math.round((rmd1 + rmd2) * 100) / 100;
 
-      const incomeAmount = Math.round((wageIncome + bonusAnnual + totalSs + rmdTotal) * 100) / 100;
       const expensesUseRetirement = expenseRetirementYear != null && y >= expenseRetirementYear;
-      const expenseBase = expensesUseRetirement ? retirementAnnual : currentAnnual;
-      const expenseGrowthYears = expensesUseRetirement && expenseRetirementYear != null ? y - expenseRetirementYear : y - startYear;
-      let expensesAmount = Math.round(expenseBase * Math.pow(expenseColaFactor, Math.max(0, expenseGrowthYears)) * 100) / 100;
-      const inP2HealthBridge = p1RetirementYear != null && p2MedicareYear != null && y >= p1RetirementYear && y < p2MedicareYear;
-      if (inP2HealthBridge && p2HealthUntilMedicareMonthly.length > 0) {
-        const bridgeColaYears = y - p1RetirementYear;
-        let bridgeAnnual = 0;
-        for (const monthly of p2HealthUntilMedicareMonthly) {
-          bridgeAnnual += monthly * 12 * Math.pow(expenseColaFactor, Math.max(0, bridgeColaYears));
+      const inP2HealthBridge =
+        p1RetirementYear != null && p2MedicareYear != null && y >= p1RetirementYear && y < p2MedicareYear;
+
+      let expensesAmount;
+      let actualWithdrawalFromSavings = 0;
+      let retirementFundingShortfall = 0;
+
+      if (useRequiredMonthlyIncome && expensesUseRetirement && expenseRetirementYear != null) {
+        const expenseGrowthYears = y - expenseRetirementYear;
+        const baseNeed = rmiMonthly * 12 * Math.pow(expenseColaFactor, Math.max(0, expenseGrowthYears));
+        expensesAmount = Math.round(baseNeed * 100) / 100;
+        if (inP2HealthBridge && p2HealthUntilMedicareMonthly.length > 0) {
+          const bridgeColaYears = y - p1RetirementYear;
+          let bridgeAnnual = 0;
+          for (const monthly of p2HealthUntilMedicareMonthly) {
+            bridgeAnnual += monthly * 12 * Math.pow(expenseColaFactor, Math.max(0, bridgeColaYears));
+          }
+          expensesAmount = Math.round((expensesAmount + bridgeAnnual) * 100) / 100;
         }
-        expensesAmount = Math.round((expensesAmount + bridgeAnnual) * 100) / 100;
+        const withdrawalFromSavings = Math.max(
+          0,
+          expensesAmount - totalSs - rmdTotal - wageIncome - bonusAnnual
+        );
+        actualWithdrawalFromSavings = Math.min(withdrawalFromSavings, otherInvest);
+        actualWithdrawalFromSavings = Math.round(actualWithdrawalFromSavings * 100) / 100;
+        retirementFundingShortfall = Math.round((withdrawalFromSavings - actualWithdrawalFromSavings) * 100) / 100;
+        otherInvest = Math.max(0, otherInvest - actualWithdrawalFromSavings);
+      } else {
+        const expenseBase = expensesUseRetirement ? retirementAnnual : currentAnnual;
+        const expenseGrowthYears =
+          expensesUseRetirement && expenseRetirementYear != null ? y - expenseRetirementYear : y - startYear;
+        expensesAmount = Math.round(expenseBase * Math.pow(expenseColaFactor, Math.max(0, expenseGrowthYears)) * 100) / 100;
+        if (inP2HealthBridge && p2HealthUntilMedicareMonthly.length > 0) {
+          const bridgeColaYears = y - p1RetirementYear;
+          let bridgeAnnual = 0;
+          for (const monthly of p2HealthUntilMedicareMonthly) {
+            bridgeAnnual += monthly * 12 * Math.pow(expenseColaFactor, Math.max(0, bridgeColaYears));
+          }
+          expensesAmount = Math.round((expensesAmount + bridgeAnnual) * 100) / 100;
+        }
       }
-      let savingsAmount = incomeAmount - expensesAmount;
+
+      const otherForSsTax = wageIncome + bonusAnnual + rmdTotal + actualWithdrawalFromSavings;
+      const taxableSsEstimate = estimateTaxableSocialSecurityAnnual(otherForSsTax, totalSs, filingStatus);
+      const taxableIncomeEstimate =
+        Math.round(
+          (wageIncome + bonusAnnual + rmdTotal + taxableSsEstimate + actualWithdrawalFromSavings) * 100
+        ) / 100;
+      const taxableSsPlusRmd =
+        Math.round((taxableSsEstimate + rmdTotal + actualWithdrawalFromSavings) * 100) / 100;
+      const standardDeduction = standardDeductionEstimate(filingStatus, y, age1, age2);
+      const taxableIncomeAfterDeduction =
+        Math.max(0, Math.round((taxableIncomeEstimate - standardDeduction) * 100) / 100);
+      const taxableSsRmdMinusStdDed =
+        Math.max(0, Math.round((taxableSsPlusRmd - standardDeduction) * 100) / 100);
+      const fedTaxResult = federalOrdinaryTaxWithBreakdown(taxableIncomeAfterDeduction, filingStatus, y);
+      const federalEffectiveRate =
+        taxableIncomeAfterDeduction > 0
+          ? Math.round((fedTaxResult.total / taxableIncomeAfterDeduction) * 10000) / 100
+          : 0;
+
+      const incomeAmount =
+        Math.round((wageIncome + bonusAnnual + totalSs + rmdTotal + actualWithdrawalFromSavings) * 100) / 100;
+      const savingsAmount = Math.round((incomeAmount - expensesAmount) * 100) / 100;
 
       let contributions401k = 0;
       if (!isRetired) {
@@ -1431,12 +1648,30 @@ app.get('/api/projections', async (req, res) => {
       const netWorth =
         Math.round((tradP1 + tradP2 + otherInvest + assetParts.reduce((s, a) => s + a.balance, 0)) * 100) / 100;
 
+      const wageP1 = p1Retired ? 0 : salaryP1;
+      const wageP2 = p2Retired ? 0 : salaryP2;
+
       byYear.push({
         year: y,
         net_worth: netWorth,
         income: incomeAmount,
         expenses: expensesAmount,
         savings: savingsAmount,
+        income_wages: Math.round(wageIncome * 100) / 100,
+        income_wage_p1: Math.round(wageP1 * 100) / 100,
+        income_wage_p2: Math.round(wageP2 * 100) / 100,
+        income_bonus: Math.round(bonusAnnual * 100) / 100,
+        income_ss_total: Math.round(totalSs * 100) / 100,
+        taxable_ss_estimate: taxableSsEstimate,
+        taxable_income_estimate: taxableIncomeEstimate,
+        taxable_income_before_deduction: taxableIncomeEstimate,
+        taxable_ss_plus_rmd: taxableSsPlusRmd,
+        standard_deduction_estimate: standardDeduction,
+        taxable_income_after_standard_deduction: taxableIncomeAfterDeduction,
+        taxable_ss_rmd_minus_std_ded: taxableSsRmdMinusStdDed,
+        federal_tax_ordinary_estimate: fedTaxResult.total,
+        federal_tax_brackets: fedTaxResult.brackets,
+        federal_effective_rate_pct: federalEffectiveRate,
         rmd: rmdTotal,
         rmd_p1: Math.round(rmd1 * 100) / 100,
         rmd_p2: Math.round(rmd2 * 100) / 100,
@@ -1446,6 +1681,10 @@ app.get('/api/projections', async (req, res) => {
         p2_retired: p2Retired,
         income_ss_p1: Math.round(annualSsP1 * 100) / 100,
         income_ss_p2: Math.round(annualSsP2 * 100) / 100,
+        p1_age_eoy: age1 != null ? age1 : null,
+        p2_age_eoy: age2 != null ? age2 : null,
+        income_from_savings_draw: actualWithdrawalFromSavings,
+        retirement_funding_shortfall: retirementFundingShortfall,
       });
     }
 
@@ -1467,9 +1706,17 @@ app.get('/api/projections', async (req, res) => {
       starting_net_worth: startingNetWorth,
       current_annual: Math.round(currentAnnual * 100) / 100,
       retirement_annual: Math.round(retirementAnnual * 100) / 100,
+      required_monthly_income_retirement: rmiMonthly,
       by_year: byYear,
       year_reaches_target: year_reaches_target,
-      household: household ? { p1_display_name: household.p1_display_name || 'P1', p2_display_name: household.p2_display_name || 'P2' } : null,
+      household: household
+        ? {
+            p1_display_name: household.p1_display_name || 'P1',
+            p2_display_name: household.p2_display_name || 'P2',
+            filing_status: household.filing_status || 'married_filing_jointly',
+            required_monthly_income_retirement: rmiMonthly,
+          }
+        : null,
       projection_meta: {
         p1_retirement_year: p1RetirementYear,
         p2_retirement_year: p2RetirementYear,
@@ -1480,7 +1727,15 @@ app.get('/api/projections', async (req, res) => {
         p1_rmd_start_age: rmdStartAgeFromBirthYear(p1BirthYear),
         p2_rmd_start_age: rmdStartAgeFromBirthYear(p2BirthYear),
         rmd_note:
-          'RMD from traditional IRA and traditional 401(k) balances using IRS Uniform Lifetime Table (2022+); joint accounts split 50/50; first RMD age by birth year (72/73/75).',
+          'RMD from traditional IRA and traditional 401(k) balances using IRS Uniform Lifetime Table (2022+). RMD owner (per account) assigns balance to P1, P2, or joint (50/50); if unset, general owner applies. First RMD age by birth year (72/73/75).',
+        taxable_income_note:
+          'Ordinary income before deduction = wages + bonus + RMD + estimated taxable Social Security (Pub. 915). Taxable income after standard deduction subtracts inflated 2025-style standard deduction (plus age 65+ add-ons). Federal tax uses ordinary brackets (2025-style, indexed ~2%/year). SS+RMD − std ded is informational only (full return uses one deduction). Not tax advice.',
+        tax_model_note:
+          'Excludes NIIT, AMT, state/local tax, credits, and payroll taxes. Brackets and standard deduction are approximations.',
+        use_required_monthly_income: useRequiredMonthlyIncome,
+        required_monthly_income_note: useRequiredMonthlyIncome
+          ? 'Retirement spending uses Required monthly income (COLA from first year expenses use retirement amounts). Cash flow: Social Security and RMDs first, then wages/bonus, then withdrawals from non-RMD savings (taxable, Roth, etc.). P2 pre-Medicare bridge adds on top. Federal tax treats savings draws as ordinary income (approximation).'
+          : null,
       },
     });
   } catch (error) {

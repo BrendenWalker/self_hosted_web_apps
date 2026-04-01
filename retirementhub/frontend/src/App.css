@@ -15,9 +15,9 @@
 }
 
 .nav-container {
-  max-width: 1100px;
   margin: 0 auto;
-  padding: 0 1rem;
+  padding: 0 clamp(0.5rem, 1.5vw, 1rem);
+  width: 100%;
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -52,10 +52,10 @@
 .main-content {
   flex: 1;
   min-height: 0;
-  max-width: 1100px;
+  max-width: none;
   width: 100%;
   margin: 0 auto;
-  padding: 2rem 1rem;
+  padding: 2rem clamp(0.5rem, 1.5vw, 1rem);
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -94,7 +94,7 @@
     justify-content: center;
   }
   .main-content {
-    padding: 1rem 0.5rem;
+    padding: 1rem clamp(0.5rem, 2vw, 0.75rem);
   }
 }
 
@@ -491,6 +491,104 @@
   font-size: 0.8rem;
   color: #5a6b64;
   margin-top: 0.2rem;
+}
+
+.projections-detail-grid {
+  margin-top: 1.25rem;
+  padding-top: 1rem;
+  border-top: 1px solid #e8eeec;
+}
+
+.projections-detail-title {
+  font-size: 1.05rem;
+  color: #1a3d35;
+  margin: 0 0 0.5rem 0;
+  font-weight: 600;
+}
+
+.projections-detail-intro {
+  font-size: 0.85rem;
+  color: #5a6b64;
+  margin: 0 0 0.75rem 0;
+  line-height: 1.45;
+  max-width: 70rem;
+}
+
+.projections-detail-table-wrap {
+  overflow-x: auto;
+  margin: 0 -0.25rem;
+}
+
+.projections-detail-table {
+  width: 100%;
+  min-width: 1200px;
+  border-collapse: collapse;
+  font-size: 0.8rem;
+}
+
+.projections-detail-table th,
+.projections-detail-table td {
+  padding: 0.4rem 0.45rem;
+  border-bottom: 1px solid #e8eeec;
+  white-space: nowrap;
+}
+
+.projections-detail-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  font-weight: 600;
+  color: #1a3d35;
+  background: #f5f9f8;
+  text-align: left;
+}
+
+.projections-detail-table th.num,
+.projections-detail-table td.num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.projections-detail-table tbody tr:nth-child(even) {
+  background: #fafcfb;
+}
+
+.projections-tax-grid {
+  border-top: 1px solid #dce8e3;
+  margin-top: 1.5rem;
+  padding-top: 1.25rem;
+}
+
+.projections-tax-table {
+  min-width: 900px;
+}
+
+.projections-tax-table .bracket-col,
+.projections-tax-table .bracket-cell {
+  text-align: left;
+  white-space: normal;
+  min-width: 12rem;
+  max-width: 22rem;
+  vertical-align: top;
+  font-size: 0.78rem;
+  line-height: 1.35;
+  color: #3d4a45;
+}
+
+.federal-tax-brackets {
+  margin: 0;
+  padding-left: 1.1rem;
+}
+
+.federal-tax-brackets li {
+  margin: 0.15rem 0;
+}
+
+.projections-detail-meta {
+  display: block;
+  margin-top: 0.35rem;
+  font-size: 0.82rem;
+  color: #6b7c75;
 }
 
 .tax-guide {

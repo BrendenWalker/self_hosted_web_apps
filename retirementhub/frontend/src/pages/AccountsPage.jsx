@@ -29,6 +29,18 @@ const OWNER_TYPES = [
   { value: 'joint', label: 'Joint' },
 ];
 
+/** Traditional accounts subject to RMD rules in projections */
+function isTraditionalRetirement(type) {
+  return type === 'ira_traditional' || type === '401k_traditional';
+}
+
+const RMD_OWNER_OPTIONS = [
+  { value: '', label: 'Same as owner' },
+  { value: 'p1', label: 'P1 (RMD on P1)' },
+  { value: 'p2', label: 'P2 (RMD on P2)' },
+  { value: 'joint', label: 'Joint (50/50 RMD split)' },
+];
+
 export default function AccountsPage() {
   const [accounts, setAccounts] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -39,6 +51,7 @@ export default function AccountsPage() {
     account_type: 'taxable',
     owner_type: 'joint',
     expected_depreciation_pct: '',
+    rmd_owner_type: '',
   });
   const [showAdd, setShowAdd] = useState(false);
   const [addForm, setAddForm] = useState({
@@ -46,6 +59,7 @@ export default function AccountsPage() {
     account_type: 'taxable',
     owner_type: 'joint',
     expected_depreciation_pct: '',
+    rmd_owner_type: '',
   });
   const [saving, setSaving] = useState(false);
   const [deletingId, setDeletingId] = useState(null);
@@ -101,8 +115,18 @@ export default function AccountsPage() {
         const raw = addForm.expected_depreciation_pct?.trim();
         payload.expected_depreciation_pct = raw === '' ? null : parseFloat(raw);
       }
+      if (isTraditionalRetirement(addForm.account_type)) {
+        const raw = addForm.rmd_owner_type?.trim();
+        payload.rmd_owner_type = raw === '' || raw == null ? null : raw;
+      }
       await createAccount(payload);
-      setAddForm({ name: '', account_type: 'taxable', owner_type: 'joint', expected_depreciation_pct: '' });
+      setAddForm({
+        name: '',
+        account_type: 'taxable',
+        owner_type: 'joint',
+        expected_depreciation_pct: '',
+        rmd_owner_type: '',
+      });
       setShowAdd(false);
       await load();
     } catch (err) {
@@ -120,6 +144,7 @@ export default function AccountsPage() {
       owner_type: acc.owner_type,
       expected_depreciation_pct:
         acc.expected_depreciation_pct != null ? String(acc.expected_depreciation_pct) : '',
+      rmd_owner_type: acc.rmd_owner_type != null ? String(acc.rmd_owner_type) : '',
     });
   };
 
@@ -141,6 +166,10 @@ export default function AccountsPage() {
       if (editForm.account_type === 'asset') {
         const raw = editForm.expected_depreciation_pct?.trim();
         payload.expected_depreciation_pct = raw === '' ? null : parseFloat(raw);
+      }
+      if (isTraditionalRetirement(editForm.account_type)) {
+        const raw = editForm.rmd_owner_type?.trim();
+        payload.rmd_owner_type = raw === '' || raw == null ? null : raw;
       }
       await updateAccount(editingId, payload);
       setEditingId(null);
@@ -252,7 +281,7 @@ export default function AccountsPage() {
     <div className="page-scroll">
       <h1 className="page-title">Accounts</h1>
       <p style={{ marginBottom: '1rem', color: '#5a6b64', fontSize: '0.95rem' }}>
-        Add any number of accounts: savings, checking, HSA, IRA (traditional or Roth), 401(k) (traditional or Roth), taxable, and assets (e.g. vehicle or property value). For assets, set expected annual depreciation; projections reduce those balances by that percent each year while portfolio growth applies to other accounts. Record balances with an “as of” date; the latest balance per account is used for projections and history is kept.
+        Add any number of accounts: savings, checking, HSA, IRA (traditional or Roth), 401(k) (traditional or Roth), taxable, and assets (e.g. vehicle or property value). For traditional IRA and traditional 401(k), set <strong>RMD owner</strong> so each person’s required distributions use the correct balance (or choose “same as owner”). For assets, set expected annual depreciation. Record balances with an “as of” date; the latest balance per account is used for projections and history is kept.
       </p>
       {message && <div className="error-message">{message}</div>}
 
@@ -306,6 +335,21 @@ export default function AccountsPage() {
                   ))}
                 </select>
               </div>
+              {isTraditionalRetirement(addForm.account_type) && (
+                <div className="form-group">
+                  <label htmlFor="add_rmd_owner">RMD owner</label>
+                  <select
+                    id="add_rmd_owner"
+                    value={addForm.rmd_owner_type}
+                    onChange={(e) => setAddForm((p) => ({ ...p, rmd_owner_type: e.target.value }))}
+                    title="Which person’s RMD rules apply to this balance (joint = split 50/50). Same as owner uses the Owner field."
+                  >
+                    {RMD_OWNER_OPTIONS.map((o) => (
+                      <option key={o.value || 'inherit'} value={o.value}>{o.label}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
               {addForm.account_type === 'asset' && (
                 <div className="form-group">
                   <label htmlFor="add_depreciation">Expected depreciation (% / year)</label>
@@ -361,6 +405,19 @@ export default function AccountsPage() {
                         <option key={o.value} value={o.value}>{o.label}</option>
                       ))}
                     </select>
+                    {isTraditionalRetirement(editForm.account_type) && (
+                      <select
+                        value={editForm.rmd_owner_type}
+                        onChange={(e) => setEditForm((p) => ({ ...p, rmd_owner_type: e.target.value }))}
+                        title="RMD owner"
+                        className="input-cell"
+                        style={{ maxWidth: '11rem' }}
+                      >
+                        {RMD_OWNER_OPTIONS.map((o) => (
+                          <option key={o.value || 'inherit'} value={o.value}>{o.label}</option>
+                        ))}
+                      </select>
+                    )}
                     {editForm.account_type === 'asset' && (
                       <input
                         type="number"
@@ -391,6 +448,14 @@ export default function AccountsPage() {
                     <span className="account-name">{acc.name}</span>
                     <span className="account-meta">
                       {typeLabel(acc.account_type)} · {ownerLabel(acc.owner_type)}
+                      {isTraditionalRetirement(acc.account_type) && (
+                        <>
+                          {' · '}
+                          {acc.rmd_owner_type != null && acc.rmd_owner_type !== ''
+                            ? `RMD: ${acc.rmd_owner_type === 'joint' ? 'joint 50/50' : ownerLabel(acc.rmd_owner_type)}`
+                            : `RMD: same as owner (${ownerLabel(acc.owner_type)})`}
+                        </>
+                      )}
                       {acc.account_type === 'asset' && (
                         <>
                           {' · '}

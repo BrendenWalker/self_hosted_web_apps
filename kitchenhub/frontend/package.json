@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "description": "React frontend for KitchenHub - shopping lists, meal planning, and recipe management",
   "private": true,
+  "type": "module",
   "dependencies": {
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
