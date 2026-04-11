@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { getStores, getShoppingList, markPurchased } from '../api/api';
 import {
-  gramsToDisplayUnits,
-  formatShoppingUnitsDisplay,
+  inStoreShoppingCountDisplay,
+  inStoreTotalGramsLabel,
   itemDisplayName,
 } from '../utils/shoppingQuantity';
 import { queuePurchaseUpdate, subscribePendingCount, flushPurchaseQueue } from '../utils/purchaseSync';
@@ -122,15 +122,16 @@ function ShoppingPage() {
     if (!currentPurchased) {
       const item = shoppingList.find(i => i.name === itemName);
       if (item) {
+        const countStr =
+          inStoreShoppingCountDisplay(item.quantity, item.shopping_measure_grams) ||
+          String(item.quantity ?? '1');
+        const totalGrams = inStoreTotalGramsLabel(item.quantity);
         setConfirmPurchase({
-        name: item.name,
-        quantity: item.quantity || '1',
-        quantityDisplay:
-          formatShoppingUnitsDisplay(
-            gramsToDisplayUnits(item.quantity, item.shopping_measure_grams)
-          ) || item.quantity || '1',
-        displayName: itemDisplayName(item),
-      });
+          name: item.name,
+          quantity: item.quantity || '1',
+          quantityDisplay: totalGrams ? `${countStr} (${totalGrams})` : countStr,
+          displayName: itemDisplayName(item),
+        });
         return;
       }
     }
@@ -220,7 +221,9 @@ function ShoppingPage() {
               <div key={zone} className="zone-section">
                 <h2 className="zone-header">{zone}</h2>
                 <div className="items-list">
-                  {groupedByZone[zone].map(item => (
+                  {groupedByZone[zone].map(item => {
+                    const totalGrams = inStoreTotalGramsLabel(item.quantity);
+                    return (
                     <div
                       key={item.name}
                       className="shopping-item"
@@ -232,15 +235,24 @@ function ShoppingPage() {
                           onChange={() => handleTogglePurchased(item.name, false)}
                         />
                         <span className="item-quantity">
-                          {formatShoppingUnitsDisplay(
-                            gramsToDisplayUnits(item.quantity, item.shopping_measure_grams)
-                          ) || item.quantity || '1'}{' '}
-                          ×
+                          <span className="item-quantity-count">
+                            {inStoreShoppingCountDisplay(
+                              item.quantity,
+                              item.shopping_measure_grams
+                            ) || item.quantity || '1'}
+                          </span>
+                          {totalGrams ? (
+                            <span className="item-quantity-total">
+                              {' '}({totalGrams})
+                            </span>
+                          ) : null}
+                          {' '}×
                         </span>
                         <span className="item-name">{itemDisplayName(item)}</span>
                       </label>
                     </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
             ))}

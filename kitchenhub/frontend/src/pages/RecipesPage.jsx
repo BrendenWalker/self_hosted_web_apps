@@ -1,6 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { Link, NavLink } from 'react-router-dom';
 import { getRecipes, getRecipeCategories, addRecipeToShoppingList } from '../api/api';
+import {
+  buildRecipeShoppingListNoticeText,
+  recipeShoppingListNoticeClassName,
+} from '../utils/recipeShoppingListNotice';
 import './RecipesPage.css';
 
 function RecipesPage() {
@@ -11,7 +15,7 @@ function RecipesPage() {
   const [categoryId, setCategoryId] = useState('');
   const [recipeFilter, setRecipeFilter] = useState('');
   const [addingShopRecipeId, setAddingShopRecipeId] = useState(null);
-  const [shopNotice, setShopNotice] = useState(null);
+  const [shopNotice, setShopNotice] = useState(null); // { text, className }
 
   useEffect(() => {
     loadRecipes();
@@ -52,12 +56,10 @@ function RecipesPage() {
     setError(null);
     try {
       const res = await addRecipeToShoppingList(recipeId);
-      const { added = [], skipped = [] } = res.data || {};
-      const skipHint =
-        skipped.length > 0
-          ? ` ${skipped.length} line(s) skipped (optional lines, or missing unit / grams conversion).`
-          : '';
-      setShopNotice(`“${recipeName}”: added ${added.length} ingredient(s) to the shopping list.${skipHint}`);
+      setShopNotice({
+        text: buildRecipeShoppingListNoticeText(recipeName, res.data || {}),
+        className: recipeShoppingListNoticeClassName(res.data || {}),
+      });
     } catch (err) {
       const msg = err.response?.data?.error || err.message || 'Failed to add to shopping list';
       setError(msg);
@@ -118,8 +120,8 @@ function RecipesPage() {
       )}
 
       {shopNotice && (
-        <div className="recipes-shop-notice" role="status">
-          {shopNotice}
+        <div className={shopNotice.className} role="status">
+          {shopNotice.text}
         </div>
       )}
 

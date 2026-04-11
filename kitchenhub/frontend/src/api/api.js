@@ -68,8 +68,9 @@ export const removeFromShoppingList = (name) =>
 // Recipe categories
 export const getRecipeCategories = () => api.get('/recipe-categories');
 
-// Ingredient measurements (for recipe ingredient dropdowns)
-export const getIngredientMeasurements = () => api.get('/ingredient-measurements');
+// Measurements (recipe units + kcal)
+export const getMeasurements = () => api.get('/measurements');
+export const getIngredientMeasurements = getMeasurements;
 
 // Ingredients catalog (for adding to recipes; includes shopping_measure for future shopping list)
 // Pass { for_recipe: 1 } to list only items in departments with ingredient=true.
@@ -84,7 +85,7 @@ export const deleteIngredient = (id) => api.delete(`/ingredients/${id}`);
 export const getRecipes = (categoryId) =>
   api.get('/recipes', categoryId != null ? { params: { category_id: categoryId } } : undefined);
 export const getRecipe = (id) => api.get(`/recipes/${id}`);
-/** Increment shopping quantities (items.qty) by grams: Σ (recipe line qty × measurement to_grams). */
+/** Add recipe to shopping list: resolves grams per line (Each, Shopping Unit, or measurement to_grams). */
 export const addRecipeToShoppingList = (recipeId) => api.post(`/recipes/${recipeId}/shopping-list`);
 export const createRecipe = (data) => api.post('/recipes', data);
 export const updateRecipe = (id, data) => api.put(`/recipes/${id}`, data);

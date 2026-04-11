@@ -12,15 +12,15 @@ function HomePage() {
         </p>
         <div className="home-quick-links">
           <Link to="/shopping" className="home-card">
-            <h2>In-Store Shopping</h2>
+            <h2>Shopping List</h2>
             <p>
-              Use your current shopping list in-store, organized by store zones so the next item you need is always near the top.
+              Use your current list in-store, organized by store zones so the next item you need is always near the top.
             </p>
           </Link>
           <Link to="/list" className="home-card">
-            <h2>Shopping List &amp; Items</h2>
+            <h2>Items</h2>
             <p>
-              View your shopping list and manage the full catalog of items, adjusting quantities and adding new items as needed.
+              Browse and manage your full item catalog, adjust how much is on your list, and add new items.
             </p>
           </Link>
           <Link to="/recipes" className="home-card">
@@ -42,8 +42,8 @@ function HomePage() {
         <div className="home-detail-card">
           <h3>How it all fits together</h3>
           <p>
-            Your items live in the master list on the <strong>Shopping List &amp; Items</strong> page. When you are planning a trip,
-            you add items from that list into the shopping list. On the <strong>In-Store Shopping</strong> page, those items are
+            Your items live in the master catalog on the <strong>Items</strong> page. When you are planning a trip,
+            you add items from that catalog onto your list. On the <strong>Shopping List</strong> page, those items are
             grouped and ordered according to the zones you configure per store on the <strong>Stores &amp; Layouts</strong> page.
           </p>
         </div>
@@ -51,8 +51,8 @@ function HomePage() {
           <h3>Next steps</h3>
           <ul>
             <li>Set up your primary store and its zones under <strong>Stores &amp; Layouts</strong>.</li>
-            <li>Add your common items on the <strong>Shopping List &amp; Items</strong> page.</li>
-            <li>Head to <strong>In-Store Shopping</strong> when you are in the store to walk the aisles in order.</li>
+            <li>Add your common items on the <strong>Items</strong> page.</li>
+            <li>Head to <strong>Shopping List</strong> when you are in the store to walk the aisles in order.</li>
           </ul>
         </div>
       </section>

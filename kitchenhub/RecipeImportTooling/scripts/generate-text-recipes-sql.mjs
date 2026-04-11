@@ -171,7 +171,7 @@ lines.push('BEGIN;');
 lines.push('');
 
 lines.push('-- 1) Measurements');
-lines.push('INSERT INTO common.ingredient_measurements (name, to_grams) VALUES');
+lines.push('INSERT INTO common.measurements (name, to_grams) VALUES');
 lines.push(
   [...allMeasurements]
     .sort()
@@ -265,7 +265,7 @@ for (const file of files) {
   );
   lines.push('JOIN public.items items ON items.name = recipe_data.item_name');
   lines.push(
-    'JOIN common.ingredient_measurements measurements ON measurements.name = recipe_data.measurement_name;'
+    'JOIN common.measurements measurements ON measurements.name = recipe_data.measurement_name;'
   );
   lines.push('');
 }

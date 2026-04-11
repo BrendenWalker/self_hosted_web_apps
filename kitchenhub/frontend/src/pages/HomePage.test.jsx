@@ -20,8 +20,8 @@ describe('HomePage', () => {
         <HomePage />
       </MemoryRouter>
     );
-    expect(screen.getByRole('link', { name: /in-store shopping/i })).toHaveAttribute('href', '/shopping');
-    expect(screen.getByRole('link', { name: /shopping list & items/i })).toHaveAttribute('href', '/list');
+    expect(screen.getByRole('link', { name: /^Shopping List/i })).toHaveAttribute('href', '/shopping');
+    expect(screen.getByRole('link', { name: /^Items/i })).toHaveAttribute('href', '/list');
     expect(screen.getByRole('link', { name: /stores & layouts/i })).toHaveAttribute('href', '/stores');
   });
 

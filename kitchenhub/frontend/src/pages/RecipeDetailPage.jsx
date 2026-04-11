@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import {
   getRecipe,
@@ -11,8 +11,18 @@ import {
   addRecipeIngredient,
   updateRecipeIngredient,
   removeRecipeIngredient,
+  addRecipeToShoppingList,
 } from '../api/api';
 import { formatRecipeQuantity } from '../utils/recipeQuantity';
+import {
+  sortMeasurementsForRecipeEditor,
+  formatRecipeMeasurementOptionLabel,
+} from '../utils/recipeMeasurements';
+import { itemDisplayName } from '../utils/shoppingQuantity';
+import {
+  buildRecipeShoppingListNoticeText,
+  recipeShoppingListNoticeClassName,
+} from '../utils/recipeShoppingListNotice';
 import './RecipeDetailPage.css';
 
 function RecipeDetailPage() {
@@ -35,6 +45,9 @@ function RecipeDetailPage() {
   const [addIngredientOptional, setAddIngredientOptional] = useState(false);
   const [editingIngredientId, setEditingIngredientId] = useState(null);
   const [editIngredientForm, setEditIngredientForm] = useState({ qty: '', measurement_id: '', comment: '', is_optional: false });
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [addingToShoppingList, setAddingToShoppingList] = useState(false);
+  const [shopNotice, setShopNotice] = useState(null); // { text, className }
 
   useEffect(() => {
     if (isNew) {
@@ -52,6 +65,11 @@ function RecipeDetailPage() {
       setForm((f) => ({ ...f, category_ids: [categories[0].id] }));
     }
   }, [isNew, categories, form.category_ids.length]);
+
+  const recipeMeasurementsSorted = useMemo(
+    () => sortMeasurementsForRecipeEditor(measurements),
+    [measurements]
+  );
 
   const loadOptions = async () => {
     try {
@@ -71,6 +89,7 @@ function RecipeDetailPage() {
   const loadRecipe = async () => {
     setLoading(true);
     setError(null);
+    setShopNotice(null);
     try {
       const res = await getRecipe(id);
       setRecipe(res.data);
@@ -116,8 +135,29 @@ function RecipeDetailPage() {
     }
   };
 
-  const handleDeleteRecipe = async () => {
-    if (!window.confirm(`Delete recipe "${recipe?.name}"?`)) return;
+  const handleAddRecipeToShoppingList = async () => {
+    if (isNew || !id) return;
+    setError(null);
+    setShopNotice(null);
+    setAddingToShoppingList(true);
+    try {
+      const res = await addRecipeToShoppingList(id);
+      const data = res.data || {};
+      setShopNotice({
+        text: buildRecipeShoppingListNoticeText(recipe?.name, data),
+        className: recipeShoppingListNoticeClassName(data),
+      });
+    } catch (err) {
+      setShopNotice(null);
+      setError(err.response?.data?.error || err.message || 'Failed to add recipe to shopping list');
+    } finally {
+      setAddingToShoppingList(false);
+    }
+  };
+
+  const executeDeleteRecipe = async () => {
+    setDeleteConfirmOpen(false);
+    setError(null);
     try {
       await deleteRecipe(id);
       navigate('/recipes');
@@ -127,14 +167,24 @@ function RecipeDetailPage() {
   };
 
   const handleAddIngredient = async (e) => {
-    e.preventDefault();
+    e?.preventDefault?.();
     if (!addIngredientId) return;
     setError(null);
+    const measureIdRaw = String(addIngredientMeasureId ?? '').trim();
+    if (!measureIdRaw) {
+      setError('Select a unit for the ingredient.');
+      return;
+    }
+    const measurementId = Number(measureIdRaw);
+    if (!Number.isFinite(measurementId) || !recipeMeasurementsSorted.some((m) => Number(m.id) === measurementId)) {
+      setError('Select a valid unit for the ingredient.');
+      return;
+    }
     try {
       await addRecipeIngredient(id, {
         ingredient_id: Number(addIngredientId),
         qty: addIngredientQty ? parseFloat(addIngredientQty) : null,
-        measurement_id: addIngredientMeasureId ? Number(addIngredientMeasureId) : null,
+        measurement_id: measurementId,
         comment: addIngredientComment.trim() || null,
         is_optional: addIngredientOptional,
       });
@@ -174,10 +224,21 @@ function RecipeDetailPage() {
   };
 
   const handleSaveEditIngredient = async (ingredientId) => {
+    setError(null);
+    const measureIdRaw = String(editIngredientForm.measurement_id ?? '').trim();
+    if (!measureIdRaw) {
+      setError('Select a unit for the ingredient.');
+      return;
+    }
+    const measurementId = Number(measureIdRaw);
+    if (!Number.isFinite(measurementId) || !recipeMeasurementsSorted.some((m) => Number(m.id) === measurementId)) {
+      setError('Select a valid unit for the ingredient.');
+      return;
+    }
     try {
       await updateRecipeIngredient(id, ingredientId, {
         qty: editIngredientForm.qty ? parseFloat(editIngredientForm.qty) : null,
-        measurement_id: editIngredientForm.measurement_id ? Number(editIngredientForm.measurement_id) : null,
+        measurement_id: measurementId,
         comment: editIngredientForm.comment.trim() || null,
         is_optional: editIngredientForm.is_optional,
       });
@@ -199,7 +260,11 @@ function RecipeDetailPage() {
   };
 
   const formatIngredientLine = (row) => {
-    const name = row.ingredient_details ? `${row.ingredient_name} (${row.ingredient_details})` : row.ingredient_name;
+    const name = itemDisplayName({
+      name: row.ingredient_name,
+      details: row.ingredient_details,
+      shopping_measure: row.shopping_measure,
+    });
     const qty = row.qty != null ? formatRecipeQuantity(row.qty) : '';
     const measure = row.measurement_name || '';
     const part = [qty, measure].filter(Boolean).join(' ');
@@ -209,8 +274,7 @@ function RecipeDetailPage() {
   /** Prefix * when the catalog row has no kcal (nutrition not filled in). */
   const formatCatalogIngredientLabel = (i) => {
     const prefix = i.kcal == null ? '* ' : '';
-    const body = i.details ? `${i.name} (${i.details})` : i.name;
-    return `${prefix}${body}`;
+    return `${prefix}${itemDisplayName(i)}`;
   };
 
   if (loading && !isNew) {
@@ -237,6 +301,12 @@ function RecipeDetailPage() {
       {error && (
         <div className="recipe-detail-error-banner" role="alert">
           {error}
+        </div>
+      )}
+
+      {shopNotice && (
+        <div className={shopNotice.className} role="status">
+          {shopNotice.text}
         </div>
       )}
 
@@ -299,21 +369,61 @@ function RecipeDetailPage() {
               <h1>{recipe.name}</h1>
             <p className="recipe-meta">{recipe.category_names || 'Uncategorized'} · {recipe.servings} servings</p>
               <div className="recipe-detail-actions">
-                <button
-                  type="button"
-                  className="btn btn-secondary"
-                  onClick={() => setEditing(!editing)}
-                >
-                  {editing ? 'Cancel' : 'Edit'}
-                </button>
-                <button type="button" className="btn btn-danger" onClick={handleDeleteRecipe}>
-                  Delete
-                </button>
+                <div className="recipe-detail-actions-primary">
+                  {editing ? (
+                    <>
+                      <button
+                        type="button"
+                        className="btn btn-secondary"
+                        onClick={() => setEditing(false)}
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        type="button"
+                        className="btn btn-primary"
+                        onClick={(e) => handleSaveRecipe(e)}
+                      >
+                        Save
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      <button
+                        type="button"
+                        className="btn btn-secondary"
+                        onClick={() => {
+                          // Defer so this click cannot complete on Save/Cancel after they replace Edit (same slot).
+                          setTimeout(() => setEditing(true), 0);
+                        }}
+                      >
+                        Edit
+                      </button>
+                      <button
+                        type="button"
+                        className="btn btn-danger"
+                        onClick={() => setDeleteConfirmOpen(true)}
+                      >
+                        Delete
+                      </button>
+                    </>
+                  )}
+                </div>
+                {!editing && (
+                  <button
+                    type="button"
+                    className="btn btn-primary recipe-detail-add-to-list"
+                    onClick={handleAddRecipeToShoppingList}
+                    disabled={addingToShoppingList}
+                  >
+                    {addingToShoppingList ? 'Adding…' : 'Add to shopping list'}
+                  </button>
+                )}
               </div>
             </div>
 
             {editing ? (
-              <form onSubmit={handleSaveRecipe} className="recipe-detail-form">
+              <form id="recipe-edit-form" onSubmit={handleSaveRecipe} className="recipe-detail-form">
                 <div className="form-row">
                   <label>Name</label>
                   <input
@@ -368,9 +478,11 @@ function RecipeDetailPage() {
                                 value={editIngredientForm.measurement_id}
                                 onChange={(e) => setEditIngredientForm((f) => ({ ...f, measurement_id: e.target.value }))}
                               >
-                                <option value="">Unit</option>
-                                {measurements.map((m) => (
-                                  <option key={m.id} value={m.id}>{m.name}</option>
+                                <option value="">- Select Unit -</option>
+                                {recipeMeasurementsSorted.map((m) => (
+                                  <option key={m.id} value={m.id}>
+                                    {formatRecipeMeasurementOptionLabel(m)}
+                                  </option>
                                 ))}
                               </select>
                               <input
@@ -388,7 +500,7 @@ function RecipeDetailPage() {
                                 />
                                 Optional
                               </label>
-                              <span className="ingredient-edit-name">{row.ingredient_details ? `${row.ingredient_name} (${row.ingredient_details})` : row.ingredient_name}</span>
+                              <span className="ingredient-edit-name">{itemDisplayName({ name: row.ingredient_name, details: row.ingredient_details, shopping_measure: row.shopping_measure })}</span>
                               <button type="button" className="btn btn-primary btn-sm" onClick={() => handleSaveEditIngredient(row.ingredient_id)}>Save</button>
                               <button type="button" className="btn btn-secondary btn-sm" onClick={cancelEditIngredient}>Cancel</button>
                             </div>
@@ -399,11 +511,6 @@ function RecipeDetailPage() {
                                 {formatIngredientLine(row)}
                                 {row.comment && <span className="ingredient-comment"> — {row.comment}</span>}
                               </span>
-                              {row.shopping_measure && (
-                                <span className="ingredient-shopping-measure" title="Shopping measure for list">
-                                  Buy: {row.shopping_measure}
-                                </span>
-                              )}
                               <button type="button" className="btn-edit-ingredient" onClick={() => startEditIngredient(row)} title="Edit">Edit</button>
                               <button type="button" className="btn-remove-ingredient" onClick={() => handleRemoveIngredient(row.ingredient_id)} title="Remove">×</button>
                             </>
@@ -415,9 +522,16 @@ function RecipeDetailPage() {
                     <p className="recipe-no-ingredients">No ingredients yet.</p>
                   )}
 
-                  <form onSubmit={handleAddIngredient} className="add-ingredient-form">
+                  <div className="add-ingredient-form">
                     <h3>Add ingredient</h3>
-                    <div className="add-ingredient-fields">
+                    <div
+                      className="add-ingredient-fields"
+                      onKeyDown={(ev) => {
+                        if (ev.key !== 'Enter' || ev.target.tagName === 'TEXTAREA') return;
+                        ev.preventDefault();
+                        handleAddIngredient(ev);
+                      }}
+                    >
                       <select
                         value={addIngredientId}
                         onChange={(e) => setAddIngredientId(e.target.value)}
@@ -443,9 +557,11 @@ function RecipeDetailPage() {
                         value={addIngredientMeasureId}
                         onChange={(e) => setAddIngredientMeasureId(e.target.value)}
                       >
-                        <option value="">Unit</option>
-                        {measurements.map((m) => (
-                          <option key={m.id} value={m.id}>{m.name}</option>
+                        <option value="">- Select Unit -</option>
+                        {recipeMeasurementsSorted.map((m) => (
+                          <option key={m.id} value={m.id}>
+                            {formatRecipeMeasurementOptionLabel(m)}
+                          </option>
                         ))}
                       </select>
                       <input
@@ -463,9 +579,11 @@ function RecipeDetailPage() {
                         />
                         Optional
                       </label>
-                      <button type="submit" className="btn btn-primary">Add</button>
+                      <button type="button" className="btn btn-primary" onClick={handleAddIngredient}>
+                        Add
+                      </button>
                     </div>
-                  </form>
+                  </div>
                 </div>
 
                 <div className="form-row instructions-row">
@@ -475,10 +593,6 @@ function RecipeDetailPage() {
                     onChange={(e) => setForm((f) => ({ ...f, instructions: e.target.value }))}
                     rows={6}
                   />
-                </div>
-
-                <div className="form-actions">
-                  <button type="submit" className="btn btn-primary">Save</button>
                 </div>
               </form>
             ) : (
@@ -494,11 +608,6 @@ function RecipeDetailPage() {
                             {formatIngredientLine(row)}
                             {row.comment && <span className="ingredient-comment"> — {row.comment}</span>}
                           </span>
-                          {row.shopping_measure && (
-                            <span className="ingredient-shopping-measure" title="Shopping measure for list">
-                              Buy: {row.shopping_measure}
-                            </span>
-                          )}
                         </li>
                       ))}
                     </ul>
@@ -518,6 +627,33 @@ function RecipeDetailPage() {
           </>
         )}
       </section>
+
+      {!isNew && deleteConfirmOpen && recipe && (
+        <div
+          className="recipe-delete-overlay"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="recipe-delete-title"
+          onClick={() => setDeleteConfirmOpen(false)}
+        >
+          <div className="recipe-delete-modal" onClick={(e) => e.stopPropagation()}>
+            <h2 id="recipe-delete-title" className="recipe-delete-title">
+              Delete recipe?
+            </h2>
+            <p className="recipe-delete-body">
+              Delete &quot;{recipe.name}&quot;? This cannot be undone.
+            </p>
+            <div className="recipe-delete-actions">
+              <button type="button" className="btn btn-secondary" onClick={() => setDeleteConfirmOpen(false)}>
+                Cancel
+              </button>
+              <button type="button" className="btn btn-danger" onClick={executeDeleteRecipe}>
+                Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

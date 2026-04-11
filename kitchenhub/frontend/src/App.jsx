@@ -21,8 +21,8 @@ function App() {
   const navLinks = (
     <>
       <Link to="/" className="nav-link" onClick={closeNav}>Home</Link>
-      <Link to="/shopping" className="nav-link" onClick={closeNav}>In-Store</Link>
-      <Link to="/list" className="nav-link" onClick={closeNav}>Shopping List</Link>
+      <Link to="/shopping" className="nav-link" onClick={closeNav}>Shopping List</Link>
+      <Link to="/list" className="nav-link" onClick={closeNav}>Items</Link>
       <Link to="/recipes" className="nav-link" onClick={closeNav}>Recipes</Link>
       <Link to="/stores" className="nav-link" onClick={closeNav}>Stores</Link>
     </>

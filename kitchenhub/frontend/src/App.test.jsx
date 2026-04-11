@@ -40,8 +40,8 @@ describe('App', () => {
     );
     expect(screen.getByText('KitchenHub')).toBeInTheDocument();
     expect(screen.getByText('Home')).toBeInTheDocument();
-    expect(screen.getByText('In-Store')).toBeInTheDocument();
-    expect(screen.getByText('Shopping List')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /^Shopping List$/ })).toHaveAttribute('href', '/shopping');
+    expect(screen.getByRole('link', { name: /^Items$/ })).toHaveAttribute('href', '/list');
     expect(screen.getByText('Stores')).toBeInTheDocument();
   });
 
@@ -71,7 +71,8 @@ describe('App', () => {
         <App />
       </MemoryRouter>
     );
-    expect(await screen.findByRole('button', { name: /all items/i })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Items' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /new item/i })).toBeInTheDocument();
   });
 
   it('renders StorePage at /stores', async () => {

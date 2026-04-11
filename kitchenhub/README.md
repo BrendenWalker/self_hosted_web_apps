@@ -4,8 +4,8 @@ A modern, dockerized web application for managing shopping lists with store layo
 
 ## Features
 
-- **Shopping Page**: View shopping list organized by store layout/zones, mark items as purchased
-- **Shopping List Management**: Add/remove items, manage quantities
+- **Items**: Browse and manage your item catalog; add items to your shopping list
+- **Shopping List**: View your current list in-store, organized by store layout/zones; mark items as purchased
 - **Recipes**: Browse recipes by category, view ingredients (quantity, measurement, optional flag, comments), and see each ingredient’s shopping measure for future list building
 - **Store Management**: Create stores and configure store zones (layout) for organizing shopping lists
 
@@ -191,8 +191,8 @@ CI runs these tests on pull requests when `kitchenhub/**` changes.
 
 ### Recipes
 - `GET /api/recipe-categories` - Get all recipe categories
-- `GET /api/ingredient-measurements` - Get measurement units (tbsp, cup, etc.)
-- `GET /api/ingredients` - Get ingredients catalog (includes shopping_measure for future list building)
+- `GET /api/measurements` - Get measurement units (tbsp, cup, **Each**, **Shopping Unit**, etc.). `GET /api/ingredient-measurements` is an alias.
+- `GET /api/ingredients` - Get ingredients catalog (includes shopping fields: `shopping_measure`, `ingredient_unit_grams`, `count_per_pack`, `shopping_measure_grams`)
 - `GET /api/recipes` - Get all recipes (optional query: `?category_id=`)
 - `GET /api/recipes/:id` - Get recipe with ingredients (each has quantity, measurement, comment, is_optional, shopping_measure)
 - `POST /api/recipes` - Create recipe
@@ -206,8 +206,12 @@ CI runs these tests on pull requests when `kitchenhub/**` changes.
 
 1. **Set up Stores**: Go to the Stores page and create stores
 2. **Configure Store Layout**: For each store, add zones that map departments to physical locations in the store
-3. **Add Items**: Use the Shopping List page to add items to your list
-4. **Shop**: Use the Shopping page to view your list organized by store layout
+3. **Add Items**: Use the Items page to manage the catalog and add items to your list
+4. **Shop**: Use the Shopping List page to view your list organized by store layout
+
+## Database migrations
+
+Apply SQL files under `kitchenhub/database/migrations/` in order on existing databases (for example `013-measurements-rename-and-items-pack.sql` renames `common.ingredient_measurements` to `common.measurements` and adds pack-related columns on `items`). Fresh installs from `kitchenhub/database/schema.sql` already include those changes.
 
 ## Notes
 
@@ -218,7 +222,7 @@ CI runs these tests on pull requests when `kitchenhub/**` changes.
 
 ## Future Enhancements
 
-- **Add recipe ingredients to shopping list**: Use each ingredient’s `shopping_measure` (e.g. “quart container”) when adding required ingredients to the list
+- **Recipe row preview** (optional): show estimated shopping units on the recipe detail page; `POST /api/recipes/:id/shopping-list` already adds lines using **Each**, **Shopping Unit**, and standard units
 - **Meal Planning**: Plan meals and automatically generate shopping lists (mealplanner schema exists)
 - User authentication and multi-user support
 - Shopping history and analytics

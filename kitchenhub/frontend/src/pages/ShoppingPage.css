@@ -158,6 +158,11 @@
   white-space: nowrap;
 }
 
+.item-quantity-total {
+  font-weight: 500;
+  color: #5d6d7e;
+}
+
 .purchased-section {
   margin-top: 2rem;
   background: white;
