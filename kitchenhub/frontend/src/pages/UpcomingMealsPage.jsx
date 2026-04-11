@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Link, NavLink } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import { getRecipes } from '../api/api';
 import './RecipesPage.css';
 import './UpcomingMealsPage.css';
@@ -46,17 +46,6 @@ function UpcomingMealsPage() {
     <div className="recipes-page upcoming-meals-page page-scroll">
       <header className="recipes-header">
         <h1>Upcoming meals</h1>
-        <nav className="recipes-subnav" aria-label="Recipes section">
-          <NavLink to="/recipes" end className={({ isActive }) => (isActive ? 'recipes-subnav-link active' : 'recipes-subnav-link')}>
-            Recipes
-          </NavLink>
-          <NavLink to="/recipes/upcoming" className={({ isActive }) => (isActive ? 'recipes-subnav-link active' : 'recipes-subnav-link')}>
-            Upcoming
-          </NavLink>
-          <NavLink to="/recipes/ingredients" className={({ isActive }) => (isActive ? 'recipes-subnav-link active' : 'recipes-subnav-link')}>
-            Ingredients
-          </NavLink>
-        </nav>
         <p className="recipes-subtitle">
           Recipes you queued by adding them to the shopping list. Open one for ingredients and instructions, then mark as prepared when done.
         </p>

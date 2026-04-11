@@ -84,9 +84,6 @@ function RecipesPage() {
           <NavLink to="/recipes" end className={({ isActive }) => isActive ? 'recipes-subnav-link active' : 'recipes-subnav-link'}>
             Recipes
           </NavLink>
-          <NavLink to="/recipes/upcoming" className={({ isActive }) => isActive ? 'recipes-subnav-link active' : 'recipes-subnav-link'}>
-            Upcoming
-          </NavLink>
           <NavLink to="/recipes/ingredients" className={({ isActive }) => isActive ? 'recipes-subnav-link active' : 'recipes-subnav-link'}>
             Ingredients
           </NavLink>
