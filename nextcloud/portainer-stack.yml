@@ -1,0 +1,55 @@
+# Portainer / Swarm: build the image first (see README), push or load on nodes, then deploy.
+# Set stack environment variables in Portainer to match env.example (paths are host-specific).
+
+version: '3.8'
+
+services:
+  nextcloud:
+    image: ${NEXTCLOUD_IMAGE_NAME:-nextcloud:33-apache-smb}
+    container_name: nextcloud
+    restart: unless-stopped
+    networks:
+      - web
+    volumes:
+      - ${NEXTCLOUD_HTML_HOST_PATH:-/home/nextcloud/html}:/var/www/html
+      - ${NEXTCLOUD_DATA_HOST_PATH:-/home/nextcloud/data}:/var/www/html/data
+      - ${NEXTCLOUD_CONFIG_HOST_PATH:-/home/nextcloud/config}:/var/www/html/config
+    environment:
+      POSTGRES_HOST: ${POSTGRES_HOST}
+      POSTGRES_DB: ${POSTGRES_DB:-nextcloud}
+      POSTGRES_USER: ${POSTGRES_USER:-nextcloud}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      NEXTCLOUD_TRUSTED_DOMAINS: ${NEXTCLOUD_TRUSTED_DOMAINS}
+      NEXTCLOUD_DATA_DIR: ${NEXTCLOUD_DATA_DIR:-/var/www/html/data}
+      PHP_MEMORY_LIMIT: ${PHP_MEMORY_LIMIT:-1024M}
+    ports:
+      - "${NEXTCLOUD_HTTP_PORT:-8090}:80"
+
+  nextcloud-cron:
+    image: ${NEXTCLOUD_IMAGE_NAME:-nextcloud:33-apache-smb}
+    container_name: nextcloud-cron
+    restart: unless-stopped
+    volumes:
+      - ${NEXTCLOUD_HTML_HOST_PATH:-/home/nextcloud/html}:/var/www/html
+      - ${NEXTCLOUD_DATA_HOST_PATH:-/home/nextcloud/data}:/var/www/html/data
+      - ${NEXTCLOUD_CONFIG_HOST_PATH:-/home/nextcloud/config}:/var/www/html/config
+    entrypoint: ["/cron.sh"]
+    networks:
+      - web
+    depends_on:
+      - nextcloud
+    environment:
+      PHP_MEMORY_LIMIT: ${PHP_MEMORY_LIMIT:-1024M}
+
+  redis:
+    image: redis:7-alpine
+    container_name: nextcloud-redis
+    restart: unless-stopped
+    volumes:
+      - ${REDIS_DATA_HOST_PATH:-/home/nextcloud/redis}:/data
+    networks:
+      - web
+
+networks:
+  web:
+    external: true

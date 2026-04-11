@@ -1,0 +1,60 @@
+version: '3.8'
+
+services:
+  nextcloud:
+    build:
+      context: ./docker
+      dockerfile: Dockerfile
+    image: ${NEXTCLOUD_IMAGE_NAME:-nextcloud:33-apache-smb}
+    container_name: nextcloud
+    restart: unless-stopped
+    ports:
+      - "${NEXTCLOUD_HTTP_PORT:-8120}:80"
+    env_file:
+      - .env
+    environment:
+      POSTGRES_HOST: ${POSTGRES_HOST}
+      POSTGRES_DB: ${POSTGRES_DB:-nextcloud}
+      POSTGRES_USER: ${POSTGRES_USER:-nextcloud}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      NEXTCLOUD_TRUSTED_DOMAINS: ${NEXTCLOUD_TRUSTED_DOMAINS}
+      NEXTCLOUD_DATA_DIR: ${NEXTCLOUD_DATA_DIR:-/var/www/html/data}
+      PHP_MEMORY_LIMIT: ${PHP_MEMORY_LIMIT:-1024M}
+    volumes:
+      - ${NEXTCLOUD_HTML_HOST_PATH:-./volumes/html}:/var/www/html
+      - ${NEXTCLOUD_DATA_HOST_PATH:-./volumes/data}:/var/www/html/data
+      - ${NEXTCLOUD_CONFIG_HOST_PATH:-./volumes/config}:/var/www/html/config
+    networks:
+      - nextcloud-network
+
+  nextcloud-cron:
+    image: ${NEXTCLOUD_IMAGE_NAME:-nextcloud:33-apache-smb}
+    container_name: nextcloud-cron
+    restart: unless-stopped
+    # Use image /cron.sh (busybox crond) so cron.php runs as www-data — root loops break background jobs (e.g. calendar reminders).
+    entrypoint: ["/cron.sh"]
+    env_file:
+      - .env
+    environment:
+      PHP_MEMORY_LIMIT: ${PHP_MEMORY_LIMIT:-1024M}
+    volumes:
+      - ${NEXTCLOUD_HTML_HOST_PATH:-./volumes/html}:/var/www/html
+      - ${NEXTCLOUD_DATA_HOST_PATH:-./volumes/data}:/var/www/html/data
+      - ${NEXTCLOUD_CONFIG_HOST_PATH:-./volumes/config}:/var/www/html/config
+    networks:
+      - nextcloud-network
+    depends_on:
+      - nextcloud
+
+  redis:
+    image: redis:7-alpine
+    container_name: nextcloud-redis
+    restart: unless-stopped
+    volumes:
+      - ${REDIS_DATA_HOST_PATH:-./volumes/redis}:/data
+    networks:
+      - nextcloud-network
+
+networks:
+  nextcloud-network:
+    driver: bridge
