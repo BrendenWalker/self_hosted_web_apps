@@ -84,6 +84,9 @@ function RecipesPage() {
           <NavLink to="/recipes" end className={({ isActive }) => isActive ? 'recipes-subnav-link active' : 'recipes-subnav-link'}>
             Recipes
           </NavLink>
+          <NavLink to="/recipes/upcoming" className={({ isActive }) => isActive ? 'recipes-subnav-link active' : 'recipes-subnav-link'}>
+            Upcoming
+          </NavLink>
           <NavLink to="/recipes/ingredients" className={({ isActive }) => isActive ? 'recipes-subnav-link active' : 'recipes-subnav-link'}>
             Ingredients
           </NavLink>
@@ -142,7 +145,10 @@ function RecipesPage() {
             <li key={r.id} className="recipe-list-item">
               <div className="recipe-card-wrap">
                 <Link to={`/recipes/${r.id}`} className="recipe-card">
-                  <span className="recipe-card-name">{r.name}</span>
+                  <span className="recipe-card-name">
+                    {r.name}
+                    {r.planned_at ? <span className="recipe-planned-badge" title="On upcoming meals list">Upcoming</span> : null}
+                  </span>
                   <span className="recipe-card-meta">{r.category_names || 'Uncategorized'} · {r.servings} servings</span>
                 </Link>
                 <button

@@ -77,8 +77,16 @@
   flex-wrap: wrap;
 }
 
-.recipe-detail-add-to-list {
+.recipe-detail-shop-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
   margin-left: auto;
+}
+
+.recipe-detail-add-to-list {
+  margin-left: 0;
 }
 
 .recipe-detail-form .form-row {

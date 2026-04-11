@@ -82,13 +82,21 @@ export const updateIngredient = (id, data) => api.put(`/ingredients/${id}`, data
 export const deleteIngredient = (id) => api.delete(`/ingredients/${id}`);
 
 // Recipes
-export const getRecipes = (categoryId) =>
-  api.get('/recipes', categoryId != null ? { params: { category_id: categoryId } } : undefined);
+/** @param {number|string|undefined} categoryId @param {{ planned?: boolean }} [opts] */
+export const getRecipes = (categoryId, opts) => {
+  const params = {};
+  if (categoryId != null && categoryId !== '') params.category_id = categoryId;
+  if (opts?.planned) params.planned = '1';
+  const hasParams = Object.keys(params).length > 0;
+  return api.get('/recipes', hasParams ? { params } : undefined);
+};
 export const getRecipe = (id) => api.get(`/recipes/${id}`);
 /** Add recipe to shopping list: resolves grams per line (Each, Shopping Unit, or measurement to_grams). */
 export const addRecipeToShoppingList = (recipeId) => api.post(`/recipes/${recipeId}/shopping-list`);
 export const createRecipe = (data) => api.post('/recipes', data);
 export const updateRecipe = (id, data) => api.put(`/recipes/${id}`, data);
+export const patchRecipePlanned = (id, planned) =>
+  api.patch(`/recipes/${id}/planned`, { planned: Boolean(planned) });
 export const deleteRecipe = (id) => api.delete(`/recipes/${id}`);
 
 // Recipe ingredients

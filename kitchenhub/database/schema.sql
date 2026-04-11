@@ -76,9 +76,12 @@ CREATE TABLE IF NOT EXISTS recipe.recipe (
     name VARCHAR(80) NOT NULL UNIQUE,
     servings INTEGER NOT NULL,
     instructions TEXT,
-    image BYTEA
+    image BYTEA,
+    planned_at TIMESTAMPTZ NULL
 );
 CREATE INDEX IF NOT EXISTS idx_recipe_name ON recipe.recipe(name);
+CREATE INDEX IF NOT EXISTS idx_recipe_planned_at ON recipe.recipe (planned_at)
+  WHERE planned_at IS NOT NULL;
 
 CREATE TABLE IF NOT EXISTS recipe.recipe_category_members (
     recipe_id INTEGER NOT NULL REFERENCES recipe.recipe(id) ON DELETE CASCADE,
