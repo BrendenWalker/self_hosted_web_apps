@@ -12,6 +12,7 @@ import {
   updateRecipeIngredient,
   removeRecipeIngredient,
   addRecipeToShoppingList,
+  patchRecipePlanned,
 } from '../api/api';
 import { formatRecipeQuantity } from '../utils/recipeQuantity';
 import {
@@ -47,6 +48,7 @@ function RecipeDetailPage() {
   const [editIngredientForm, setEditIngredientForm] = useState({ qty: '', measurement_id: '', comment: '', is_optional: false });
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [addingToShoppingList, setAddingToShoppingList] = useState(false);
+  const [markingPrepared, setMarkingPrepared] = useState(false);
   const [shopNotice, setShopNotice] = useState(null); // { text, className }
 
   useEffect(() => {
@@ -147,11 +149,26 @@ function RecipeDetailPage() {
         text: buildRecipeShoppingListNoticeText(recipe?.name, data),
         className: recipeShoppingListNoticeClassName(data),
       });
+      await loadRecipe();
     } catch (err) {
       setShopNotice(null);
       setError(err.response?.data?.error || err.message || 'Failed to add recipe to shopping list');
     } finally {
       setAddingToShoppingList(false);
+    }
+  };
+
+  const handleMarkPrepared = async () => {
+    if (isNew || !id) return;
+    setError(null);
+    setMarkingPrepared(true);
+    try {
+      await patchRecipePlanned(id, false);
+      await loadRecipe();
+    } catch (err) {
+      setError(err.response?.data?.error || err.message || 'Failed to mark recipe as prepared');
+    } finally {
+      setMarkingPrepared(false);
     }
   };
 
@@ -263,7 +280,6 @@ function RecipeDetailPage() {
     const name = itemDisplayName({
       name: row.ingredient_name,
       details: row.ingredient_details,
-      shopping_measure: row.shopping_measure,
     });
     const qty = row.qty != null ? formatRecipeQuantity(row.qty) : '';
     const measure = row.measurement_name || '';
@@ -410,14 +426,30 @@ function RecipeDetailPage() {
                   )}
                 </div>
                 {!editing && (
-                  <button
-                    type="button"
-                    className="btn btn-primary recipe-detail-add-to-list"
-                    onClick={handleAddRecipeToShoppingList}
-                    disabled={addingToShoppingList}
-                  >
-                    {addingToShoppingList ? 'Adding…' : 'Add to shopping list'}
-                  </button>
+                  <div className="recipe-detail-shop-actions">
+                    {recipe.planned_at && (
+                      <button
+                        type="button"
+                        className="btn btn-primary"
+                        onClick={handleMarkPrepared}
+                        disabled={markingPrepared}
+                      >
+                        {markingPrepared ? 'Updating…' : 'Prepared'}
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      className={
+                        recipe.planned_at
+                          ? 'btn btn-secondary recipe-detail-add-to-list'
+                          : 'btn btn-primary recipe-detail-add-to-list'
+                      }
+                      onClick={handleAddRecipeToShoppingList}
+                      disabled={addingToShoppingList}
+                    >
+                      {addingToShoppingList ? 'Adding…' : 'Add to shopping list'}
+                    </button>
+                  </div>
                 )}
               </div>
             </div>
@@ -500,7 +532,7 @@ function RecipeDetailPage() {
                                 />
                                 Optional
                               </label>
-                              <span className="ingredient-edit-name">{itemDisplayName({ name: row.ingredient_name, details: row.ingredient_details, shopping_measure: row.shopping_measure })}</span>
+                              <span className="ingredient-edit-name">{itemDisplayName({ name: row.ingredient_name, details: row.ingredient_details })}</span>
                               <button type="button" className="btn btn-primary btn-sm" onClick={() => handleSaveEditIngredient(row.ingredient_id)}>Save</button>
                               <button type="button" className="btn btn-secondary btn-sm" onClick={cancelEditIngredient}>Cancel</button>
                             </div>

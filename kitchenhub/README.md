@@ -193,11 +193,13 @@ CI runs these tests on pull requests when `kitchenhub/**` changes.
 - `GET /api/recipe-categories` - Get all recipe categories
 - `GET /api/measurements` - Get measurement units (tbsp, cup, **Each**, **Shopping Unit**, etc.). `GET /api/ingredient-measurements` is an alias.
 - `GET /api/ingredients` - Get ingredients catalog (includes shopping fields: `shopping_measure`, `ingredient_unit_grams`, `count_per_pack`, `shopping_measure_grams`)
-- `GET /api/recipes` - Get all recipes (optional query: `?category_id=`)
-- `GET /api/recipes/:id` - Get recipe with ingredients (each has quantity, measurement, comment, is_optional, shopping_measure)
+- `GET /api/recipes` - Get all recipes (optional query: `?category_id=`, `?planned=1` for upcoming / meal queue, ordered by `planned_at`)
+- `GET /api/recipes/:id` - Get recipe with ingredients (each has quantity, measurement, comment, is_optional, shopping_measure); includes `planned_at` when set
+- `PATCH /api/recipes/:id/planned` - Set `{ "planned": true }` or `{ "planned": false }` (clears `planned_at`)
 - `POST /api/recipes` - Create recipe
 - `PUT /api/recipes/:id` - Update recipe
 - `DELETE /api/recipes/:id` - Delete recipe
+- `POST /api/recipes/:id/shopping-list` - Add non-optional recipe lines to shopping list (updates `items.qty`) and sets `planned_at` on the recipe
 - `POST /api/recipes/:id/ingredients` - Add ingredient to recipe
 - `PUT /api/recipes/:id/ingredients/:ingredientId` - Update recipe ingredient
 - `DELETE /api/recipes/:id/ingredients/:ingredientId` - Remove ingredient from recipe
@@ -211,7 +213,7 @@ CI runs these tests on pull requests when `kitchenhub/**` changes.
 
 ## Database migrations
 
-Apply SQL files under `kitchenhub/database/migrations/` in order on existing databases (for example `013-measurements-rename-and-items-pack.sql` renames `common.ingredient_measurements` to `common.measurements` and adds pack-related columns on `items`). Fresh installs from `kitchenhub/database/schema.sql` already include those changes.
+Apply SQL files under `kitchenhub/database/migrations/` in order on existing databases (for example `013-measurements-rename-and-items-pack.sql` renames `common.ingredient_measurements` to `common.measurements` and adds pack-related columns on `items`; `014-recipe-planned-at.sql` adds `recipe.recipe.planned_at` for upcoming meals). Fresh installs from `kitchenhub/database/schema.sql` already include those changes.
 
 ## Notes
 

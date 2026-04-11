@@ -1143,9 +1143,13 @@ app.delete('/api/ingredients/:id', async (req, res) => {
 
 app.get('/api/recipes', async (req, res) => {
   try {
-    const { category_id } = req.query;
+    const { category_id, planned } = req.query;
+    const plannedOnly =
+      planned === '1' ||
+      planned === 'true' ||
+      String(planned).toLowerCase() === 'yes';
     let query = `
-      SELECT r.id, r.name, r.servings, r.instructions,
+      SELECT r.id, r.name, r.servings, r.instructions, r.planned_at,
              (SELECT string_agg(c.name, ', ' ORDER BY c.name)
               FROM recipe.recipe_category_members m
               JOIN recipe.recipe_category c ON c.id = m.category_id
@@ -1153,11 +1157,20 @@ app.get('/api/recipes', async (req, res) => {
       FROM recipe.recipe r
     `;
     const params = [];
+    const where = [];
     if (category_id != null && category_id !== '') {
       params.push(category_id);
-      query += ` WHERE EXISTS (SELECT 1 FROM recipe.recipe_category_members m WHERE m.recipe_id = r.id AND m.category_id = $${params.length})`;
+      where.push(
+        `EXISTS (SELECT 1 FROM recipe.recipe_category_members m WHERE m.recipe_id = r.id AND m.category_id = $${params.length})`
+      );
     }
-    query += ' ORDER BY r.name';
+    if (plannedOnly) {
+      where.push('r.planned_at IS NOT NULL');
+    }
+    if (where.length > 0) {
+      query += ` WHERE ${where.join(' AND ')}`;
+    }
+    query += plannedOnly ? ' ORDER BY r.planned_at ASC NULLS LAST, r.name' : ' ORDER BY r.name';
     const result = await pool.query(query, params);
     res.json(result.rows);
   } catch (error) {
@@ -1169,7 +1182,7 @@ app.get('/api/recipes', async (req, res) => {
 app.get('/api/recipes/:id', async (req, res) => {
   try {
     const recipeResult = await pool.query(
-      `SELECT r.id, r.name, r.servings, r.instructions
+      `SELECT r.id, r.name, r.servings, r.instructions, r.planned_at
        FROM recipe.recipe r
        WHERE r.id = $1`,
       [req.params.id]
@@ -1205,6 +1218,33 @@ app.get('/api/recipes/:id', async (req, res) => {
   } catch (error) {
     console.error('Error fetching recipe:', error);
     res.status(500).json({ error: 'Failed to fetch recipe' });
+  }
+});
+
+app.patch('/api/recipes/:id/planned', async (req, res) => {
+  try {
+    const recipeId = parseInt(req.params.id, 10);
+    if (Number.isNaN(recipeId) || recipeId < 1) {
+      return res.status(400).json({ error: 'Invalid recipe id' });
+    }
+    const { planned } = req.body;
+    if (planned !== true && planned !== false) {
+      return res.status(400).json({ error: 'planned must be true or false' });
+    }
+    const result = await pool.query(
+      `UPDATE recipe.recipe
+       SET planned_at = CASE WHEN $1::boolean THEN now() ELSE NULL END
+       WHERE id = $2
+       RETURNING id, name, servings, instructions, planned_at`,
+      [planned, recipeId]
+    );
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Recipe not found' });
+    }
+    res.json(result.rows[0]);
+  } catch (error) {
+    console.error('Error updating recipe planned:', error);
+    res.status(500).json({ error: 'Failed to update recipe planned state' });
   }
 });
 
@@ -1299,6 +1339,7 @@ app.post('/api/recipes/:id/shopping-list', async (req, res) => {
         qty_after: upd.rows[0].qty,
       });
     }
+    await client.query(`UPDATE recipe.recipe SET planned_at = now() WHERE id = $1`, [recipeId]);
     await client.query('COMMIT');
     res.status(201).json({ added, skipped });
   } catch (error) {

@@ -198,6 +198,21 @@
 .recipe-card-name {
   font-weight: 600;
   font-size: 1.05rem;
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.recipe-planned-badge {
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: #2980b9;
+  background: #e8f4fc;
+  padding: 0.15rem 0.45rem;
+  border-radius: 4px;
 }
 
 .recipe-card-meta {
