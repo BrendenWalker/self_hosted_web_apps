@@ -1,6 +1,6 @@
 # Recipe database import guide
 
-Use this guide to turn a recipe in plain text into SQL that inserts into the KitchenHub PostgreSQL database. Recipe ingredients are stored as rows in `public.items`; units are rows in `common.ingredient_measurements`. The junction table `recipe.recipe_ingredients` uses the column name `ingredient_id` to reference `public.items(id)`.
+Use this guide to turn a recipe in plain text into SQL that inserts into the KitchenHub PostgreSQL database. Recipe ingredients are stored as rows in `public.items`; units are rows in `common.measurements`. The junction table `recipe.recipe_ingredients` uses the column name `ingredient_id` to reference `public.items(id)`.
 
 ## 1. Relevant tables
 
@@ -35,22 +35,25 @@ ON CONFLICT (name) DO NOTHING;
 
 Optional `details` (`VARCHAR(255)`) can hold a stable product note (e.g. preparation form) when it should appear on the item row; recipe-specific prep often belongs in `recipe.recipe_ingredients.comment` instead (see §6).
 
-### `common.ingredient_measurements`
+### `common.measurements`
 
 Units for recipe lines (teaspoon, cup, `each`, etc.). The `name` column is matched in SQL **exactly** (PostgreSQL string comparison is case-sensitive). Before inserting new units, query what you already have so imports stay consistent:
 
 ```sql
-SELECT name FROM common.ingredient_measurements ORDER BY name;
+SELECT name FROM common.measurements ORDER BY name;
 ```
 
 When you must add a row, supply `to_grams` when you know a sensible conversion for shopping or nutrition; otherwise `NULL` is fine for count-only units (e.g. cloves, each).
 
 ```sql
-INSERT INTO common.ingredient_measurements (name, to_grams) VALUES
+INSERT INTO common.measurements (name, to_grams) VALUES
 ('Teaspoon', 5.00),
 ('cloves', NULL)
 ON CONFLICT (name) DO NOTHING;
 ```
+
+Reserved measurement names **`Each`** and **`Shopping Unit`** (usually inserted by migration) have `to_grams` NULL. For those, the app uses per-item fields: `items.ingredient_unit_grams` (one “each”) and `items.shopping_measure_grams` (one purchase unit). If both `ingredient_unit_grams` and `count_per_pack` are set, `shopping_measure_grams` is stored as their product when saving the item.
+
 
 ### `recipe.recipe_ingredients`
 
@@ -61,15 +64,15 @@ Links a recipe to items and amounts. Primary key is `(recipe_id, ingredient_id)`
 | `recipe_id`      | Use `currval('recipe.recipe_id_seq')` after the preceding `recipe.recipe` insert |
 | `ingredient_id`  | `public.items.id` |
 | `qty`            | Numeric amount |
-| `measurement_id` | From `common.ingredient_measurements` via join on `name` |
+| `measurement_id` | From `common.measurements` via join on `name` |
 | `comment`        | Optional; omit to default |
 | `is_optional`    | Optional; defaults to `false` |
 
-Foreign keys: `ingredient_id` → `public.items(id)`; `measurement_id` → `common.ingredient_measurements(id)`.
+Foreign keys: `ingredient_id` → `public.items(id)`; `measurement_id` → `common.measurements(id)`.
 
 ## 2. Mapping recipe text to measurement names
 
-Recipes use abbreviations and mixed casing. Your `VALUES` list must use the **exact** `common.ingredient_measurements.name` string you will join on — either an existing row or a new one you insert first.
+Recipes use abbreviations and mixed casing. Your `VALUES` list must use the **exact** `common.measurements.name` string you will join on — either an existing row or a new one you insert first.
 
 **Preferred canonical names** (use these when adding new measurements so imports stay uniform):
 
@@ -96,7 +99,7 @@ Recipes use abbreviations and mixed casing. Your `VALUES` list must use the **ex
 | rib, ribs | `ribs` |
 | large, medium, small (e.g. “1 large egg”) | Often modeled as `each` with qty `1`, or a descriptive name like `large` if you add that unit |
 
-If your database already uses different spellings (for example `tsp` and `Teaspoon` both exist), pick **one** row per real unit and use that name in imports; do not rely on abbreviations in SQL unless that exact string exists in `common.ingredient_measurements`.
+If your database already uses different spellings (for example `tsp` and `Teaspoon` both exist), pick **one** row per real unit and use that name in imports; do not rely on abbreviations in SQL unless that exact string exists in `common.measurements`.
 
 ## 3. Import workflow
 
@@ -108,7 +111,7 @@ If your database already uses different spellings (for example `tsp` and `Teaspo
 
 ### Ingredient rows pattern
 
-Use a `VALUES` list with columns `(qty_val, measurement_name, item_name)` and optional **`comment_text`**, alias it, and join to `items` and `common.ingredient_measurements` on names:
+Use a `VALUES` list with columns `(qty_val, measurement_name, item_name)` and optional **`comment_text`**, alias it, and join to `items` and `common.measurements` on names:
 
 ```sql
 INSERT INTO recipe.recipe_ingredients (recipe_id, ingredient_id, qty, measurement_id, comment)
@@ -125,7 +128,7 @@ FROM (
     (3.00, 'Teaspoon', 'Garlic', 'minced')
 ) AS recipe_data(qty_val, measurement_name, item_name, comment_text)
 JOIN public.items items ON items.name = recipe_data.item_name
-JOIN common.ingredient_measurements measurements ON measurements.name = recipe_data.measurement_name;
+JOIN common.measurements measurements ON measurements.name = recipe_data.measurement_name;
 ```
 
 Omit the `comment` column from the `INSERT` list if you are not using comments; the minimal **three-column** `VALUES` pattern in §4 remains valid.
@@ -134,7 +137,7 @@ Omit the `comment` column from the `INSERT` list if you are not using comments; 
 
 ```sql
 -- Measurements not already present (names unique)
-INSERT INTO common.ingredient_measurements (name, to_grams) VALUES
+INSERT INTO common.measurements (name, to_grams) VALUES
 ('Cup', NULL),
 ('each', NULL)
 ON CONFLICT (name) DO NOTHING;
@@ -158,14 +161,14 @@ FROM (
     (2.00, 'each', 'Eggs')
 ) AS recipe_data(qty_val, measurement_name, item_name)
 JOIN public.items items ON items.name = recipe_data.item_name
-JOIN common.ingredient_measurements measurements ON measurements.name = recipe_data.measurement_name;
+JOIN common.measurements measurements ON measurements.name = recipe_data.measurement_name;
 ```
 
 ## 5. Checklist from text recipe → SQL
 
 1. Parse **servings** as an integer (use a placeholder if the text only says “serves a crowd”).
 2. Normalize **ingredient names** to match `public.items.name` exactly (including punctuation and spacing).
-3. Normalize **units** using the mapping table and `SELECT name FROM common.ingredient_measurements`; insert missing units with consistent names.
+3. Normalize **units** using the mapping table and `SELECT name FROM common.measurements`; insert missing units with consistent names.
 4. Build the **`VALUES` list**: `(qty, 'measurement_name', 'item_name')` — quantity is numeric; strings must match catalog rows exactly.
 5. Ensure **no duplicate `item_name`** in the list for one recipe, or merge rows.
 6. Run **recipe insert**, then **recipe_ingredients insert** in order (same connection/session so `currval` refers to the new recipe).
@@ -214,7 +217,7 @@ node kitchenhub/RecipeImportTooling/scripts/generate-text-recipes-sql.mjs
 
 ### 6.3 Measurements to add beyond §2
 
-Batch imports may introduce units such as **`Quart`**, **`Gram`**, **`Milliliter`**, **`Liter`**, **`Fluid Ounce`**, **`sprig`** — add them to `common.ingredient_measurements` with the same `ON CONFLICT` pattern as other units.
+Batch imports may introduce units such as **`Quart`**, **`Gram`**, **`Milliliter`**, **`Liter`**, **`Fluid Ounce`**, **`sprig`** — add them to `common.measurements` with the same `ON CONFLICT` pattern as other units.
 
 ### 6.4 What the generator outputs
 

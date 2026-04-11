@@ -21,6 +21,49 @@ const pool = createDbPool({
 // Test database connection (non-blocking, doesn't affect readiness)
 testConnection(pool);
 
+function parseItemNumber(value) {
+  if (value == null || value === '') return null;
+  const n = typeof value === 'string' ? parseFloat(value) : Number(value);
+  if (Number.isNaN(n)) return null;
+  return n;
+}
+function parseItemInt(value) {
+  if (value == null || value === '') return null;
+  const n = typeof value === 'string' ? parseInt(value, 10) : Number(value);
+  if (Number.isNaN(n)) return null;
+  return n;
+}
+
+const PACK1_GRAMS_EPS = 1e-6;
+
+/** When count per pack is 1, ingredient grams and shopping measure grams must match if either is set. */
+function validateCountPerPackOneGramsRule(ingredient_unit_grams, count_per_pack, shopping_measure_grams) {
+  const cpp = parseItemInt(count_per_pack);
+  if (cpp !== 1) return null;
+  const iug = parseItemNumber(ingredient_unit_grams);
+  const smg = parseItemNumber(shopping_measure_grams);
+  const hasI = iug != null && Number.isFinite(iug);
+  const hasS = smg != null && Number.isFinite(smg);
+  if (!hasI && !hasS) return null;
+  if (!hasI || !hasS) {
+    return 'When count per pack is 1, ingredient unit (grams) and grams in shopping measure must both be set to the same value.';
+  }
+  if (Math.abs(iug - smg) > PACK1_GRAMS_EPS) {
+    return 'When count per pack is 1, ingredient unit (grams) and grams in shopping measure must match.';
+  }
+  return null;
+}
+
+function deriveShoppingMeasureGrams({ ingredient_unit_grams, count_per_pack, shopping_measure_grams }) {
+  const iug = parseItemNumber(ingredient_unit_grams);
+  const cpp = parseItemInt(count_per_pack);
+  if (iug != null && cpp != null && iug > 0 && cpp > 0) {
+    return Math.round(iug * cpp * 100) / 100;
+  }
+  const smg = parseItemNumber(shopping_measure_grams);
+  return smg;
+}
+
 // Virtual "All" store: id -1, not in DB, not editable, all departments in General zone
 const ALL_STORE_ID = -1;
 const ALL_STORE = { id: ALL_STORE_ID, name: 'All', modified: null };
@@ -347,7 +390,7 @@ app.get('/api/items', async (req, res) => {
       `SELECT i.*, d.name as department_name, m.name as measurement_name
        FROM items i 
        LEFT JOIN common.department d ON i.department = d.id 
-       LEFT JOIN common.ingredient_measurements m ON i.kcal_measurement_id = m.id
+       LEFT JOIN common.measurements m ON i.kcal_measurement_id = m.id
        ORDER BY d.name, i.name`
     );
     res.json(result.rows);
@@ -364,7 +407,7 @@ app.get('/api/items/:id', async (req, res) => {
       `SELECT i.*, d.name as department_name, m.name as measurement_name
        FROM items i 
        LEFT JOIN common.department d ON i.department = d.id 
-       LEFT JOIN common.ingredient_measurements m ON i.kcal_measurement_id = m.id
+       LEFT JOIN common.measurements m ON i.kcal_measurement_id = m.id
        WHERE i.id = $1`,
       [req.params.id]
     );
@@ -394,6 +437,8 @@ app.post('/api/items', async (req, res) => {
       kcal,
       kcal_measurement_id,
       shopping_measure,
+      ingredient_unit_grams,
+      count_per_pack,
       shopping_measure_grams,
       kcal_qty,
     } = req.body;
@@ -401,6 +446,14 @@ app.post('/api/items', async (req, res) => {
       department != null && department !== '' ? parseInt(department, 10) : NaN;
     if (Number.isNaN(departmentId) || departmentId < 1) {
       return res.status(400).json({ error: 'Validation failed', detail: 'department is required' });
+    }
+    const packErrCreate = validateCountPerPackOneGramsRule(
+      ingredient_unit_grams,
+      count_per_pack,
+      shopping_measure_grams
+    );
+    if (packErrCreate) {
+      return res.status(400).json({ error: 'Validation failed', detail: packErrCreate });
     }
     // Case-insensitive duplicate check (DB may have "parsley" while user adds "Parsley")
     const existing = await pool.query(
@@ -423,21 +476,26 @@ app.post('/api/items', async (req, res) => {
       kcal_measurement_id != null && kcal_measurement_id !== ''
         ? parseInt(kcal_measurement_id, 10)
         : null;
-    const shopGrams =
-      shopping_measure_grams != null && shopping_measure_grams !== ''
-        ? parseFloat(shopping_measure_grams)
-        : null;
     const detailsTrim = details != null && String(details).trim() !== '' ? String(details).trim() : null;
     const shopMeasureTrim =
       shopping_measure != null && String(shopping_measure).trim() !== ''
         ? String(shopping_measure).trim()
         : null;
+    const derivedSmg = deriveShoppingMeasureGrams({
+      ingredient_unit_grams,
+      count_per_pack,
+      shopping_measure_grams,
+    });
+    const shopGrams =
+      derivedSmg != null && !Number.isNaN(derivedSmg) ? derivedSmg : null;
+    const iugVal = parseItemNumber(ingredient_unit_grams);
+    const cppVal = parseItemInt(count_per_pack);
 
     const result = await pool.query(
       `INSERT INTO items (
          name, department, qty, details, kcal, kcal_qty, kcal_measurement_id,
-         shopping_measure, shopping_measure_grams
-       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING *`,
+         shopping_measure, ingredient_unit_grams, count_per_pack, shopping_measure_grams
+       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING *`,
       [
         name,
         departmentId,
@@ -447,7 +505,9 @@ app.post('/api/items', async (req, res) => {
         Number.isNaN(kcalQtyVal) ? null : kcalQtyVal,
         Number.isNaN(measureId) ? null : measureId,
         shopMeasureTrim,
-        Number.isNaN(shopGrams) ? null : shopGrams,
+        iugVal,
+        cppVal,
+        shopGrams,
       ]
     );
     res.status(201).json(result.rows[0]);
@@ -507,6 +567,8 @@ app.put('/api/items/:id', async (req, res) => {
       kcal,
       kcal_measurement_id,
       shopping_measure,
+      ingredient_unit_grams,
+      count_per_pack,
       shopping_measure_grams,
       kcal_qty,
     } = req.body;
@@ -514,6 +576,14 @@ app.put('/api/items/:id', async (req, res) => {
       department != null && department !== '' ? parseInt(department, 10) : NaN;
     if (Number.isNaN(departmentId) || departmentId < 1) {
       return res.status(400).json({ error: 'Validation failed', detail: 'department is required' });
+    }
+    const packErrUpdate = validateCountPerPackOneGramsRule(
+      ingredient_unit_grams,
+      count_per_pack,
+      shopping_measure_grams
+    );
+    if (packErrUpdate) {
+      return res.status(400).json({ error: 'Validation failed', detail: packErrUpdate });
     }
     const id = req.params.id;
     // Case-insensitive duplicate check, excluding current item
@@ -537,15 +607,20 @@ app.put('/api/items/:id', async (req, res) => {
       kcal_measurement_id != null && kcal_measurement_id !== ''
         ? parseInt(kcal_measurement_id, 10)
         : null;
-    const shopGrams =
-      shopping_measure_grams != null && shopping_measure_grams !== ''
-        ? parseFloat(shopping_measure_grams)
-        : null;
     const detailsTrim = details != null && String(details).trim() !== '' ? String(details).trim() : null;
     const shopMeasureTrim =
       shopping_measure != null && String(shopping_measure).trim() !== ''
         ? String(shopping_measure).trim()
         : null;
+    const derivedSmg = deriveShoppingMeasureGrams({
+      ingredient_unit_grams,
+      count_per_pack,
+      shopping_measure_grams,
+    });
+    const shopGrams =
+      derivedSmg != null && !Number.isNaN(derivedSmg) ? derivedSmg : null;
+    const iugVal = parseItemNumber(ingredient_unit_grams);
+    const cppVal = parseItemInt(count_per_pack);
 
     // Do not update qty here — shopping list quantity is managed separately.
     const result = await pool.query(
@@ -557,8 +632,10 @@ app.put('/api/items/:id', async (req, res) => {
          kcal_qty = $5,
          kcal_measurement_id = $6,
          shopping_measure = $7,
-         shopping_measure_grams = $8
-       WHERE id = $9 RETURNING *`,
+         ingredient_unit_grams = $8,
+         count_per_pack = $9,
+         shopping_measure_grams = $10
+       WHERE id = $11 RETURNING *`,
       [
         name,
         departmentId,
@@ -567,7 +644,9 @@ app.put('/api/items/:id', async (req, res) => {
         Number.isNaN(kcalQtyVal) ? null : kcalQtyVal,
         Number.isNaN(measureId) ? null : measureId,
         shopMeasureTrim,
-        Number.isNaN(shopGrams) ? null : shopGrams,
+        iugVal,
+        cppVal,
+        shopGrams,
         id,
       ]
     );
@@ -637,6 +716,7 @@ function shoppingListRowJson(row, extra = {}) {
   return {
     name: row.name,
     description: row.name,
+    details: row.details,
     quantity: String(row.qty),
     purchased: 0,
     department_id: row.department,
@@ -670,9 +750,9 @@ app.get('/api/shopping-list/:storeId', async (req, res) => {
     // Shopping list = items where qty > 0; no separate "purchased" state (marking purchased sets qty to 0)
     if (isAllStore(req.params.storeId)) {
       const result = await pool.query(
-        `SELECT i.name, i.name as description, i.qty::text as quantity, 0 as purchased,
+        `SELECT i.name, i.name as description, i.details, i.qty::text as quantity, 0 as purchased,
                 i.department as department_id, i.id as item_id,
-                i.shopping_measure, i.shopping_measure_grams,
+                i.shopping_measure, i.ingredient_unit_grams, i.count_per_pack, i.shopping_measure_grams,
                 'General' as zone, 0 as zone_seq,
                 d.name as department_name
          FROM items i
@@ -683,9 +763,9 @@ app.get('/api/shopping-list/:storeId', async (req, res) => {
       return res.json(result.rows);
     }
     const result = await pool.query(
-      `SELECT i.name, i.name as description, i.qty::text as quantity, 0 as purchased,
+      `SELECT i.name, i.name as description, i.details, i.qty::text as quantity, 0 as purchased,
               i.department as department_id, i.id as item_id,
-              i.shopping_measure, i.shopping_measure_grams,
+              i.shopping_measure, i.ingredient_unit_grams, i.count_per_pack, i.shopping_measure_grams,
               COALESCE(sz.zonename, 'Uncategorized') as zone,
               COALESCE(sz.zonesequence, 999) as zone_seq,
               d.name as department_name
@@ -707,9 +787,9 @@ app.get('/api/shopping-list/:storeId', async (req, res) => {
 app.get('/api/shopping-list', async (req, res) => {
   try {
     const result = await pool.query(
-      `SELECT i.id as item_id, i.name, i.name as item_name, i.name as description,
+      `SELECT i.id as item_id, i.name, i.name as item_name, i.name as description, i.details,
               i.department as department_id, i.qty::text as quantity, 0 as purchased,
-              i.shopping_measure, i.shopping_measure_grams,
+              i.shopping_measure, i.ingredient_unit_grams, i.count_per_pack, i.shopping_measure_grams,
               d.name as department_name
        FROM items i
        LEFT JOIN common.department d ON i.department = d.id
@@ -841,17 +921,20 @@ app.get('/api/recipe-categories', async (req, res) => {
   }
 });
 
-// ==================== INGREDIENT MEASUREMENTS ====================
+// ==================== MEASUREMENTS ====================
 
-app.get('/api/ingredient-measurements', async (req, res) => {
+async function handleGetMeasurements(req, res) {
   try {
-    const result = await pool.query('SELECT * FROM common.ingredient_measurements ORDER BY name');
+    const result = await pool.query('SELECT * FROM common.measurements ORDER BY name');
     res.json(result.rows);
   } catch (error) {
-    console.error('Error fetching ingredient measurements:', error);
-    res.status(500).json({ error: 'Failed to fetch ingredient measurements' });
+    console.error('Error fetching measurements:', error);
+    res.status(500).json({ error: 'Failed to fetch measurements' });
   }
-});
+}
+
+app.get('/api/measurements', handleGetMeasurements);
+app.get('/api/ingredient-measurements', handleGetMeasurements);
 
 // ==================== INGREDIENTS (recipe catalog) ====================
 
@@ -862,11 +945,11 @@ app.get('/api/ingredients', async (req, res) => {
       req.query.for_recipe === 'true' ||
       req.query.for_recipe === 'yes';
     const result = await pool.query(
-      `SELECT i.id, i.name, i.details, i.kcal, i.kcal_qty, i.qty, i.kcal_measurement_id, i.department as department_id, i.shopping_measure, i.shopping_measure_grams,
+      `SELECT i.id, i.name, i.details, i.kcal, i.kcal_qty, i.qty, i.kcal_measurement_id, i.department as department_id, i.shopping_measure, i.ingredient_unit_grams, i.count_per_pack, i.shopping_measure_grams,
               d.name as department_name, m.name as measurement_name
        FROM items i
        LEFT JOIN common.department d ON i.department = d.id
-       LEFT JOIN common.ingredient_measurements m ON i.kcal_measurement_id = m.id
+       LEFT JOIN common.measurements m ON i.kcal_measurement_id = m.id
        WHERE (NOT $1::boolean OR d.ingredient IS TRUE)
        ORDER BY i.name, i.details`,
       [forRecipe]
@@ -881,11 +964,11 @@ app.get('/api/ingredients', async (req, res) => {
 app.get('/api/ingredients/:id', async (req, res) => {
   try {
     const result = await pool.query(
-      `SELECT i.id, i.name, i.details, i.kcal, i.kcal_qty, i.qty, i.kcal_measurement_id, i.department as department_id, i.shopping_measure, i.shopping_measure_grams,
+      `SELECT i.id, i.name, i.details, i.kcal, i.kcal_qty, i.qty, i.kcal_measurement_id, i.department as department_id, i.shopping_measure, i.ingredient_unit_grams, i.count_per_pack, i.shopping_measure_grams,
               d.name as department_name, m.name as measurement_name
        FROM items i
        LEFT JOIN common.department d ON i.department = d.id
-       LEFT JOIN common.ingredient_measurements m ON i.kcal_measurement_id = m.id
+       LEFT JOIN common.measurements m ON i.kcal_measurement_id = m.id
        WHERE i.id = $1`,
       [req.params.id]
     );
@@ -910,17 +993,36 @@ app.post('/api/ingredients', async (req, res) => {
       kcal_measurement_id,
       department_id,
       shopping_measure,
+      ingredient_unit_grams,
+      count_per_pack,
       shopping_measure_grams,
     } = req.body;
     if (!name || !department_id) {
       return res.status(400).json({ error: 'name and department_id are required' });
     }
+    const packErrIng = validateCountPerPackOneGramsRule(
+      ingredient_unit_grams,
+      count_per_pack,
+      shopping_measure_grams
+    );
+    if (packErrIng) {
+      return res.status(400).json({ error: 'Validation failed', detail: packErrIng });
+    }
     const kcalQtyParsed =
       kcal_qty != null && kcal_qty !== '' ? parseFloat(kcal_qty) : null;
+    const derivedSmgIng = deriveShoppingMeasureGrams({
+      ingredient_unit_grams,
+      count_per_pack,
+      shopping_measure_grams,
+    });
+    const smgFinal =
+      derivedSmgIng != null && !Number.isNaN(derivedSmgIng) ? derivedSmgIng : null;
+    const iugIng = parseItemNumber(ingredient_unit_grams);
+    const cppIng = parseItemInt(count_per_pack);
     const result = await pool.query(
-      `INSERT INTO items (name, details, kcal, kcal_qty, qty, kcal_measurement_id, department, shopping_measure, shopping_measure_grams)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-       RETURNING id, name, details, kcal, kcal_qty, qty, kcal_measurement_id, department as department_id, shopping_measure, shopping_measure_grams`,
+      `INSERT INTO items (name, details, kcal, kcal_qty, qty, kcal_measurement_id, department, shopping_measure, ingredient_unit_grams, count_per_pack, shopping_measure_grams)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+       RETURNING id, name, details, kcal, kcal_qty, qty, kcal_measurement_id, department as department_id, shopping_measure, ingredient_unit_grams, count_per_pack, shopping_measure_grams`,
       [
         name.trim(),
         details ? details.trim() : null,
@@ -930,7 +1032,9 @@ app.post('/api/ingredients', async (req, res) => {
         kcal_measurement_id || null,
         department_id,
         shopping_measure ? shopping_measure.trim() : null,
-        shopping_measure_grams != null ? parseFloat(shopping_measure_grams) : null,
+        iugIng,
+        cppIng,
+        smgFinal,
       ]
     );
     res.status(201).json(result.rows[0]);
@@ -957,18 +1061,37 @@ app.put('/api/ingredients/:id', async (req, res) => {
       kcal_measurement_id,
       department_id,
       shopping_measure,
+      ingredient_unit_grams,
+      count_per_pack,
       shopping_measure_grams,
     } = req.body;
     if (!name || !department_id) {
       return res.status(400).json({ error: 'name and department_id are required' });
     }
+    const packErrPut = validateCountPerPackOneGramsRule(
+      ingredient_unit_grams,
+      count_per_pack,
+      shopping_measure_grams
+    );
+    if (packErrPut) {
+      return res.status(400).json({ error: 'Validation failed', detail: packErrPut });
+    }
     const kcalQtyParsed =
       kcal_qty != null && kcal_qty !== '' ? parseFloat(kcal_qty) : null;
+    const derivedSmgU = deriveShoppingMeasureGrams({
+      ingredient_unit_grams,
+      count_per_pack,
+      shopping_measure_grams,
+    });
+    const smgFinalU =
+      derivedSmgU != null && !Number.isNaN(derivedSmgU) ? derivedSmgU : null;
+    const iugU = parseItemNumber(ingredient_unit_grams);
+    const cppU = parseItemInt(count_per_pack);
     const result = await pool.query(
       `UPDATE items
-       SET name = $1, details = $2, kcal = $3, kcal_qty = $4, qty = $5, kcal_measurement_id = $6, department = $7, shopping_measure = $8, shopping_measure_grams = $9
-       WHERE id = $10
-       RETURNING id, name, details, kcal, kcal_qty, qty, kcal_measurement_id, department as department_id, shopping_measure, shopping_measure_grams`,
+       SET name = $1, details = $2, kcal = $3, kcal_qty = $4, qty = $5, kcal_measurement_id = $6, department = $7, shopping_measure = $8, ingredient_unit_grams = $9, count_per_pack = $10, shopping_measure_grams = $11
+       WHERE id = $12
+       RETURNING id, name, details, kcal, kcal_qty, qty, kcal_measurement_id, department as department_id, shopping_measure, ingredient_unit_grams, count_per_pack, shopping_measure_grams`,
       [
         name.trim(),
         details ? details.trim() : null,
@@ -978,7 +1101,9 @@ app.put('/api/ingredients/:id', async (req, res) => {
         kcal_measurement_id || null,
         department_id,
         shopping_measure ? shopping_measure.trim() : null,
-        shopping_measure_grams != null ? parseFloat(shopping_measure_grams) : null,
+        iugU,
+        cppU,
+        smgFinalU,
         req.params.id,
       ]
     );
@@ -1070,7 +1195,7 @@ app.get('/api/recipes/:id', async (req, res) => {
               m.name as measurement_name
        FROM recipe.recipe_ingredients ri
        JOIN items i ON ri.ingredient_id = i.id
-       LEFT JOIN common.ingredient_measurements m ON ri.measurement_id = m.id
+       LEFT JOIN common.measurements m ON ri.measurement_id = m.id
        WHERE ri.recipe_id = $1
        ORDER BY i.name`,
       [req.params.id]
@@ -1083,7 +1208,7 @@ app.get('/api/recipes/:id', async (req, res) => {
   }
 });
 
-// Add all required recipe ingredients to shopping list: increment items.qty by (line qty × measurement to_grams) grams
+// Add recipe ingredients to shopping list: resolve grams per line (Each, Shopping Unit, or to_grams)
 app.post('/api/recipes/:id/shopping-list', async (req, res) => {
   const recipeId = parseInt(req.params.id, 10);
   if (Number.isNaN(recipeId) || recipeId < 1) {
@@ -1098,40 +1223,73 @@ app.post('/api/recipes/:id/shopping-list', async (req, res) => {
       return res.status(404).json({ error: 'Recipe not found' });
     }
     const lines = await client.query(
-      `SELECT ri.ingredient_id, ri.qty, ri.is_optional, ri.measurement_id, im.to_grams
+      `SELECT ri.ingredient_id, ri.qty, ri.is_optional, ri.measurement_id,
+              im.name AS measurement_name, im.to_grams,
+              i.name AS ingredient_name,
+              i.ingredient_unit_grams, i.shopping_measure_grams
        FROM recipe.recipe_ingredients ri
-       LEFT JOIN common.ingredient_measurements im ON ri.measurement_id = im.id
+       LEFT JOIN common.measurements im ON ri.measurement_id = im.id
+       JOIN items i ON ri.ingredient_id = i.id
        WHERE ri.recipe_id = $1`,
       [recipeId]
     );
     const added = [];
     const skipped = [];
+    const skip = (row, reason, detail = {}) => {
+      skipped.push({
+        ingredient_id: row.ingredient_id,
+        ingredient_name: row.ingredient_name,
+        reason,
+        ...detail,
+      });
+    };
     for (const row of lines.rows) {
       if (row.is_optional) {
-        skipped.push({ ingredient_id: row.ingredient_id, reason: 'optional' });
+        skip(row, 'optional');
         continue;
       }
       const qty = row.qty != null ? Number(row.qty) : 0;
       if (qty <= 0) {
-        skipped.push({ ingredient_id: row.ingredient_id, reason: 'no_qty' });
+        skip(row, 'no_qty', { qty: row.qty });
         continue;
       }
       if (!row.measurement_id) {
-        skipped.push({ ingredient_id: row.ingredient_id, reason: 'no_measurement' });
+        skip(row, 'no_measurement', { measurement_id: row.measurement_id });
         continue;
       }
-      const toGrams = row.to_grams != null ? Number(row.to_grams) : NaN;
-      if (Number.isNaN(toGrams) || toGrams <= 0) {
-        skipped.push({ ingredient_id: row.ingredient_id, reason: 'no_to_grams' });
-        continue;
+      const unitName = (row.measurement_name || '').trim().toLowerCase();
+      let grams;
+      if (unitName === 'each') {
+        const g = row.ingredient_unit_grams != null ? Number(row.ingredient_unit_grams) : NaN;
+        if (Number.isNaN(g) || g <= 0) {
+          skip(row, 'no_ingredient_unit_grams', { ingredient_unit_grams: row.ingredient_unit_grams });
+          continue;
+        }
+        grams = qty * g;
+      } else if (unitName === 'shopping unit') {
+        const g = row.shopping_measure_grams != null ? Number(row.shopping_measure_grams) : NaN;
+        if (Number.isNaN(g) || g <= 0) {
+          skip(row, 'no_shopping_measure_grams', { shopping_measure_grams: row.shopping_measure_grams });
+          continue;
+        }
+        grams = qty * g;
+      } else {
+        const toGrams = row.to_grams != null ? Number(row.to_grams) : NaN;
+        if (Number.isNaN(toGrams) || toGrams <= 0) {
+          skip(row, 'no_to_grams', {
+            measurement_name: row.measurement_name,
+            to_grams: row.to_grams,
+          });
+          continue;
+        }
+        grams = qty * toGrams;
       }
-      const grams = qty * toGrams;
       const upd = await client.query(
         `UPDATE items SET qty = COALESCE(qty, 0) + $1 WHERE id = $2 RETURNING id, name, qty`,
         [grams, row.ingredient_id]
       );
       if (upd.rows.length === 0) {
-        skipped.push({ ingredient_id: row.ingredient_id, reason: 'item_not_found' });
+        skip(row, 'item_not_found');
         continue;
       }
       added.push({

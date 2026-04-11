@@ -18,6 +18,7 @@ import {
   itemDisplayName,
   parseShoppingMeasureGrams,
 } from '../utils/shoppingQuantity';
+import { validateCountPerPackOneGrams } from '../utils/itemPackGrams';
 
 function ShoppingListPage() {
   const [shoppingList, setShoppingList] = useState([]);
@@ -26,7 +27,6 @@ function ShoppingListPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [itemFilter, setItemFilter] = useState('');
-  const [activeTab, setActiveTab] = useState('shopping-list'); // 'items' or 'shopping-list'
   const [showItemForm, setShowItemForm] = useState(false);
   const [editingItem, setEditingItem] = useState(null);
   const [measurements, setMeasurements] = useState([]);
@@ -38,6 +38,8 @@ function ShoppingListPage() {
     kcal_qty: '',
     kcal_measurement_id: '',
     shopping_measure: '',
+    ingredient_unit_grams: '',
+    count_per_pack: '',
     shopping_measure_grams: '',
   });
   const [highlightItemId, setHighlightItemId] = useState(null);
@@ -110,6 +112,7 @@ function ShoppingListPage() {
   const mergeListResponse = (row) => ({
     name: row.name,
     description: row.description ?? row.name,
+    details: row.details,
     quantity: row.quantity,
     department_id: row.department_id,
     item_id: row.item_id,
@@ -152,6 +155,7 @@ function ShoppingListPage() {
       const newEntry = {
         name: item.name,
         description: item.name,
+        details: item.details,
         quantity: '1',
         department_id: item.department || null,
         item_id: item.id,
@@ -216,13 +220,6 @@ function ShoppingListPage() {
     }
   };
 
-  const handleIncrementQuantity = (item) => {
-    const grams = parseFloat(item.quantity);
-    const current = gramsToDisplayUnits(grams, item.shopping_measure_grams);
-    const next = current + 1;
-    handleUpdateQuantity(item.name, next);
-  };
-
   const handleDecrementQuantity = (item, quantityFromButton) => {
     const grams = parseFloat(String(quantityFromButton ?? item.quantity ?? 0));
     const parsed = gramsToDisplayUnits(grams, item.shopping_measure_grams);
@@ -251,6 +248,14 @@ function ShoppingListPage() {
         ? String(item.kcal_measurement_id)
         : '',
     shopping_measure: item?.shopping_measure ?? '',
+    ingredient_unit_grams:
+      item?.ingredient_unit_grams != null && item.ingredient_unit_grams !== ''
+        ? String(item.ingredient_unit_grams)
+        : '',
+    count_per_pack:
+      item?.count_per_pack != null && item.count_per_pack !== ''
+        ? String(item.count_per_pack)
+        : '',
     shopping_measure_grams:
       item?.shopping_measure_grams != null && item.shopping_measure_grams !== ''
         ? String(item.shopping_measure_grams)
@@ -273,6 +278,8 @@ function ShoppingListPage() {
       kcal_qty: '',
       kcal_measurement_id: '',
       shopping_measure: '',
+      ingredient_unit_grams: '',
+      count_per_pack: '',
       shopping_measure_grams: '',
     });
     setShowItemForm(true);
@@ -288,6 +295,15 @@ function ShoppingListPage() {
       setError('Department is required');
       return;
     }
+    const packGrams = validateCountPerPackOneGrams({
+      ingredient_unit_grams: itemForm.ingredient_unit_grams,
+      count_per_pack: itemForm.count_per_pack,
+      shopping_measure_grams: itemForm.shopping_measure_grams,
+    });
+    if (!packGrams.ok) {
+      setError(packGrams.message);
+      return;
+    }
 
     try {
       const optional = {
@@ -297,6 +313,9 @@ function ShoppingListPage() {
         kcal_measurement_id:
           itemForm.kcal_measurement_id === '' ? null : itemForm.kcal_measurement_id,
         shopping_measure: itemForm.shopping_measure?.trim() || null,
+        ingredient_unit_grams:
+          itemForm.ingredient_unit_grams === '' ? null : itemForm.ingredient_unit_grams,
+        count_per_pack: itemForm.count_per_pack === '' ? null : itemForm.count_per_pack,
         shopping_measure_grams:
           itemForm.shopping_measure_grams === '' ? null : itemForm.shopping_measure_grams,
       };
@@ -326,7 +345,6 @@ function ShoppingListPage() {
       // If server tells us which item conflicts, switch to Items tab and show it
       const existingItem = data?.existingItem;
       if (existingItem?.id != null && existingItem?.name) {
-        setActiveTab('items');
         setItemFilter(existingItem.name);
         setHighlightItemId(existingItem.id);
         setTimeout(() => setHighlightItemId(null), 5000);
@@ -367,9 +385,6 @@ function ShoppingListPage() {
 
   const sortedDepartments = Object.keys(itemsByDepartment).sort();
 
-  // On your list: exclude purchased items
-  const unpurchasedList = shoppingList.filter(item => !item.purchased || item.purchased === 0);
-
   // Scroll conflicting item into view when we highlight it
   useEffect(() => {
     if (highlightItemId == null) return;
@@ -380,7 +395,7 @@ function ShoppingListPage() {
   return (
     <div className="shopping-list-page page-scroll">
       <div className="page-header">
-        <h1>Shopping List</h1>
+        <h1>Items</h1>
         <div className="header-actions">
           <button
             className="btn btn-primary"
@@ -388,20 +403,6 @@ function ShoppingListPage() {
           >
             + New Item
           </button>
-          <div className="tabs">
-            <button
-              className={`tab-button ${activeTab === 'items' ? 'active' : ''}`}
-              onClick={() => setActiveTab('items')}
-            >
-              All items
-            </button>
-            <button
-              className={`tab-button ${activeTab === 'shopping-list' ? 'active' : ''}`}
-              onClick={() => setActiveTab('shopping-list')}
-            >
-              On your list ({unpurchasedList.length})
-            </button>
-          </div>
         </div>
       </div>
 
@@ -510,6 +511,28 @@ function ShoppingListPage() {
                 />
               </div>
               <div className="form-group">
+                <label>Ingredient unit (grams)</label>
+                <input
+                  type="number"
+                  min={0}
+                  step="any"
+                  value={itemForm.ingredient_unit_grams}
+                  onChange={(e) => setItemForm({ ...itemForm, ingredient_unit_grams: e.target.value })}
+                  placeholder="Grams per &quot;Each&quot; in recipes"
+                />
+              </div>
+              <div className="form-group">
+                <label>Count per pack</label>
+                <input
+                  type="number"
+                  min={0}
+                  step={1}
+                  value={itemForm.count_per_pack}
+                  onChange={(e) => setItemForm({ ...itemForm, count_per_pack: e.target.value })}
+                  placeholder="e.g. 12 for a dozen"
+                />
+              </div>
+              <div className="form-group">
                 <label>Grams in shopping measure</label>
                 <input
                   type="number"
@@ -517,7 +540,7 @@ function ShoppingListPage() {
                   step="any"
                   value={itemForm.shopping_measure_grams}
                   onChange={(e) => setItemForm({ ...itemForm, shopping_measure_grams: e.target.value })}
-                  placeholder="Grams per unit above"
+                  placeholder="Grams per purchase unit (derived if unit × pack)"
                 />
               </div>
               <div className="form-group">
@@ -543,8 +566,6 @@ function ShoppingListPage() {
       )}
 
       <div className="shopping-list-page-content">
-      {activeTab === 'items' && (
-        <>
           <div className="filter-section">
             <input
               type="text"
@@ -674,84 +695,6 @@ function ShoppingListPage() {
               )}
             </div>
           )}
-        </>
-      )}
-
-      {activeTab === 'shopping-list' && (
-        <>
-          <div className="shopping-list-section">
-            <div className="shopping-list-toolbar">
-              <button
-                className="btn btn-primary"
-                onClick={() => setActiveTab('items')}
-              >
-                Add items
-              </button>
-            </div>
-            {loading && <div className="loading">Loading...</div>}
-
-            {!loading && (
-              <div className="shopping-list-items">
-                {unpurchasedList.length === 0 ? (
-                  <div className="empty-message">No items in shopping list</div>
-                ) : (
-                  unpurchasedList.map(item => (
-                    <div key={item.name} className="list-item">
-                      <div className="list-item-main">
-                        <div className="list-item-name">{itemDisplayName(item)}</div>
-                        {item.description && item.description !== item.name && (
-                          <div className="list-item-desc">{item.description}</div>
-                        )}
-                        {item.department_name && (
-                          <div className="list-item-dept">{item.department_name}</div>
-                        )}
-                      </div>
-                      <div className="list-item-actions">
-                        <div className="quantity-control">
-                          <button
-                            type="button"
-                            className="btn btn-quantity"
-                            data-quantity={String(item.quantity ?? 1)}
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              const q = e.currentTarget.getAttribute('data-quantity');
-                              handleDecrementQuantity(item, q);
-                            }}
-                            aria-label="Decrease quantity"
-                          >
-                            −
-                          </button>
-                          <input
-                            type="text"
-                            className="quantity-input"
-                            value={displayQtyString(item, item)}
-                            onChange={(e) => handleUpdateQuantity(item.name, e.target.value)}
-                            placeholder="Qty"
-                          />
-                          <button
-                            type="button"
-                            className="btn btn-quantity"
-                            onClick={() => handleIncrementQuantity(item)}
-                            aria-label="Increase quantity"
-                          >
-                            +
-                          </button>
-                        </div>
-                        <button
-                          className="btn btn-danger btn-sm"
-                          onClick={() => handleRemoveFromShoppingList(item.name)}
-                        >
-                          Remove
-                        </button>
-                      </div>
-                    </div>
-                  ))
-                )}
-              </div>
-            )}
-          </div>
-        </>
-      )}
       </div>
     </div>
   );

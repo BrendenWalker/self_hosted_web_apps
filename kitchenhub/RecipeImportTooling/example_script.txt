@@ -1,5 +1,5 @@
 -- 1. NEW MEASUREMENTS (Omitting 'id' for SERIAL auto-generation)
-INSERT INTO common.ingredient_measurements (name, to_grams) VALUES
+INSERT INTO common.measurements (name, to_grams) VALUES
 ('cloves', NULL),
 ('slices', NULL),
 ('can', NULL),
@@ -69,7 +69,7 @@ SELECT currval('recipe.recipe_id_seq'), items.id, qty_val, measurements.id FROM
     (1.00, 'cup', 'Parmesan Cheese, grated')
 ) AS recipe_data(qty_val, measurement_name, item_name)
 JOIN public.items items ON items.name = recipe_data.item_name
-JOIN common.ingredient_measurements measurements ON measurements.name = recipe_data.measurement_name;
+JOIN common.measurements measurements ON measurements.name = recipe_data.measurement_name;
 
 -- RECIPE 2: Ranch Pork Chop With Veggies (ID will be auto-generated)
 INSERT INTO recipe.recipe (name, servings, instructions) VALUES
@@ -87,7 +87,7 @@ SELECT currval('recipe.recipe_id_seq'), items.id, qty_val, measurements.id FROM
     (3.00, 'Teaspoon', 'Ranch Dressing Mix') -- Summing the two teaspoon measures
 ) AS recipe_data(qty_val, measurement_name, item_name)
 JOIN public.items items ON items.name = recipe_data.item_name
-JOIN common.ingredient_measurements measurements ON measurements.name = recipe_data.measurement_name;
+JOIN common.measurements measurements ON measurements.name = recipe_data.measurement_name;
 
 
 -- RECIPE 3: Smoked Sausage Cabbage and Apple (ID will be auto-generated)
@@ -108,7 +108,7 @@ SELECT currval('recipe.recipe_id_seq'), items.id, qty_val, measurements.id FROM
     (1.00, 'large', 'Apple')
 ) AS recipe_data(qty_val, measurement_name, item_name)
 JOIN public.items items ON items.name = recipe_data.item_name
-JOIN common.ingredient_measurements measurements ON measurements.name = recipe_data.measurement_name;
+JOIN common.measurements measurements ON measurements.name = recipe_data.measurement_name;
 
 -- RECIPE 4: Tamarind Red Lentil Soup (ID will be auto-generated)
 INSERT INTO recipe.recipe (name, servings, instructions) VALUES
@@ -134,7 +134,7 @@ SELECT currval('recipe.recipe_id_seq'), items.id, qty_val, measurements.id FROM
     (3.00, 'Tablespoon', 'Lemon Juice')
 ) AS recipe_data(qty_val, measurement_name, item_name)
 JOIN public.items items ON items.name = recipe_data.item_name
-JOIN common.ingredient_measurements measurements ON measurements.name = recipe_data.measurement_name;
+JOIN common.measurements measurements ON measurements.name = recipe_data.measurement_name;
 
 
 -- RECIPE 5: Toad In Der Hole (ID will be auto-generated)
@@ -152,4 +152,4 @@ SELECT currval('recipe.recipe_id_seq'), items.id, qty_val, measurements.id FROM
     (1.00, 'Pound', 'Pork Sausages, small fresh')
 ) AS recipe_data(qty_val, measurement_name, item_name)
 JOIN public.items items ON items.name = recipe_data.item_name
-JOIN common.ingredient_measurements measurements ON measurements.name = recipe_data.measurement_name;
+JOIN common.measurements measurements ON measurements.name = recipe_data.measurement_name;

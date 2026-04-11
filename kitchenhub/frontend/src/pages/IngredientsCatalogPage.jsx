@@ -8,6 +8,8 @@ import {
   updateIngredient,
   deleteIngredient,
 } from '../api/api';
+import { itemDisplayName } from '../utils/shoppingQuantity';
+import { validateCountPerPackOneGrams } from '../utils/itemPackGrams';
 import './IngredientsCatalogPage.css';
 
 function IngredientsCatalogPage() {
@@ -18,7 +20,7 @@ function IngredientsCatalogPage() {
   const [ingredientFilter, setIngredientFilter] = useState('');
   const [form, setForm] = useState({
     name: '', details: '', kcal: '', qty: '', kcal_measurement_id: '', department_id: '',
-    shopping_measure: '', shopping_measure_grams: '',
+    shopping_measure: '', ingredient_unit_grams: '', count_per_pack: '', shopping_measure_grams: '',
   });
   const [editingId, setEditingId] = useState(null);
   const [saving, setSaving] = useState(false);
@@ -46,7 +48,7 @@ function IngredientsCatalogPage() {
   const resetForm = () => {
     setForm({
       name: '', details: '', kcal: '', qty: '', kcal_measurement_id: '', department_id: '',
-      shopping_measure: '', shopping_measure_grams: '',
+      shopping_measure: '', ingredient_unit_grams: '', count_per_pack: '', shopping_measure_grams: '',
     });
     setEditingId(null);
   };
@@ -62,6 +64,8 @@ function IngredientsCatalogPage() {
         ing.kcal_measurement_id != null ? String(ing.kcal_measurement_id) : '',
       department_id: ing.department_id != null ? String(ing.department_id) : '',
       shopping_measure: ing.shopping_measure || '',
+      ingredient_unit_grams: ing.ingredient_unit_grams != null ? String(ing.ingredient_unit_grams) : '',
+      count_per_pack: ing.count_per_pack != null ? String(ing.count_per_pack) : '',
       shopping_measure_grams: ing.shopping_measure_grams != null ? String(ing.shopping_measure_grams) : '',
     });
   };
@@ -80,10 +84,22 @@ function IngredientsCatalogPage() {
           form.kcal_measurement_id === '' ? null : Number(form.kcal_measurement_id),
         department_id: Number(form.department_id),
         shopping_measure: form.shopping_measure.trim() || null,
+        ingredient_unit_grams: form.ingredient_unit_grams === '' ? null : parseFloat(form.ingredient_unit_grams),
+        count_per_pack: form.count_per_pack === '' ? null : parseInt(form.count_per_pack, 10),
         shopping_measure_grams: form.shopping_measure_grams === '' ? null : parseFloat(form.shopping_measure_grams),
       };
       if (!payload.department_id) {
         setError('Department is required');
+        setSaving(false);
+        return;
+      }
+      const packGrams = validateCountPerPackOneGrams({
+        ingredient_unit_grams: form.ingredient_unit_grams,
+        count_per_pack: form.count_per_pack,
+        shopping_measure_grams: form.shopping_measure_grams,
+      });
+      if (!packGrams.ok) {
+        setError(packGrams.message);
         setSaving(false);
         return;
       }
@@ -147,7 +163,7 @@ function IngredientsCatalogPage() {
       <section className="ingredients-catalog-card">
         <h1 className="ingredients-catalog-title">Ingredients catalog</h1>
         <p className="ingredients-catalog-description">
-          Add and edit ingredients. kcal and qty are per measurement (e.g. kcal for 5 oz). Shopping measure is how you buy the item (e.g. small jar, each).
+          Add and edit ingredients. kcal and qty are per measurement (e.g. kcal for 5 oz). Shopping measure is how you buy the item. Set ingredient unit grams and count per pack to auto-fill shopping grams; use measurements Each and Shopping Unit in recipes.
         </p>
 
         <form onSubmit={handleSubmit} className="ingredients-catalog-form">
@@ -224,7 +240,29 @@ function IngredientsCatalogPage() {
               <input
                 value={form.shopping_measure}
                 onChange={(e) => setForm((f) => ({ ...f, shopping_measure: e.target.value }))}
-                placeholder="e.g. small jar, each"
+                placeholder="e.g. 1 dozen, small jar"
+              />
+            </div>
+            <div className="form-group">
+              <label>Ingredient unit (grams)</label>
+              <input
+                type="number"
+                step="any"
+                min="0"
+                value={form.ingredient_unit_grams}
+                onChange={(e) => setForm((f) => ({ ...f, ingredient_unit_grams: e.target.value }))}
+                placeholder="Grams per &quot;Each&quot; in recipes"
+              />
+            </div>
+            <div className="form-group">
+              <label>Count per pack</label>
+              <input
+                type="number"
+                step="1"
+                min="0"
+                value={form.count_per_pack}
+                onChange={(e) => setForm((f) => ({ ...f, count_per_pack: e.target.value }))}
+                placeholder="e.g. 12 — multiplies with unit g to set shopping g"
               />
             </div>
             <div className="form-group">
@@ -235,7 +273,7 @@ function IngredientsCatalogPage() {
                 min="0"
                 value={form.shopping_measure_grams}
                 onChange={(e) => setForm((f) => ({ ...f, shopping_measure_grams: e.target.value }))}
-                placeholder="Grams per purchase unit"
+                placeholder="Grams per purchase unit (derived if unit g × pack)"
               />
             </div>
           </div>
@@ -274,13 +312,12 @@ function IngredientsCatalogPage() {
               {filteredIngredients.map((ing) => (
                 <li key={ing.id} className="ingredients-catalog-list-item">
                   <span className="ingredients-catalog-item-name">
-                    {ing.details ? `${ing.name} (${ing.details})` : ing.name}
+                    {itemDisplayName(ing)}
                   </span>
                   <span className="ingredients-catalog-item-meta">
                     {ing.department_name}
                     {ing.measurement_name && ` · ${ing.qty != null ? ing.qty : ''} ${ing.measurement_name}`.trim()}
                     {ing.kcal != null && ` · ${ing.kcal} kcal`}
-                    {ing.shopping_measure && ` · Buy: ${ing.shopping_measure}`}
                   </span>
                   <div className="ingredients-catalog-item-actions">
                     <button type="button" className="btn-edit-ingredient" onClick={() => startEdit(ing)}>Edit</button>

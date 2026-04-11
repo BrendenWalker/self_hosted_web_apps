@@ -29,7 +29,7 @@ function defaultQueryHandler(sql, params) {
   if (s.includes('SELECT id FROM recipe.recipe WHERE id')) {
     return { rows: params?.[0] == 999 ? [] : [{ id: Number(params[0]) }] };
   }
-  if (s.includes('FROM recipe.recipe_ingredients ri') && s.includes('common.ingredient_measurements im')) {
+  if (s.includes('FROM recipe.recipe_ingredients ri') && s.includes('common.measurements im')) {
     return {
       rows: [
         {
@@ -37,7 +37,11 @@ function defaultQueryHandler(sql, params) {
           qty: '2',
           is_optional: false,
           measurement_id: 1,
+          measurement_name: 'Teaspoon',
           to_grams: '5',
+          ingredient_name: 'Test Item',
+          ingredient_unit_grams: null,
+          shopping_measure_grams: null,
         },
       ],
     };
@@ -99,8 +103,8 @@ function defaultQueryHandler(sql, params) {
       ],
     };
   }
-  if (s.includes('UPDATE items SET') && s.includes('kcal_qty') && s.includes('WHERE id = $9')) {
-    return { rows: [{ id: params?.[8], name: params?.[0], department: params?.[1], qty: 0 }] };
+  if (s.includes('UPDATE items SET') && s.includes('kcal_qty') && s.includes('WHERE id = $11')) {
+    return { rows: [{ id: params?.[10], name: params?.[0], department: params?.[1], qty: 0 }] };
   }
   if (s.includes('SELECT shopping_measure_grams FROM items WHERE')) {
     return { rows: [{ shopping_measure_grams: null }] };

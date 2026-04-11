@@ -15,7 +15,7 @@ describe('ShoppingListPage', () => {
     vi.mocked(api.getIngredientMeasurements).mockResolvedValue({ data: [] });
   });
 
-  it('loads data and renders tabs', async () => {
+  it('loads data and renders Items page', async () => {
     render(
       <MemoryRouter>
         <ShoppingListPage />
@@ -26,7 +26,8 @@ describe('ShoppingListPage', () => {
       expect(api.getItems).toHaveBeenCalled();
       expect(api.getDepartments).toHaveBeenCalled();
     });
-    expect(screen.getByRole('button', { name: /all items/i })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Items' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /new item/i })).toBeInTheDocument();
   });
 
   it('shows shopping list items when loaded', async () => {
