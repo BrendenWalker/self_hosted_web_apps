@@ -64,7 +64,7 @@ function defaultQueryHandler(sql, params) {
   if (s.includes('UPDATE common.department SET') && s.includes('RETURNING *')) {
     return { rows: [{ id: params?.[params.length - 1], name: 'Produce', ingredient: true }] };
   }
-  if (s.includes('FROM items i') && s.includes('LEFT JOIN common.department')) {
+  if (s.includes('FROM items i') && s.includes('LEFT JOIN common.department') && !s.includes('storezones sz')) {
     if (s.includes('WHERE i.id')) return { rows: params?.[0] == 1 ? [{ id: 1, name: 'Item', department: 1, department_name: 'Produce' }] : [] };
     if (s.includes('WHERE i.qty > 0')) {
       // Shopping list GET (by store or all): return rows with selected columns

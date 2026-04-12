@@ -766,14 +766,14 @@ app.get('/api/shopping-list/:storeId', async (req, res) => {
       `SELECT i.name, i.name as description, i.details, i.qty::text as quantity, 0 as purchased,
               i.department as department_id, i.id as item_id,
               i.shopping_measure, i.ingredient_unit_grams, i.count_per_pack, i.shopping_measure_grams,
-              COALESCE(sz.zonename, 'Uncategorized') as zone,
-              COALESCE(sz.zonesequence, 999) as zone_seq,
+              sz.zonename as zone,
+              sz.zonesequence as zone_seq,
               d.name as department_name
        FROM items i
-       LEFT JOIN storezones sz ON sz.departmentid = i.department AND sz.storeid = $1
+       INNER JOIN storezones sz ON sz.departmentid = i.department AND sz.storeid = $1
        LEFT JOIN common.department d ON i.department = d.id
        WHERE i.qty > 0
-       ORDER BY COALESCE(sz.zonesequence, 999), i.name`,
+       ORDER BY sz.zonesequence, i.name`,
       [req.params.storeId]
     );
     res.json(result.rows);

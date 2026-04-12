@@ -2,3 +2,14 @@
   color: #666;
   font-weight: 400;
 }
+
+.upcoming-meals-prepared-btn {
+  flex-shrink: 0;
+  align-self: center;
+  white-space: nowrap;
+}
+
+.upcoming-meals-prepared-btn:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+}
