@@ -1,0 +1,61 @@
+{% extends "base.html" %}
+{% block content %}
+<section class="card">
+  <h2>Pet Invitation</h2>
+  {% if invite.accepted %}
+    <div class="flash warning">
+      <p>This invitation has already been accepted.</p>
+    </div>
+    <p><a href="{{ url_for('index') }}">Go to Home</a></p>
+  {% else %}
+    <div class="invite-details">
+      <p>You have been invited to access <strong>{{ invite.pet.name }}</strong>.</p>
+      <p>Invitation email: <strong>{{ invite.invite_email }}</strong></p>
+      {% if invite.expires_at %}
+        <p>Expires: {{ invite.expires_at|localtime }}</p>
+      {% endif %}
+    </div>
+    <div style="margin-top: 20px;">
+      <p><strong>Note:</strong> You must be logged in as <strong>{{ invite.invite_email }}</strong> to accept this invitation.</p>
+      <p>Current user: <strong>{{ current_user.user.email }}</strong></p>
+      {% if current_user.user.email.lower() != invite.invite_email.lower() %}
+        <div class="flash warning">
+          <p>The invitation email does not match your current account. Please log out and log in with the correct email address.</p>
+        </div>
+      {% else %}
+        <button id="accept-invite-btn" class="primary">Accept Invitation</button>
+      {% endif %}
+    </div>
+  {% endif %}
+</section>
+<script>
+document.addEventListener('DOMContentLoaded', ()=>{
+  const acceptBtn = document.querySelector('#accept-invite-btn');
+  if (acceptBtn) {
+    acceptBtn.addEventListener('click', async ()=>{
+      const token = '{{ invite.token }}';
+      acceptBtn.disabled = true;
+      acceptBtn.textContent = 'Accepting...';
+      try {
+        const resp = await fetch('/invite/pet/' + token + '/accept', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'}
+        });
+        const data = await resp.json();
+        if (data.ok) {
+          window.location.href = '{{ url_for("index") }}';
+        } else {
+          alert(data.error || 'Failed to accept invitation');
+          acceptBtn.disabled = false;
+          acceptBtn.textContent = 'Accept Invitation';
+        }
+      } catch (error) {
+        alert('Error accepting invitation: ' + error.message);
+        acceptBtn.disabled = false;
+        acceptBtn.textContent = 'Accept Invitation';
+      }
+    });
+  }
+});
+</script>
+{% endblock %}

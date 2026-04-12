@@ -1,0 +1,210 @@
+{% extends "base.html" %}
+{% block content %}
+
+<section class="card">
+  <h2>Admin Panel</h2>
+  <p>Manage users and system settings.</p>
+</section>
+
+<section class="card">
+  <h2>Users</h2>
+  <table style="width: 100%; border-collapse: collapse;">
+    <thead>
+      <tr style="border-bottom: 2px solid #e5e7eb;">
+        <th style="text-align: left; padding: 8px;">Email</th>
+        <th style="text-align: left; padding: 8px;">Active</th>
+        <th style="text-align: left; padding: 8px;">Admin</th>
+        <th style="text-align: left; padding: 8px;">Actions</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for user in users %}
+      <tr style="border-bottom: 1px solid #e5e7eb;" data-user-id="{{ user.id }}">
+        <td style="padding: 8px;">
+          <input type="email" value="{{ user.email }}" data-field="email" style="width: 100%; max-width: 300px;">
+        </td>
+        <td style="padding: 8px;">
+          <input type="checkbox" data-field="is_active" {% if user.is_active %}checked{% endif %}>
+        </td>
+        <td style="padding: 8px;">
+          <input type="checkbox" data-field="is_admin" {% if user.is_admin %}checked{% endif %}>
+        </td>
+        <td style="padding: 8px;">
+          <button class="btn-save-user" data-user-id="{{ user.id }}" type="button">Save</button>
+          <button class="btn-reset-password" data-user-id="{{ user.id }}" type="button">Reset Password</button>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+
+<section class="card">
+  <h2>Mail Server Settings</h2>
+  <form id="mail-settings" style="display: grid; gap: 16px; max-width: 600px;">
+    <div class="row">
+      <label for="SMTP_HOST" style="min-width: 150px;">SMTP Host</label>
+      <input type="text" id="SMTP_HOST" name="SMTP_HOST" value="{{ settings.get('SMTP_HOST', '') }}" placeholder="smtp.example.com">
+    </div>
+    <div class="row">
+      <label for="SMTP_PORT" style="min-width: 150px;">SMTP Port</label>
+      <input type="number" id="SMTP_PORT" name="SMTP_PORT" value="{{ settings.get('SMTP_PORT', '587') }}" placeholder="587">
+    </div>
+    <div class="row">
+      <label for="SMTP_USE_SSL" style="min-width: 150px;">Use SSL/TLS</label>
+      <input type="checkbox" id="SMTP_USE_SSL" name="SMTP_USE_SSL" {% if settings.get('SMTP_USE_SSL', '0') in ('1', 'true', 'True') %}checked{% endif %}>
+      <span style="font-size: 0.9em; color: #666;">Use direct SSL/TLS (port 465) instead of STARTTLS (port 587)</span>
+    </div>
+    <div class="row">
+      <label for="SMTP_USER" style="min-width: 150px;">SMTP User</label>
+      <input type="text" id="SMTP_USER" name="SMTP_USER" value="{{ settings.get('SMTP_USER', '') }}" placeholder="username">
+    </div>
+    <div class="row">
+      <label for="SMTP_PASS" style="min-width: 150px;">SMTP Password</label>
+      <input type="password" id="SMTP_PASS" name="SMTP_PASS" value="{{ settings.get('SMTP_PASS', '') }}" placeholder="password">
+    </div>
+    <div class="row">
+      <label for="EMAIL_FROM" style="min-width: 150px;">From Address</label>
+      <input type="email" id="EMAIL_FROM" name="EMAIL_FROM" value="{{ settings.get('EMAIL_FROM', '') }}" placeholder="noreply@example.com">
+    </div>
+    <div class="row">
+      <label for="EMAIL_TO" style="min-width: 150px;">To Address</label>
+      <input type="email" id="EMAIL_TO" name="EMAIL_TO" value="{{ settings.get('EMAIL_TO', '') }}" placeholder="alerts@example.com">
+    </div>
+    <div class="row">
+      <label for="SUMMARY_DAY" style="min-width: 150px;">Summary Day</label>
+      <select id="SUMMARY_DAY" name="SUMMARY_DAY">
+        <option value="sunday" {% if settings.get('SUMMARY_DAY', 'sunday') == 'sunday' %}selected{% endif %}>Sunday</option>
+        <option value="monday" {% if settings.get('SUMMARY_DAY', 'sunday') == 'monday' %}selected{% endif %}>Monday</option>
+        <option value="tuesday" {% if settings.get('SUMMARY_DAY', 'sunday') == 'tuesday' %}selected{% endif %}>Tuesday</option>
+        <option value="wednesday" {% if settings.get('SUMMARY_DAY', 'sunday') == 'wednesday' %}selected{% endif %}>Wednesday</option>
+        <option value="thursday" {% if settings.get('SUMMARY_DAY', 'sunday') == 'thursday' %}selected{% endif %}>Thursday</option>
+        <option value="friday" {% if settings.get('SUMMARY_DAY', 'sunday') == 'friday' %}selected{% endif %}>Friday</option>
+        <option value="saturday" {% if settings.get('SUMMARY_DAY', 'sunday') == 'saturday' %}selected{% endif %}>Saturday</option>
+      </select>
+    </div>
+    <div class="row">
+      <label for="SUMMARY_HOUR" style="min-width: 150px;">Summary Hour (0-23)</label>
+      <input type="number" id="SUMMARY_HOUR" name="SUMMARY_HOUR" value="{{ settings.get('SUMMARY_HOUR', '18') }}" min="0" max="23" placeholder="18">
+    </div>
+    <div class="row">
+      <label for="SUMMARY_TZ" style="min-width: 150px;">Timezone</label>
+      <input type="text" id="SUMMARY_TZ" name="SUMMARY_TZ" value="{{ settings.get('SUMMARY_TZ', 'America/Los_Angeles') }}" placeholder="America/Los_Angeles">
+    </div>
+    <div class="row">
+      <button type="submit" style="max-width: 200px;">Save Settings</button>
+    </div>
+  </form>
+
+  <div class="row" style="margin-top: 16px; gap: 8px; align-items: center;">
+    <label for="TEST_EMAIL_TO" style="min-width: 150px;">Test Email To</label>
+    <input type="email" id="TEST_EMAIL_TO" placeholder="you@example.com" style="max-width: 300px;">
+    <button id="btn-test-email" type="button" onclick="return window.__sendTestEmail && window.__sendTestEmail();">Send Test Email</button>
+  </div>
+</section>
+
+<section class="card">
+  <h2>Maintenance</h2>
+  <p style="margin-top: 0;">Recalculate toilet trend/variance for all pets from oldest to newest entries.</p>
+  <button id="btn-recalc-trend" type="button">Recalculate Toilet Trends</button>
+  <small style="display:block;margin-top:8px;color:#6b7280;">Use this after schema changes or imports. This may take a few seconds on large datasets.</small>
+</section>
+
+<script>
+async function __postJSON(url, data){
+  console.log('POST', url, data);
+  const resp = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) });
+  let result;
+  try { result = await resp.json(); }
+  catch(e){ result = { ok:false, error:'Invalid JSON response', status: resp.status }; }
+  console.log('RESP', url, result);
+  return result;
+}
+
+window.__sendTestEmail = async function(){
+  const to = (document.getElementById('TEST_EMAIL_TO')?.value || '').trim();
+  if (!to) { alert('Enter a recipient address'); return false; }
+  const result = await __postJSON('/admin/test_email', { to });
+  alert(result.ok ? ('Test email sent to ' + (result.to || to)) : ('Error: ' + (result.error || JSON.stringify(result))));
+  return false;
+};
+
+function setupAdminPage(){
+  // Save user
+  document.querySelectorAll('.btn-save-user').forEach(btn => {
+    btn.onclick = async () => {
+      const userId = btn.dataset.userId;
+      const row = btn.closest('tr');
+      const data = { email: row.querySelector('[data-field="email"]').value, is_active: row.querySelector('[data-field="is_active"]').checked, is_admin: row.querySelector('[data-field="is_admin"]').checked };
+      const result = await __postJSON(`/admin/users/${userId}`, data);
+      alert(result.ok ? 'User updated successfully' : ('Error: ' + result.error));
+    };
+  });
+
+  // Reset password
+  document.querySelectorAll('.btn-reset-password').forEach(btn => {
+    btn.onclick = async () => {
+      const userId = btn.dataset.userId;
+      const newPassword = prompt('Enter new password (leave empty to cancel):');
+      if (!newPassword) return;
+      const result = await __postJSON(`/admin/users/${userId}`, { password: newPassword });
+      alert(result.ok ? 'Password updated successfully' : ('Error: ' + result.error));
+    };
+  });
+
+  // Save mail settings
+  const form = document.getElementById('mail-settings');
+  if (form) {
+    form.onsubmit = async (e) => {
+      e.preventDefault();
+      const formData = new FormData(form);
+      const data = {}; 
+      for (const [key, value] of formData.entries()) {
+        data[key] = value;
+      }
+      // Handle checkbox - if not checked, explicitly set to '0'
+      const sslCheckbox = document.getElementById('SMTP_USE_SSL');
+      data['SMTP_USE_SSL'] = sslCheckbox && sslCheckbox.checked ? '1' : '0';
+      const result = await __postJSON('/admin/settings', data);
+      alert(result.ok ? 'Settings saved successfully' : ('Error: ' + result.error));
+    };
+  }
+
+  // Attach button as well (redundant with inline onclick)
+  const testBtn = document.getElementById('btn-test-email');
+  if (testBtn) testBtn.onclick = window.__sendTestEmail;
+
+  // Recalculate trend/variance for toilet activities
+  const recalcBtn = document.getElementById('btn-recalc-trend');
+  if (recalcBtn) {
+    recalcBtn.onclick = async () => {
+      if (!confirm('Recalculate toilet trend/variance for all pets? This may take a few seconds.')) return;
+      recalcBtn.disabled = true;
+      const originalText = recalcBtn.textContent;
+      recalcBtn.textContent = 'Recalculating...';
+      try {
+        const result = await __postJSON('/admin/recalc_trend', {});
+        if (result.ok) {
+          alert(`Recalculation complete. Updated: ${result.updated}, Skipped: ${result.skipped}.`);
+        } else {
+          alert('Error: ' + (result.error || JSON.stringify(result)));
+        }
+      } catch (e) {
+        alert('Error: ' + e);
+      } finally {
+        recalcBtn.disabled = false;
+        recalcBtn.textContent = originalText;
+      }
+    };
+  }
+}
+
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', setupAdminPage);
+} else {
+  setupAdminPage();
+}
+</script>
+
+{% endblock %}
+
