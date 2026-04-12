@@ -23,6 +23,32 @@ function ssMonthlyAtAge(atFraMonthly, age) {
   return Math.round(n * ssFactorAtAge(a) * 100) / 100;
 }
 
+/** Calendar year from stored retirement date (YYYY-MM-DD). */
+function retirementYearFromStoredDate(dateStr) {
+  if (!dateStr) return null;
+  const y = parseInt(String(dateStr).slice(0, 4), 10);
+  return Number.isFinite(y) ? y : null;
+}
+
+/** Integer age at retirement from stored date + birth year (approximation: year of retirement − birth year). */
+function retirementAgeFromStoredDate(dateStr, birthYear) {
+  const ry = retirementYearFromStoredDate(dateStr);
+  const by = birthYear != null && birthYear !== '' ? parseInt(String(birthYear), 10) : null;
+  if (ry == null || by == null || !Number.isFinite(by)) return '';
+  const age = ry - by;
+  if (!Number.isFinite(age)) return '';
+  return String(Math.min(100, Math.max(62, age)));
+}
+
+/** Stored as YYYY-01-01 in the calendar year when the person reaches `age` (birth year + age). */
+function retirementDateFromBirthYearAndAge(birthYear, ageInt) {
+  if (birthYear == null || !Number.isFinite(birthYear)) return undefined;
+  if (ageInt == null || !Number.isFinite(ageInt)) return undefined;
+  const y = birthYear + ageInt;
+  if (!Number.isFinite(y) || y < 1900 || y > 2200) return undefined;
+  return `${y}-01-01`;
+}
+
 export default function HouseholdPage() {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -33,8 +59,8 @@ export default function HouseholdPage() {
     p2_display_name: 'P2',
     p1_birth_year: '',
     p2_birth_year: '',
-    p1_retirement_date: '',
-    p2_retirement_date: '',
+    p1_retirement_age: '',
+    p2_retirement_age: '',
     p1_ss_at_fra: '',
     p2_ss_at_fra: '',
     filing_status: 'married_filing_jointly',
@@ -55,8 +81,8 @@ export default function HouseholdPage() {
         p2_display_name: h.p2_display_name ?? 'P2',
         p1_birth_year: h.p1_birth_year ?? '',
         p2_birth_year: h.p2_birth_year ?? '',
-        p1_retirement_date: h.p1_retirement_date ? String(h.p1_retirement_date).slice(0, 10) : '',
-        p2_retirement_date: h.p2_retirement_date ? String(h.p2_retirement_date).slice(0, 10) : '',
+        p1_retirement_age: retirementAgeFromStoredDate(h.p1_retirement_date, h.p1_birth_year),
+        p2_retirement_age: retirementAgeFromStoredDate(h.p2_retirement_date, h.p2_birth_year),
         p1_ss_at_fra: h.p1_ss_at_fra != null && h.p1_ss_at_fra !== '' ? String(h.p1_ss_at_fra) : '',
         p2_ss_at_fra: h.p2_ss_at_fra != null && h.p2_ss_at_fra !== '' ? String(h.p2_ss_at_fra) : '',
         filing_status: h.filing_status ?? 'married_filing_jointly',
@@ -76,6 +102,11 @@ export default function HouseholdPage() {
         const v = parseInt(value, 10);
         if (Number.isFinite(v)) next = String(Math.min(2100, Math.max(1900, v)));
       }
+    } else if (name === 'p1_retirement_age' || name === 'p2_retirement_age') {
+      if (value !== '') {
+        const v = parseInt(value, 10);
+        if (Number.isFinite(v)) next = String(Math.min(100, Math.max(62, v)));
+      }
     } else if (name === 'p1_ss_at_fra' || name === 'p2_ss_at_fra') {
       if (value !== '') {
         const v = parseFloat(value);
@@ -90,13 +121,33 @@ export default function HouseholdPage() {
     setMessage(null);
     try {
       setSaving(true);
+      const p1By = form.p1_birth_year ? parseInt(form.p1_birth_year, 10) : null;
+      const p2By = form.p2_birth_year ? parseInt(form.p2_birth_year, 10) : null;
+      if (form.p1_retirement_age !== '' && (p1By == null || !Number.isFinite(p1By))) {
+        setMessage({ type: 'error', text: 'P1: enter a birth year before setting retirement age.' });
+        setSaving(false);
+        return;
+      }
+      if (form.p2_retirement_age !== '' && (p2By == null || !Number.isFinite(p2By))) {
+        setMessage({ type: 'error', text: 'P2: enter a birth year before setting retirement age.' });
+        setSaving(false);
+        return;
+      }
+      const p1RetDate =
+        form.p1_retirement_age === ''
+          ? null
+          : retirementDateFromBirthYearAndAge(p1By, parseInt(form.p1_retirement_age, 10)) ?? null;
+      const p2RetDate =
+        form.p2_retirement_age === ''
+          ? null
+          : retirementDateFromBirthYearAndAge(p2By, parseInt(form.p2_retirement_age, 10)) ?? null;
       await updateHousehold({
         p1_display_name: form.p1_display_name.trim() || 'P1',
         p2_display_name: form.p2_display_name.trim() || 'P2',
         p1_birth_year: form.p1_birth_year ? parseInt(form.p1_birth_year, 10) : undefined,
         p2_birth_year: form.p2_birth_year ? parseInt(form.p2_birth_year, 10) : undefined,
-        p1_retirement_date: form.p1_retirement_date?.trim() || undefined,
-        p2_retirement_date: form.p2_retirement_date?.trim() || undefined,
+        p1_retirement_date: p1RetDate,
+        p2_retirement_date: p2RetDate,
         p1_ss_at_fra: form.p1_ss_at_fra !== '' ? form.p1_ss_at_fra : undefined,
         p2_ss_at_fra: form.p2_ss_at_fra !== '' ? form.p2_ss_at_fra : undefined,
         filing_status: form.filing_status,
@@ -126,7 +177,7 @@ export default function HouseholdPage() {
         <h2>P1 & P2</h2>
         <p style={{ marginBottom: '1rem', color: '#5a6b64', fontSize: '0.9rem' }}>
           Set display names and birth years for both parties. Birth years drive ages in future projections.
-          Retirement dates define when wage income stops and Social Security begins in Projections.
+          Retirement age (62–100) sets the calendar year you stop working; we store January 1 of that year and use it for expense import and Projections (wages end, Social Security starts).
           Enter each party’s expected monthly benefit at full retirement age (67); we derive early (62), normal (67), and late (70) and use your retirement age to set the starting benefit in Projections. P2: leave blank for spousal benefit (calculated from P1’s at-FRA amount and P2’s age at retirement).
         </p>
         <form onSubmit={handleSubmit}>
@@ -184,25 +235,33 @@ export default function HouseholdPage() {
           </div>
           <div className="form-row">
             <div className="form-group">
-              <label htmlFor="p1_retirement_date">P1 retirement date</label>
+              <label htmlFor="p1_retirement_age">P1 retirement age (years)</label>
               <input
-                id="p1_retirement_date"
-                name="p1_retirement_date"
-                type="date"
-                value={form.p1_retirement_date}
+                id="p1_retirement_age"
+                name="p1_retirement_age"
+                type="number"
+                min={62}
+                max={100}
+                step={1}
+                value={form.p1_retirement_age}
                 onChange={handleChange}
-                title="Used with expense import: if As of date is on or after this (or P2's), amounts go to retirement/mo"
+                placeholder="e.g. 67"
+                title="Age when wage income stops and Social Security starts in projections. Stored as Jan 1 of (birth year + age). Clear to unset."
               />
             </div>
             <div className="form-group">
-              <label htmlFor="p2_retirement_date">P2 retirement date</label>
+              <label htmlFor="p2_retirement_age">P2 retirement age (years)</label>
               <input
-                id="p2_retirement_date"
-                name="p2_retirement_date"
-                type="date"
-                value={form.p2_retirement_date}
+                id="p2_retirement_age"
+                name="p2_retirement_age"
+                type="number"
+                min={62}
+                max={100}
+                step={1}
+                value={form.p2_retirement_age}
                 onChange={handleChange}
-                title="Used with expense import: if As of date is on or after this (or P1's), amounts go to retirement/mo"
+                placeholder="e.g. 67"
+                title="Age when wage income stops and Social Security starts in projections. Stored as Jan 1 of (birth year + age). Clear to unset."
               />
             </div>
           </div>
@@ -241,12 +300,18 @@ export default function HouseholdPage() {
             const p2AtFra = form.p2_ss_at_fra !== '' ? parseFloat(form.p2_ss_at_fra) : null;
             const p1By = form.p1_birth_year ? parseInt(form.p1_birth_year, 10) : null;
             const p2By = form.p2_birth_year ? parseInt(form.p2_birth_year, 10) : null;
-            const p1RetYear = form.p1_retirement_date ? parseInt(String(form.p1_retirement_date).slice(0, 4), 10) : null;
-            const p2RetYear = form.p2_retirement_date ? parseInt(String(form.p2_retirement_date).slice(0, 4), 10) : null;
-            const p1Age = p1By != null && p1RetYear != null ? p1RetYear - p1By : null;
-            const p2Age = p2By != null && p2RetYear != null ? p2RetYear - p2By : null;
+            const p1RetYear =
+              form.p1_retirement_age !== '' && p1By != null
+                ? p1By + parseInt(form.p1_retirement_age, 10)
+                : null;
+            const p2RetYear =
+              form.p2_retirement_age !== '' && p2By != null
+                ? p2By + parseInt(form.p2_retirement_age, 10)
+                : null;
+            const p1Age = form.p1_retirement_age !== '' ? parseInt(form.p1_retirement_age, 10) : null;
+            const p2Age = form.p2_retirement_age !== '' ? parseInt(form.p2_retirement_age, 10) : null;
             const hasAnyAtFra = Number.isFinite(p1AtFra) || Number.isFinite(p2AtFra);
-            const p2SpousalAtAge = (Number.isFinite(p1AtFra) && p1AtFra > 0 && !Number.isFinite(p2AtFra) && p2Age != null && p2Age >= 62 && p2Age <= 70)
+            const p2SpousalAtAge = (Number.isFinite(p1AtFra) && p1AtFra > 0 && !Number.isFinite(p2AtFra) && p2Age != null && p2Age >= 62 && p2Age <= 100)
               ? Math.round(0.5 * p1AtFra * ssFactorAtAge(p2Age) * 100) / 100
               : null;
             if (!hasAnyAtFra && p2SpousalAtAge == null) return null;
@@ -256,7 +321,7 @@ export default function HouseholdPage() {
                 {(Number.isFinite(p1AtFra) && p1AtFra > 0) && (
                   <div style={{ marginTop: '0.5rem' }}>
                     P1: 62 → ${ssMonthlyAtAge(p1AtFra, 62)?.toLocaleString('en-US', { minimumFractionDigits: 2 })}/mo · 67 → ${ssMonthlyAtAge(p1AtFra, 67)?.toLocaleString('en-US', { minimumFractionDigits: 2 })}/mo · 70 → ${ssMonthlyAtAge(p1AtFra, 70)?.toLocaleString('en-US', { minimumFractionDigits: 2 })}/mo
-                    {p1Age != null && p1Age >= 62 && p1Age <= 70 && (
+                    {p1Age != null && p1Age >= 62 && p1Age <= 100 && (
                       <span style={{ marginLeft: '0.5rem' }}> · At your retirement age ({p1Age}): ${ssMonthlyAtAge(p1AtFra, p1Age)?.toLocaleString('en-US', { minimumFractionDigits: 2 })}/mo</span>
                     )}
                   </div>
@@ -264,7 +329,7 @@ export default function HouseholdPage() {
                 {(Number.isFinite(p2AtFra) && p2AtFra > 0) && (
                   <div style={{ marginTop: '0.25rem' }}>
                     P2: 62 → ${ssMonthlyAtAge(p2AtFra, 62)?.toLocaleString('en-US', { minimumFractionDigits: 2 })}/mo · 67 → ${ssMonthlyAtAge(p2AtFra, 67)?.toLocaleString('en-US', { minimumFractionDigits: 2 })}/mo · 70 → ${ssMonthlyAtAge(p2AtFra, 70)?.toLocaleString('en-US', { minimumFractionDigits: 2 })}/mo
-                    {p2Age != null && p2Age >= 62 && p2Age <= 70 && (
+                    {p2Age != null && p2Age >= 62 && p2Age <= 100 && (
                       <span style={{ marginLeft: '0.5rem' }}> · At your retirement age ({p2Age}): ${ssMonthlyAtAge(p2AtFra, p2Age)?.toLocaleString('en-US', { minimumFractionDigits: 2 })}/mo</span>
                     )}
                   </div>
