@@ -29,6 +29,7 @@ vi.mock('./api/api', () => ({
   markPurchased: () => mockResolve({}),
   removeFromShoppingList: () => mockResolve({}),
   getRecipes: () => mockResolve([]),
+  patchRecipePlanned: () => mockResolve({}),
   default: {},
 }));
 
