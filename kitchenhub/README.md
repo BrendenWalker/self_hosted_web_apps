@@ -125,6 +125,8 @@ npm install
 npm run dev
 ```
 
+By default the API listens on **http://localhost:8080** (same host port as Docker’s `8080:80` mapping). Override with `PORT` in `backend/.env` if needed.
+
 #### Frontend
 
 ```bash
@@ -132,6 +134,8 @@ cd frontend
 npm install
 npm run dev
 ```
+
+The Vite dev server (default **http://localhost:3000**) proxies **`/api`** to **`http://localhost:8080`**. If your backend runs elsewhere, set **`VITE_API_PROXY_TARGET`** when starting Vite (for example `VITE_API_PROXY_TARGET=http://127.0.0.1:9090 npm run dev`), or set **`VITE_API_URL`** in a frontend `.env` to the full API base (for example `http://localhost:8080/api`) to bypass the proxy.
 
 ### Testing
 

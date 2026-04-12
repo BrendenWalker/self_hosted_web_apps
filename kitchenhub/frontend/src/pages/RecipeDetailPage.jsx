@@ -24,6 +24,8 @@ import {
   buildRecipeShoppingListNoticeText,
   recipeShoppingListNoticeClassName,
 } from '../utils/recipeShoppingListNotice';
+import { parseRecipeSteps } from '../utils/recipeSteps';
+import { RecipeMakeItOverlay } from '../components/RecipeMakeItOverlay';
 import './RecipeDetailPage.css';
 
 function RecipeDetailPage() {
@@ -50,6 +52,7 @@ function RecipeDetailPage() {
   const [addingToShoppingList, setAddingToShoppingList] = useState(false);
   const [markingPrepared, setMarkingPrepared] = useState(false);
   const [shopNotice, setShopNotice] = useState(null); // { text, className }
+  const [makeItOpen, setMakeItOpen] = useState(false);
 
   useEffect(() => {
     if (isNew) {
@@ -71,6 +74,28 @@ function RecipeDetailPage() {
   const recipeMeasurementsSorted = useMemo(
     () => sortMeasurementsForRecipeEditor(measurements),
     [measurements]
+  );
+
+  const makeItIngredients = useMemo(() => {
+    if (!recipe?.ingredients?.length) return [];
+    return recipe.ingredients.map((row) => {
+      let line = row.is_optional ? 'Optional: ' : '';
+      const name = itemDisplayName({
+        name: row.ingredient_name,
+        details: row.ingredient_details,
+      });
+      const qty = row.qty != null ? formatRecipeQuantity(row.qty) : '';
+      const measure = row.measurement_name || '';
+      const part = [qty, measure].filter(Boolean).join(' ');
+      line += part ? `${part} ${name}` : name;
+      if (row.comment) line += ` — ${row.comment}`;
+      return { id: row.ingredient_id, line };
+    });
+  }, [recipe]);
+
+  const makeItSteps = useMemo(
+    () => (recipe?.instructions ? parseRecipeSteps(recipe.instructions) : []),
+    [recipe?.instructions]
   );
 
   const loadOptions = async () => {
@@ -408,6 +433,13 @@ function RecipeDetailPage() {
                       <button
                         type="button"
                         className="btn btn-secondary"
+                        onClick={() => setMakeItOpen(true)}
+                      >
+                        Make it
+                      </button>
+                      <button
+                        type="button"
+                        className="btn btn-secondary"
                         onClick={() => {
                           // Defer so this click cannot complete on Save/Cancel after they replace Edit (same slot).
                           setTimeout(() => setEditing(true), 0);
@@ -659,6 +691,15 @@ function RecipeDetailPage() {
           </>
         )}
       </section>
+
+      {makeItOpen && recipe && (
+        <RecipeMakeItOverlay
+          recipeName={recipe.name}
+          ingredients={makeItIngredients}
+          steps={makeItSteps}
+          onClose={() => setMakeItOpen(false)}
+        />
+      )}
 
       {!isNew && deleteConfirmOpen && recipe && (
         <div
