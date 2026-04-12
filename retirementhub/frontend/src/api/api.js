@@ -46,8 +46,11 @@ export const getBudgetSummary = () => api.get('/budget-summary');
 
 export const getRetirementTaxGuide = (params) => api.get('/retirement-tax-guide', { params: params || {} });
 
-export const getProjections = (years, growthPct, expenseColaPct) =>
-  api.get('/projections', { params: { years: years ?? 30, growth_pct: growthPct ?? 5, expense_cola_pct: expenseColaPct ?? 2.5 } });
+/** Optional query params override household-stored assumptions (defaults: read from DB only). */
+export const getProjections = (params) =>
+  params != null && typeof params === 'object' && Object.keys(params).length > 0
+    ? api.get('/projections', { params })
+    : api.get('/projections');
 
 export const getSavingsLimits = (year) =>
   year != null ? api.get('/savings-limits', { params: { year } }) : api.get('/savings-limits');
