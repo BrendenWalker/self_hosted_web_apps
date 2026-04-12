@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import {
-  LineChart,
   Line,
   XAxis,
   YAxis,
@@ -11,6 +10,8 @@ import {
   ReferenceLine,
   Bar,
   ComposedChart,
+  Area,
+  AreaChart,
 } from 'recharts';
 import { getProjections, updateHousehold } from '../api/api';
 
@@ -23,26 +24,6 @@ function formatCurrency(value) {
     maximumFractionDigits: 0,
   }).format(value);
 }
-
-/** Recharts X-axis tick: calendar year + P1/P2 ages (end of year). */
-function YearAgeAxisTick({ x, y, payload, household, data }) {
-  const raw = payload?.value ?? payload;
-  const year = typeof raw === 'object' && raw !== null && 'value' in raw ? raw.value : raw;
-  const row = data.find((d) => d.year === year);
-  const p1Name = household?.p1_display_name || 'P1';
-  const p2Name = household?.p2_display_name || 'P2';
-  const a1 = row?.p1_age_eoy ?? '—';
-  const a2 = row?.p2_age_eoy ?? '—';
-  return (
-    <g transform={`translate(${x},${y})`}>
-      <text textAnchor="end" fill="#5a6b64" className="projections-axis-year-age" transform="rotate(-38)">
-        <tspan x={0} dy={10} fontSize={11}>{year}</tspan>
-        <tspan x={0} dy={11} fontSize={9}>{p1Name} {a1} · {p2Name} {a2}</tspan>
-      </text>
-    </g>
-  );
-}
-
 
 function ProjectionsSummary({ data }) {
   if (!data) return null;
@@ -144,39 +125,62 @@ function ProjectionsSummary({ data }) {
   );
 }
 
-function NetWorthChart({ data, target25x, household }) {
+function SavingsAssetsProjectionsChart({ data, target25x }) {
   if (!data || data.length === 0) return null;
-  const p1Name = household?.p1_display_name || 'P1';
-  const p2Name = household?.p2_display_name || 'P2';
   return (
     <div className="card projections-chart-card">
-      <h2>Net worth projection</h2>
+      <h2>Projections</h2>
+      <p className="projections-chart-intro">
+        <strong>Savings</strong> is all non-asset accounts (retirement, taxable, cash, etc.); <strong>Assets</strong> is balances
+        entered as the asset type on the Accounts page. The stack height is net worth—watch the green band shrink as accounts
+        fund spending; assets only change by depreciation here, so a thin green band signals you may need to liquidate or borrow against hard assets.
+      </p>
       <div className="chart-container">
-        <ResponsiveContainer width="100%" height={340}>
-          <LineChart data={data} margin={{ top: 8, right: 16, left: 8, bottom: 52 }}>
+        <ResponsiveContainer width="100%" height={360}>
+          <AreaChart data={data} margin={{ top: 8, right: 16, left: 8, bottom: 28 }}>
             <CartesianGrid strokeDasharray="3 3" stroke="#e8eeec" />
-            <XAxis
-              dataKey="year"
-              height={52}
-              interval={0}
-              minTickGap={18}
-              tick={(props) => <YearAgeAxisTick {...props} household={household} data={data} />}
-            />
+            <XAxis dataKey="year" tick={{ fontSize: 11 }} interval={0} minTickGap={16} />
             <YAxis tickFormatter={(v) => `$${v >= 1000 ? `${(v / 1000).toFixed(0)}k` : v}`} tick={{ fontSize: 12 }} />
             <Tooltip
-              formatter={(value) => [formatCurrency(value), 'Net worth']}
-              labelFormatter={(label, payloadItems) => {
-                const row = payloadItems?.[0]?.payload;
-                const a1 = row?.p1_age_eoy ?? '—';
-                const a2 = row?.p2_age_eoy ?? '—';
-                return `Year ${label} · ${p1Name} age ${a1} · ${p2Name} age ${a2}`;
+              content={({ active, payload, label }) => {
+                if (!active || !payload?.length) return null;
+                const row = payload[0]?.payload;
+                const fin = row?.financial_balance ?? 0;
+                const hard = row?.hard_asset_balance ?? 0;
+                const total = row?.net_worth ?? fin + hard;
+                return (
+                  <div className="chart-tooltip">
+                    <strong>Year {label}</strong>
+                    <div>Savings: {formatCurrency(fin)}</div>
+                    <div>Assets: {formatCurrency(hard)}</div>
+                    <div>Total net worth: {formatCurrency(total)}</div>
+                  </div>
+                );
               }}
+            />
+            <Area
+              type="monotone"
+              dataKey="financial_balance"
+              name="Savings"
+              stackId="nw"
+              stroke="#0d5c4a"
+              fill="#0d5c4a"
+              fillOpacity={0.82}
+            />
+            <Area
+              type="monotone"
+              dataKey="hard_asset_balance"
+              name="Assets"
+              stackId="nw"
+              stroke="#7a6238"
+              fill="#c4a35a"
+              fillOpacity={0.88}
             />
             {target25x != null && target25x > 0 && (
               <ReferenceLine y={target25x} stroke="#0d5c4a" strokeDasharray="5 5" label={{ value: '25× target', position: 'right', fontSize: 11 }} />
             )}
-            <Line type="monotone" dataKey="net_worth" name="Net worth" stroke="#0d5c4a" strokeWidth={2} dot={{ r: 2 }} />
-          </LineChart>
+            <Legend />
+          </AreaChart>
         </ResponsiveContainer>
       </div>
     </div>
@@ -355,15 +359,9 @@ function IncomeVsExpensesChart({ data, household, projectionMeta }) {
       <h2>Income vs expenses by year</h2>
       <div className="chart-container">
         <ResponsiveContainer width="100%" height={340}>
-          <ComposedChart data={data} margin={{ top: 8, right: 16, left: 8, bottom: 52 }}>
+          <ComposedChart data={data} margin={{ top: 8, right: 16, left: 8, bottom: 28 }}>
             <CartesianGrid strokeDasharray="3 3" stroke="#e8eeec" />
-            <XAxis
-              dataKey="year"
-              height={52}
-              interval={0}
-              minTickGap={18}
-              tick={(props) => <YearAgeAxisTick {...props} household={household} data={data} />}
-            />
+            <XAxis dataKey="year" tick={{ fontSize: 11 }} interval={0} minTickGap={16} />
             <YAxis tickFormatter={(v) => `$${v >= 1000 ? `${(v / 1000).toFixed(0)}k` : v}`} tick={{ fontSize: 12 }} />
             <Tooltip
               formatter={(value) => [formatCurrency(value)]}
@@ -378,9 +376,7 @@ function IncomeVsExpensesChart({ data, household, projectionMeta }) {
                 else if (p2Ret) retirementLabel = `${p2Name} retired`;
                 return (
                   <div className="chart-tooltip">
-                    <strong>
-                      Year {label} · {p1Name} age {p.p1_age_eoy ?? '—'} · {p2Name} age {p.p2_age_eoy ?? '—'}
-                    </strong>
+                    <strong>Year {label}</strong>
                     <div>Income: {formatCurrency(p.income)}</div>
                     {(p.rmd ?? 0) > 0 && (
                       <div className="tooltip-rmd">
@@ -396,7 +392,7 @@ function IncomeVsExpensesChart({ data, household, projectionMeta }) {
                     {(p.retirement_funding_shortfall ?? 0) > 0 && (
                       <div className="tooltip-rmd">Funding shortfall: {formatCurrency(p.retirement_funding_shortfall)}</div>
                     )}
-                    <div>Savings: {formatCurrency(p.savings)}</div>
+                    <div>Income minus expenses: {formatCurrency(p.savings)}</div>
                     {(p.income_ss_p1 > 0 || p.income_ss_p2 > 0) && (
                       <div className="tooltip-ss">
                         {p.income_ss_p1 > 0 && <span>SS {p1Name}: {formatCurrency(p.income_ss_p1)}</span>}
@@ -514,6 +510,8 @@ export default function ProjectionsPage() {
     ...row,
     year: row.year,
     net_worth: row.net_worth,
+    financial_balance: row.financial_balance ?? 0,
+    hard_asset_balance: row.hard_asset_balance ?? 0,
     income: row.income,
     expenses: row.expenses,
     savings: row.savings,
@@ -549,7 +547,7 @@ export default function ProjectionsPage() {
     <div className="page-scroll">
       <h1 className="page-title">Projections</h1>
       <p style={{ marginBottom: '1rem', color: '#5a6b64', fontSize: '0.95rem' }}>
-        Net worth and income vs expenses over time. Uses current account balances, income, and expense settings. Set retirement dates on Household and 401(k) on Income for accurate savings. Optional <strong>Required monthly income</strong> sets retirement spending and funds it in order: Social Security, RMDs, wages/bonus (if still working), then withdrawals from non-RMD savings. Leave it blank to use retirement expense categories plus mortgage instead. Below the income chart, annual tables list cash-flow detail, then estimated federal taxable income (after standard deduction) and marginal federal tax by bracket. Portfolio growth applies each year to non-asset accounts; asset-type accounts use expected depreciation from the Accounts page (balance × (1 − depreciation%) each year). Traditional IRA and traditional 401(k) balances drive projected RMDs (IRS Uniform Lifetime Table; included in income). <strong>Expense growth</strong> inflates required income, category expenses, and the P2 pre-Medicare bridge each year. <strong>SSI growth</strong> compounds projected Social Security only after each person retires. Use <strong>Save &amp; refresh</strong> to store these assumptions (and required monthly income) in the database.
+        The <strong>Projections</strong> chart stacks savings (investment accounts) and hard assets so you can see savings drawdown vs. assets over time. Income vs expenses uses current account balances, income, and expense settings. Set retirement dates on Household and 401(k) on Income for accurate savings. Optional <strong>Required monthly income</strong> sets retirement spending and funds it in order: Social Security, RMDs, wages/bonus (if still working), then withdrawals from non-RMD savings. Leave it blank to use retirement expense categories plus mortgage instead. Below the income chart, annual tables list cash-flow detail, then estimated federal taxable income (after standard deduction) and marginal federal tax by bracket. Portfolio growth applies each year to non-asset accounts; asset-type accounts use expected depreciation from the Accounts page (balance × (1 − depreciation%) each year). Traditional IRA and traditional 401(k) balances drive projected RMDs (IRS Uniform Lifetime Table; included in income). <strong>Expense growth</strong> inflates required income, category expenses, and the P2 pre-Medicare bridge each year. <strong>SSI growth</strong> compounds projected Social Security only after each person retires. Use <strong>Save &amp; refresh</strong> to store these assumptions (and required monthly income) in the database.
       </p>
 
       <div className="card projections-controls-card">
@@ -660,7 +658,7 @@ export default function ProjectionsPage() {
       {data && (
         <>
           <ProjectionsSummary data={data} />
-          <NetWorthChart data={chartData} target25x={data.target_25x_retirement} household={data.household} />
+          <SavingsAssetsProjectionsChart data={chartData} target25x={data.target_25x_retirement} />
           <IncomeVsExpensesChart data={chartData} household={data.household} projectionMeta={data.projection_meta} />
         </>
       )}
