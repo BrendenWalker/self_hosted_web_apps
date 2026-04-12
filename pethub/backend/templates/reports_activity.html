@@ -1,0 +1,77 @@
+{% extends "base.html" %}
+{% block subnav %}
+<nav class="subnav">
+  <div class="nav">
+    <a href="{{ url_for('reports_activity') }}" class="active">Recent Activity</a>
+    <a href="{{ url_for('reports_daily_counts') }}">Daily Counts</a>
+    <a href="{{ url_for('reports_potty_hold_time') }}">Potty Hold Time</a>
+    <a href="{{ url_for('reports_potty_location') }}">Potty Location</a>
+  </div>
+</nav>
+{% endblock %}
+{% block content %}
+
+<section class="card">
+  <h2>Recent Activity</h2>
+  
+  <form id="filters" class="grid" style="margin-top: 16px;">
+    <div class="row">
+      <label for="filter_pet">Pet</label>
+      <select id="filter_pet" name="pet_id">
+        <option value="all">All</option>
+        {% for p in pets %}
+        <option value="{{ p.id }}">{{ p.name }}</option>
+        {% endfor %}
+      </select>
+
+      <label for="filter_type">Type</label>
+      <select id="filter_type" name="activity_type">
+        <option value="all">All</option>
+        <option value="toilet">Toilet</option>
+        <option value="water">Water</option>
+        <option value="food">Food</option>
+        <option value="separation">Training (Separation)</option>
+        <option value="notes">Notes</option>
+      </select>
+
+      <label for="filter_sub_type">Sub Type</label>
+      <select id="filter_sub_type" name="sub_type">
+        <option value="all">All</option>
+        <option value="poop">Poop</option>
+        <option value="pee">Pee</option>
+      </select>
+
+      <label for="filter_start">From</label>
+      <input id="filter_start" type="date" name="start">
+      <label for="filter_end">To</label>
+      <input id="filter_end" type="date" name="end">
+
+      <button id="apply_filters" type="button">Apply</button>
+      <button id="clear_filters" type="button" class="secondary">Clear</button>
+
+      <button id="export_csv" type="button" class="secondary">Export CSV</button>
+      <button id="open_report" type="button" class="secondary">Printable Report</button>
+    </div>
+  </form>
+</section>
+
+<section class="card">
+  <h2>Activity Table</h2>
+  <table id="activity-table">
+    <thead>
+      <tr>
+        <th>Time</th>
+        <th>Pet</th>
+        <th>Activity</th>
+        <th>Details</th>
+        <th>Actions</th>
+      </tr>
+    </thead>
+    <tbody>
+      <!-- rows loaded via JS -->
+    </tbody>
+  </table>
+</section>
+
+{% endblock %}
+

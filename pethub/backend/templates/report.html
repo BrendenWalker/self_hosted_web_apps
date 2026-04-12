@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+{% block content %}
+<section class="card no-print">
+  <h2>Printable Report</h2>
+  <p>This view is optimized for printing. Use your browser's print dialog.</p>
+  <button onclick="window.print()">Print</button>
+  <a class="secondary" id="back_home" href="{{ url_for('index') }}">Back</a>
+</section>
+
+<section class="card print-card">
+  <h2>Report</h2>
+  {% if grouped|length == 0 %}
+    <p>No entries match your filters.</p>
+  {% endif %}
+  {% for day, pets in grouped|dictsort %}
+    <h3>{{ day }}</h3>
+    {% for pet_name, acts in pets|dictsort %}
+      <h4>{{ pet_name }}</h4>
+      <table>
+        <thead>
+          <tr>
+            <th>Time</th>
+            <th>Activity</th>
+            <th>Details</th>
+            <th>Notes</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for a in acts %}
+          <tr>
+            <td>{{ a.created_at | localtime }}</td>
+            <td>{{ a.activity_type }}</td>
+            <td>
+              {% if a.activity_type in ['potty','toilet'] %}
+                {% if a.sub_type %} • {{ a.sub_type|capitalize }}{% endif %}
+                {% if a.location %} • {{ a.location|capitalize }}{% endif %}
+                {% if a.rating %} • Score {{ a.rating }}{% endif %}
+              {% elif a.activity_type == 'water' %}
+                {% if a.rating %} • Hydration: {{ a.rating }}{% endif %}
+              {% elif a.activity_type == 'food' %}
+                {% if a.rating %} • Outcome: {{ a.rating }}{% endif %}
+              {% endif %}
+            </td>
+            <td>{{ a.notes or '' }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    {% endfor %}
+  {% endfor %}
+</section>
+{% endblock %}

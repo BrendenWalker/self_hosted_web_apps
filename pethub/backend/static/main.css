@@ -1,0 +1,116 @@
+:root { --pad: 12px; --gap: 12px; }
+* { box-sizing: border-box; }
+body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif; margin: 0; background: #f7f7fb; color: #1f2937; }
+header { padding: var(--pad) calc(2*var(--pad)); background: white; border-bottom: 1px solid #e5e7eb; position: sticky; top: 0; z-index: 20; }
+h1 { margin: 0; font-size: 20px; }
+.header-main { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.nav a { margin-left: 12px; text-decoration: none; color: #111827; }
+.brand-link { text-decoration: none; color: inherit; }
+.brand-link:hover { text-decoration: underline; }
+.subnav { padding: var(--pad) calc(2*var(--pad)); background: #f9fafb; border-bottom: 1px solid #e5e7eb; position: sticky; top: 56px; z-index: 10; }
+.subnav .nav { display: flex; gap: 16px; align-items: center; }
+.subnav .nav a { margin-left: 0; text-decoration: none; color: #4b5563; padding: 6px 12px; border-radius: 6px; }
+.subnav .nav a:hover { background: #e5e7eb; color: #111827; }
+.subnav .nav a.active { background: #111827; color: white; }
+main { padding: calc(2*var(--pad)); display: grid; gap: var(--gap); max-width: 1100px; margin: 0 auto; }
+.card { background: white; padding: calc(2*var(--pad)); border: 1px solid #e5e7eb; border-radius: 12px; box-shadow: 0 1px 2px rgba(0,0,0,0.04); }
+.row { display: flex; gap: var(--gap); align-items: center; margin-bottom: var(--gap); flex-wrap: wrap; }
+.grid { display: grid; gap: var(--gap); }
+.tile { margin-right: 12px; margin-left: 12px; margin-bottom: 12px; margin-top: 12px }
+.label { font-size: 40px }
+.icon { font-size: 40px }
+.exit-btn { font-size: 17px; padding: 5px 5px; margin-right: 1px; margin-left: 1px; background: white;font-weight: bold; color: black; border-radius: 10px; border: 1px solid #111827; }
+.sep { margin-right: 5px;margin-left: 5px }
+.breadcrumbs { font-size: 20px }
+label { font-weight: 600; margin-right: 6px}
+select, input[type="number"], textarea, input[type="text"], input[type="datetime-local"], input[type="email"], input[type="password"] { padding: 8px 10px; border: 1px solid #d1d5db; border-radius: 8px; background: #fff; }
+/* Default buttons: look like normal web buttons (small) */ 
+button { padding: 8px 12px; border-radius: 8px; border: 1px solid #d1d5db; background: #fff; color: #111827; cursor: pointer; font-size: 14px; }
+button.secondary { background: white; color: #111827; border-color: #d1d5db; }
+button.primary { background: #111827; color: white; border-color: #111827; padding: 8px 12px; }
+/* Activity buttons (tiles) should be larger and prominent */ 
+button.tile { padding: 22px 22px; border-radius: 12px; border: 2px solid #111827; background: #111827; color: white; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+table { width: 100%; border-collapse: collapse; }
+th, td { padding: 10px; border-bottom: 1px solid #e5e7eb; text-align: left; vertical-align: top; }
+.hidden { display: none; }
+footer { padding: var(--pad) calc(2*var(--pad)); color: #6b7280; text-align: center; }
+.charts { display: grid; gap: 20px; }
+.flashes { list-style: none; padding: 0; margin: 0 0 12px 0; }
+.flash { padding: 8px 12px; border-radius: 8px; margin-bottom: 6px; }
+.flash.success { background: #ecfdf5; border: 1px solid #10b981; }
+.flash.warning { background: #fffbeb; border: 1px solid #f59e0b; }
+.flash.danger { background: #fef2f2; border: 1px solid #ef4444; }
+
+.offline-status { font-size: 0.8rem; color: #6b7280; white-space: nowrap; position: fixed; right: 16px; bottom: 16px; background: rgba(17, 24, 39, 0.92); color: #f9fafb; padding: 8px 12px; border-radius: 999px; box-shadow: 0 10px 25px rgba(0,0,0,0.15); z-index: 50; }
+.offline-status.has-pending { color: #b45309; font-weight: 600; }
+
+/* Wizard Modal */
+.wizard { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0, 0, 0, 0.5); display: flex; align-items: center; justify-content: center; z-index: 1000; }
+.wizard-card { background: white; border-radius: 12px; box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2); max-width: 700px; width: 90%; max-height: 90vh; display: flex; flex-direction: column; }
+.wizard-header { display: flex; justify-content: space-between; align-items: center; padding: calc(2*var(--pad)); border-bottom: 1px solid #e5e7eb; }
+.wizard-body { padding: calc(2*var(--pad)); overflow-y: auto; flex: 1; }
+.wizard-footer { display: flex; justify-content: space-between; align-items: center; padding: calc(2*var(--pad)); border-top: 1px solid #e5e7eb; gap: var(--gap); }
+.wizard-footer .left { display: flex; align-items: center; gap: var(--gap); }
+.wizard-footer .right { display: flex; align-items: center; gap: var(--gap); }
+.wizard-body h3 { margin: 0 0 12px 0; font-size: 18px; font-weight: 600; color: #111827; }
+
+/* Ensure the hidden class actually hides the wizard (override ordering) */
+.wizard.hidden { display: none; }
+
+/* Print styles */
+@media print {
+  header, .subnav, footer, .no-print, .charts, .no-print * { display: none !important; }
+  body { background: white; color: black; }
+  .card { border: none; box-shadow: none; padding: 0; }
+  .print-card { page-break-inside: avoid; }
+  table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  th, td { border: 1px solid #ddd; padding: 6px; }
+  h2, h3, h4 { margin: 8px 0; }
+}
+
+@media (max-width: 640px) {
+  .row { flex-direction: column; align-items: flex-start; }
+  table, thead, tbody, th, td, tr { display: block; }
+  thead { display: none; }
+  tr { margin-bottom: 8px; }
+  td { border: none; padding: 6px 0; }
+}
+
+/* Responsive layout enhancements */
+.tiles { display: flex; flex-wrap: wrap; gap: 16px; justify-content: center; }
+.tile { padding: 14px; min-width: 120px; min-height: 96px; display: flex; flex-direction: column; align-items: center; justify-content: center; border-radius: 10px; }
+.tile .label { font-size: 16px; }
+.tile .icon { font-size: 28px; }
+
+/* Reduce global button padding for smaller screens while keeping clickable area large */
+@media (max-width: 1024px) {
+  header { padding: 10px 16px; }
+  h1 { font-size: 18px; }
+  main { padding: 16px; max-width: 900px; }
+  button { padding: 12px 14px; border-radius: 8px; }
+  .wizard-card { max-width: 720px; width: 95%; }
+}
+
+@media (max-width: 640px) {
+  .tile { min-width: 100px; padding: 10px; }
+  .tile .label { font-size: 14px; }
+  .tile .icon { font-size: 24px; }
+  .wizard-card { max-width: 98%; height: auto; margin: 8px; }
+  .wizard-body { padding: 12px; }
+  .wizard-footer { padding: 10px; flex-direction: column; align-items: stretch; gap: 8px; }
+  .wizard-footer .left, .wizard-footer .right { width: 100%; justify-content: space-between; }
+  #pet_picker { width: 100%; }
+  #activity_dt, textarea, select { width: 100%; }
+}
+
+/* Tighter two-column layout for small phones (e.g. iPhone portrait) */
+@media (max-width: 420px) {
+  .tiles { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; padding: 6px; }
+  .tile { margin: 0; padding: 12px; min-width: unset; width: 100%; height: auto; box-sizing: border-box; }
+  .tile .label { font-size: 13px; }
+  .tile .icon { font-size: 22px; }
+  /* Make footer buttons full-width and stacked for easier tapping */
+  .wizard-footer { gap: 8px; }
+  .wizard-footer .right { flex-direction: column; align-items: stretch; }
+  .wizard-footer .right button { width: 100%; padding: 12px; }
+}

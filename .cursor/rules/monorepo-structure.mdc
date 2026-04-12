@@ -12,7 +12,7 @@ This is a monorepo containing multiple self-hosted web applications. Each servic
 - **Root level**: Contains shared code and configuration
   - `common/` - Shared code used across services
   - `.github/workflows/` - CI/CD workflows
-  - Each service in its own subfolder (e.g., `kitchenhub/`, `vehiclehub/`)
+  - Each service in its own subfolder (e.g., `kitchenhub/`, `vehiclehub/`, `pethub/`)
 
 - **Service structure**: Each service follows this pattern:
   ```
@@ -40,6 +40,7 @@ To avoid conflicts, each service uses different ports:
 - **KitchenHub**: Backend 8080, Frontend 8081
 - **VehicleHub**: Backend 8090, Frontend 8091
 - **RetirementHub**: Backend 8100, Frontend 8110
+- **PetHub**: Backend 8120, Frontend 8130
 - Future services should continue the pattern (e.g. +10 per service).
 
 ## Shared Code

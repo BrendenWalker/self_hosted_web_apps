@@ -7,6 +7,7 @@ on:
       - 'vehiclehub/*'   # e.g., vehiclehub/1.0.0
       - 'retirementhub/*'   # e.g., retirementhub/1.0.0
       - 'mailhub/*'      # e.g., mailhub/1.0.0
+      - 'pethub/*'        # e.g., pethub/1.0.0
   pull_request:
     branches:
       - main
@@ -15,6 +16,7 @@ on:
       - 'vehiclehub/**'
       - 'retirementhub/**'
       - 'mailhub/**'
+      - 'pethub/**'
       - '.github/workflows/docker-build.yml'
 
 jobs:
@@ -25,7 +27,7 @@ jobs:
       checks: write   # required for publish-unit-test-result-action to create check runs
     strategy:
       matrix:
-        project: [kitchenhub, retirementhub]
+        project: [kitchenhub, retirementhub, pethub]
     steps:
       - name: Checkout code
         uses: actions/checkout@v6
@@ -36,10 +38,12 @@ jobs:
           node-version: '20'
 
       - name: Install backend dependencies (${{ matrix.project }})
+        if: matrix.project != 'pethub'
         run: npm install
         working-directory: ${{ matrix.project }}/backend
 
       - name: Run backend tests (${{ matrix.project }})
+        if: matrix.project != 'pethub'
         env:
           JEST_JUNIT_OUTPUT_DIR: test-results
           JEST_JUNIT_OUTPUT_NAME: junit.xml
@@ -63,8 +67,7 @@ jobs:
         uses: EnricoMi/publish-unit-test-result-action@v2
         with:
           files: |
-            ${{ matrix.project }}/backend/test-results/junit.xml
-            ${{ matrix.project }}/frontend/test-results/junit.xml
+            ${{ matrix.project }}/**/test-results/junit.xml
           check_name: Test results (${{ matrix.project }})
           comment_mode: off
 
@@ -129,7 +132,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        project: [kitchenhub, vehiclehub, retirementhub, mailhub]
+        project: [kitchenhub, vehiclehub, retirementhub, mailhub, pethub]
     steps:
       - name: Checkout code
         uses: actions/checkout@v6
@@ -180,8 +183,8 @@ jobs:
           SERVICE="${TAG_REF%%/*}"
           VERSION="${TAG_REF#*/}"
           
-          if [ "$SERVICE" != "kitchenhub" ] && [ "$SERVICE" != "vehiclehub" ] && [ "$SERVICE" != "retirementhub" ] && [ "$SERVICE" != "mailhub" ]; then
-            echo "Error: Unsupported service '$SERVICE' in tag. Expected 'kitchenhub', 'vehiclehub', 'retirementhub', or 'mailhub'."
+          if [ "$SERVICE" != "kitchenhub" ] && [ "$SERVICE" != "vehiclehub" ] && [ "$SERVICE" != "retirementhub" ] && [ "$SERVICE" != "mailhub" ] && [ "$SERVICE" != "pethub" ]; then
+            echo "Error: Unsupported service '$SERVICE' in tag. Expected 'kitchenhub', 'vehiclehub', 'retirementhub', 'mailhub', or 'pethub'."
             exit 1
           fi
           
@@ -208,6 +211,9 @@ jobs:
           elif [ "${PROJECT_SUBFOLDER}" = "vehiclehub" ]; then
             DEFAULT_BACKEND="vehiclehub-backend"
             DEFAULT_FRONTEND="vehiclehub-frontend"
+          elif [ "${PROJECT_SUBFOLDER}" = "pethub" ]; then
+            DEFAULT_BACKEND="pethub-backend"
+            DEFAULT_FRONTEND="pethub-frontend"
           elif [ "${PROJECT_SUBFOLDER}" = "mailhub" ]; then
             DEFAULT_POSTFIX="mailhub-postfix"
             DEFAULT_AMAVISD="mailhub-amavisd"

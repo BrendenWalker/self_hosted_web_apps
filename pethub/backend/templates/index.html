@@ -1,0 +1,90 @@
+{% extends "base.html" %}
+{% block content %}
+<section class="card">
+  <div class="row" style="justify-content: space-between; align-items: center;">
+    <h2 class="home-title" style="margin:0">Activities</h2>
+    <div class="row" style="margin:0; align-items: center; gap: 8px;">
+      <label for="default_pet">Selected Pet</label>
+      <select id="default_pet">
+        <option value="">(none)</option>
+        {% for p in pets %}
+        <option value="{{ p.id }}" data-birthdate="{{ p.birthdate or '' }}">{{ p.name }}</option>
+        {% endfor %}
+      </select>
+      <small id="default_pet_age" style="margin-left:6px;color:#111827;font-weight:600;"></small>
+    </div>
+  </div>
+  <div class="tiles" style="margin-top:12px;">
+    <button class="tile" id="double_good_btn">
+      <div class="icon">👌</div>
+      <div class="label">Double Good</div>
+    </button>
+    <button class="tile" data-action="toilet">
+      <div class="icon">🚽</div>
+      <div class="label">Toilet</div>
+    </button>
+    <button class="tile" data-action="water">
+      <div class="icon">💧</div>
+      <div class="label">Water</div>
+    </button>
+    <button class="tile" data-action="food">
+      <div class="icon">🍖</div>
+      <div class="label">Food</div>
+    </button>
+    <!-- training removed: use generic activities or notes -->
+    <button class="tile" data-action="notes">
+      <div class="icon">📝</div>
+      <div class="label">Notes</div>
+    </button>
+  </div>
+</section>
+
+<section class="card">
+  <h2>Potty Status</h2>
+  <div class="row" style="justify-content: space-around; align-items: flex-start; margin-top: 24px;">
+    <div id="speedometer-pee" style="flex: 1; max-width: 250px; min-width: 200px;"></div>
+    <div id="speedometer-poop" style="flex: 1; max-width: 250px; min-width: 200px;"></div>
+  </div>
+</section>
+
+<section class="card">
+  <h2 style="margin-top:0">Recent Activies</h2>
+  <div class="grid" style="gap: 16px; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));">
+    <div class="card"><div style="font-weight:600;">Pee</div><div id="recent_pee">—</div></div>
+    <div class="card"><div style="font-weight:600;">Poop</div><div id="recent_poop">—</div></div>
+    <div class="card"><div style="font-weight:600;">Water</div><div id="recent_water">—</div></div>
+    <div class="card"><div style="font-weight:600;">Food</div><div id="recent_food">—</div></div>
+  </div>
+</section>
+
+<!-- Wizard Modal -->
+<div id="wizard" class="wizard hidden" role="dialog" aria-modal="true">
+  <div class="wizard-card">
+    <div class="wizard-header">
+      <nav id="breadcrumbs" class="breadcrumbs"></nav>
+      <button id="wizard-close" class="exit-btn" aria-label="Close">X</button>
+    </div>
+    <div id="wizard-body" class="wizard-body"></div>
+    <div class="wizard-footer">
+      <div class="left">
+        <label for="pet_picker">Pet</label>
+        <select id="pet_picker">
+          <option value="">Unassigned</option>
+          {% for p in pets %}
+          <option value="{{ p.id }}">{{ p.name }}</option>
+          {% endfor %}
+        </select>
+        <small id="pet_picker_hint" style="margin-left:6px;color:#6b7280;">Defaults to your chosen pet</small>
+      </div>
+      <div class="right">
+        <button id="wizard-back" class="secondary hidden">Back</button>
+        <button id="wizard-next" class="hidden">Next</button>
+        <button id="wizard-cancel" class="secondary">Cancel</button>
+        <button id="wizard-save" class="primary">Save</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Reporting sections moved to Activity Reports page -->
+{% endblock %}

@@ -1,0 +1,53 @@
+version: '3.8'
+
+services:
+  backend:
+    image: ${DOCKER_HUB_REGISTRY_USERNAME}/${DOCKER_HUB_BACKEND_IMAGE_NAME:-pethub-backend}:${IMAGE_TAG:-latest}
+    container_name: pethub-backend
+    ports:
+      - "${BACKEND_PORT:-8120}:80"
+    environment:
+      - PORT=80
+      - DB_HOST=${DB_HOST}
+      - DB_PORT=${DB_PORT:-5432}
+      - DB_NAME=${DB_NAME:-pethub}
+      - DB_USER=${DB_USER}
+      - DB_PASSWORD=${DB_PASSWORD}
+      - SECRET_KEY=${SECRET_KEY}
+      - SCHED_PRIMARY=${SCHED_PRIMARY:-1}
+      - ENABLE_SCHEDULER=${ENABLE_SCHEDULER:-1}
+      - ENABLE_AUTO_SCHEMA_SYNC=${ENABLE_AUTO_SCHEMA_SYNC:-1}
+      - ALLOW_SIGNUP=${ALLOW_SIGNUP:-0}
+      - SMTP_HOST=${SMTP_HOST:-}
+      - SMTP_PORT=${SMTP_PORT:-25}
+      - SMTP_USER=${SMTP_USER:-}
+      - SMTP_PASS=${SMTP_PASS:-}
+      - EMAIL_FROM=${EMAIL_FROM:-}
+      - EMAIL_TO=${EMAIL_TO:-}
+      - SUMMARY_DAY=${SUMMARY_DAY:-sunday}
+      - SUMMARY_HOUR=${SUMMARY_HOUR:-18}
+      - SUMMARY_TZ=${SUMMARY_TZ:-America/Los_Angeles}
+    networks:
+      - pethub-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:80/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  frontend:
+    image: ${DOCKER_HUB_REGISTRY_USERNAME}/${DOCKER_HUB_FRONTEND_IMAGE_NAME:-pethub-frontend}:${IMAGE_TAG:-latest}
+    container_name: pethub-frontend
+    ports:
+      - "${FRONTEND_PORT:-8130}:80"
+    depends_on:
+      - backend
+    networks:
+      - pethub-network
+    restart: unless-stopped
+
+networks:
+  pethub-network:
+    driver: bridge

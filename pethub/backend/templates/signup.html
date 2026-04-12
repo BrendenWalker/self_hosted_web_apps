@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+{% block content %}
+<section class="card">
+  <h2>Sign up</h2>
+  <form method="post">
+    <div class="row"><label>Email</label><input type="email" name="email" required></div>
+    <div class="row"><label>Password</label><input type="password" name="password" required></div>
+    <div class="row"><button type="submit">Create account</button></div>
+  </form>
+  <p>Already have an account? <a href="{{ url_for('auth.login') }}">Login</a></p>
+</section>
+{% endblock %}

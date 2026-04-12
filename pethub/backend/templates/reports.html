@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% block content %}
+
+<section class="card">
+  <h2>Reports</h2>
+  <p>Select a report to view:</p>
+  <div class="grid" style="gap: 16px; margin-top: 16px;">
+    <a href="{{ url_for('reports_activity') }}" class="card" style="text-decoration: none; padding: 24px;">
+      <h3>Recent Activity</h3>
+      <p>View and filter recent activity entries</p>
+    </a>
+    <a href="{{ url_for('reports_daily_counts') }}" class="card" style="text-decoration: none; padding: 24px;">
+      <h3>Daily Counts Chart</h3>
+      <p>View activity counts over time</p>
+    </a>
+    <a href="{{ url_for('reports_potty_hold_time') }}" class="card" style="text-decoration: none; padding: 24px;">
+      <h3>Potty Hold Time Chart</h3>
+      <p>View weighted moving average of time between toilet events</p>
+    </a>
+    <a href="{{ url_for('reports_potty_location') }}" class="card" style="text-decoration: none; padding: 24px;">
+      <h3>Potty Location Chart</h3>
+      <p>View inside vs outside potty events over time</p>
+    </a>
+  </div>
+</section>
+
+{% endblock %}
+

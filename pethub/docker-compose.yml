@@ -1,0 +1,45 @@
+version: '3.8'
+
+services:
+  backend:
+    build:
+      context: ..
+      dockerfile: pethub/backend/Dockerfile
+    container_name: pethub-backend
+    ports:
+      - "8120:80"
+    env_file:
+      - .env
+    environment:
+      - PORT=80
+      - SECRET_KEY=${SECRET_KEY:-dev-key-change-me}
+      - DB_HOST=${DB_HOST:-postgres}
+      - DB_PORT=${DB_PORT:-5432}
+      - DB_NAME=${DB_NAME:-pethub}
+      - DB_USER=${DB_USER:-postgres}
+      - DB_PASSWORD=${DB_PASSWORD:-postgres}
+      - SCHED_PRIMARY=${SCHED_PRIMARY:-1}
+      - ENABLE_SCHEDULER=${ENABLE_SCHEDULER:-1}
+      - ENABLE_AUTO_SCHEMA_SYNC=${ENABLE_AUTO_SCHEMA_SYNC:-1}
+      - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost:3002}
+      - ALLOW_SIGNUP=${ALLOW_SIGNUP:-1}
+    networks:
+      - pethub-network
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ..
+      dockerfile: pethub/frontend/Dockerfile
+    container_name: pethub-frontend
+    ports:
+      - "8130:80"
+    depends_on:
+      - backend
+    networks:
+      - pethub-network
+    restart: unless-stopped
+
+networks:
+  pethub-network:
+    driver: bridge

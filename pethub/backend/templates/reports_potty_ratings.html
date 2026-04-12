@@ -1,0 +1,62 @@
+{% extends "base.html" %}
+{% block subnav %}
+<nav class="subnav">
+  <div class="nav">
+    <a href="{{ url_for('reports_activity') }}">Recent Activity</a>
+    <a href="{{ url_for('reports_daily_counts') }}">Daily Counts</a>
+    <a href="{{ url_for('reports_potty_ratings') }}" class="active">Potty Ratings</a>
+  </div>
+</nav>
+{% endblock %}
+{% block content %}
+
+<section class="card">
+  <h2>Potty Ratings Chart</h2>
+  
+  <form id="filters" class="grid" style="margin-top: 16px;">
+    <div class="row">
+      <label for="filter_pet">Pet</label>
+      <select id="filter_pet" name="pet_id">
+        <option value="all">All</option>
+        {% for p in pets %}
+        <option value="{{ p.id }}">{{ p.name }}</option>
+        {% endfor %}
+      </select>
+
+      <label for="filter_type">Type</label>
+      <select id="filter_type" name="activity_type">
+        <option value="all">All</option>
+        <option value="toilet">Toilet</option>
+        <option value="water">Water</option>
+        <option value="food">Food</option>
+        <option value="separation">Training (Separation)</option>
+        <option value="notes">Notes</option>
+      </select>
+
+      <label for="filter_sub_type">Sub Type</label>
+      <select id="filter_sub_type" name="sub_type">
+        <option value="all">All</option>
+        <option value="poop">Poop</option>
+        <option value="pee">Pee</option>
+      </select>
+
+      <label for="filter_start">From</label>
+      <input id="filter_start" type="date" name="start">
+      <label for="filter_end">To</label>
+      <input id="filter_end" type="date" name="end">
+
+      <button id="apply_filters" type="button">Apply</button>
+      <button id="clear_filters" type="button" class="secondary">Clear</button>
+    </div>
+  </form>
+</section>
+
+<section class="card">
+  <h2>Chart</h2>
+  <div class="charts">
+    <canvas id="pottyRatings"></canvas>
+  </div>
+</section>
+
+{% endblock %}
+
