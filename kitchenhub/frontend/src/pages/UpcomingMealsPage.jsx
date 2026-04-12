@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { getRecipes } from '../api/api';
+import { getRecipes, patchRecipePlanned } from '../api/api';
 import './RecipesPage.css';
 import './UpcomingMealsPage.css';
 
@@ -19,6 +19,7 @@ function UpcomingMealsPage() {
   const [recipes, setRecipes] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [markingPreparedId, setMarkingPreparedId] = useState(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -41,6 +42,19 @@ function UpcomingMealsPage() {
       cancelled = true;
     };
   }, []);
+
+  const handleMarkPrepared = async (recipeId) => {
+    setError(null);
+    setMarkingPreparedId(recipeId);
+    try {
+      await patchRecipePlanned(recipeId, false);
+      setRecipes((prev) => prev.filter((r) => r.id !== recipeId));
+    } catch (err) {
+      setError(err.response?.data?.error || err.message || 'Failed to mark recipe as prepared');
+    } finally {
+      setMarkingPreparedId(null);
+    }
+  };
 
   return (
     <div className="recipes-page upcoming-meals-page page-scroll">
@@ -80,6 +94,15 @@ function UpcomingMealsPage() {
                     ) : null}
                   </span>
                 </Link>
+                <button
+                  type="button"
+                  className="btn btn-primary upcoming-meals-prepared-btn"
+                  disabled={markingPreparedId === r.id}
+                  onClick={() => handleMarkPrepared(r.id)}
+                  aria-label={`Mark ${r.name} as prepared`}
+                >
+                  {markingPreparedId === r.id ? 'Updating…' : 'Prepared'}
+                </button>
               </div>
             </li>
           ))}
