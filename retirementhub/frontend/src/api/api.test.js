@@ -69,10 +69,15 @@ describe('api', () => {
     expect(mockInstance.get).toHaveBeenCalledWith('/account-balances');
   });
 
-  it('getProjections calls GET /projections with params', async () => {
-    await getProjections(30, 5, 2.5);
+  it('getProjections calls GET /projections without params when omitted', async () => {
+    await getProjections();
+    expect(mockInstance.get).toHaveBeenCalledWith('/projections');
+  });
+
+  it('getProjections passes query overrides when given an object', async () => {
+    await getProjections({ years: 25, growth_pct: 4, expense_growth_pct: 2, ssi_growth_pct: 2.5 });
     expect(mockInstance.get).toHaveBeenCalledWith('/projections', {
-      params: { years: 30, growth_pct: 5, expense_cola_pct: 2.5 },
+      params: { years: 25, growth_pct: 4, expense_growth_pct: 2, ssi_growth_pct: 2.5 },
     });
   });
 
