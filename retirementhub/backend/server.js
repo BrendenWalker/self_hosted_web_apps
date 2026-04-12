@@ -1736,8 +1736,9 @@ app.get('/api/projections', async (req, res) => {
       for (const ap of assetParts) {
         ap.balance *= ap.depFactor;
       }
-      const netWorth =
-        Math.round((tradP1 + tradP2 + otherInvest + assetParts.reduce((s, a) => s + a.balance, 0)) * 100) / 100;
+      const hardAssetBalance = Math.round(assetParts.reduce((s, a) => s + a.balance, 0) * 100) / 100;
+      const financialBalance = Math.round((tradP1 + tradP2 + otherInvest) * 100) / 100;
+      const netWorth = Math.round((financialBalance + hardAssetBalance) * 100) / 100;
 
       const wageP1 = p1Retired ? 0 : salaryP1;
       const wageP2 = p2Retired ? 0 : salaryP2;
@@ -1745,6 +1746,8 @@ app.get('/api/projections', async (req, res) => {
       byYear.push({
         year: y,
         net_worth: netWorth,
+        financial_balance: financialBalance,
+        hard_asset_balance: hardAssetBalance,
         income: incomeAmount,
         expenses: expensesAmount,
         savings: savingsAmount,

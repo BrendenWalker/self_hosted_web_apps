@@ -464,12 +464,19 @@
   margin-bottom: 0;
 }
 
+.projections-chart-intro {
+  font-size: 0.9rem;
+  color: #5a6b64;
+  margin: 0 0 1rem;
+  line-height: 1.45;
+}
+
 .projections-controls-card .projections-form {
   margin-bottom: 0;
 }
 
 .projections-chart-card .chart-container {
-  min-height: 340px;
+  min-height: 360px;
 }
 
 .chart-tooltip {
