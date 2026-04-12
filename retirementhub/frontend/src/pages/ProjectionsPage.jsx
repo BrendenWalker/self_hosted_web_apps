@@ -50,7 +50,8 @@ function ProjectionsSummary({ data }) {
     start_year,
     end_year,
     growth_pct,
-    expense_cola_pct,
+    expense_growth_pct,
+    ssi_growth_pct,
     target_25x_retirement,
     retirement_year,
     starting_net_worth,
@@ -76,8 +77,12 @@ function ProjectionsSummary({ data }) {
           <span className="summary-value">{growth_pct}% / year</span>
         </div>
         <div>
-          <span className="summary-label">Expense growth (COLA)</span>
-          <span className="summary-value">{expense_cola_pct != null ? `${expense_cola_pct}% / year` : '—'}</span>
+          <span className="summary-label">Expense growth</span>
+          <span className="summary-value">{expense_growth_pct != null ? `${expense_growth_pct}% / year` : '—'}</span>
+        </div>
+        <div>
+          <span className="summary-label">SSI growth (Social Security)</span>
+          <span className="summary-value">{ssi_growth_pct != null ? `${ssi_growth_pct}% / year` : '—'}</span>
         </div>
         <div>
           <span className="summary-label">Starting net worth</span>
@@ -102,7 +107,7 @@ function ProjectionsSummary({ data }) {
         {required_monthly_income_retirement != null && required_monthly_income_retirement > 0 ? (
           <>
             Required monthly income (ret.): {formatCurrency(required_monthly_income_retirement)}/mo (
-            {formatCurrency(required_monthly_income_retirement * 12)}/yr before COLA)
+            {formatCurrency(required_monthly_income_retirement * 12)}/yr before expense growth)
           </>
         ) : (
           <>Retirement annual (from expense categories + mortgage): {formatCurrency(retirement_annual)}</>
@@ -117,7 +122,7 @@ function ProjectionsSummary({ data }) {
               {' '}
               · Expenses use retirement amounts from {projection_meta.expense_retirement_year}
               {projection_meta.use_required_monthly_income
-                ? ' (required monthly income + COLA; P2 pre-Medicare bridge added when applicable)'
+                ? ' (required monthly income + expense growth; P2 pre-Medicare bridge added when applicable)'
                 : ''}
             </>
           )}
@@ -274,7 +279,7 @@ function ProjectionsYearDetailTable({ rows, household, projectionMeta }) {
       <p className="projections-detail-intro">
         Aligns with the chart above; <strong>Net worth</strong> matches the net worth chart. <strong>Ordinary income (before ded.)</strong> is wages + bonus + RMD + savings draws (ordinary) + estimated taxable Social Security (Pub. 915–style; filing: {fsLabel}). See the federal tax table below for standard deduction, taxable income after deduction, and estimated federal liability. Not tax advice.
         {useRmi && (
-          <> In required-income mode, retirement spending is your required monthly amount (with COLA); income is funded Social Security → RMD → wages/bonus → withdrawals from non-RMD savings.</>
+          <> In required-income mode, retirement spending is your required monthly amount (with expense growth); income is funded Social Security → RMD → wages/bonus → withdrawals from non-RMD savings.</>
         )}
       </p>
       <div className="projections-detail-table-wrap">
@@ -420,28 +425,46 @@ function IncomeVsExpensesChart({ data, household, projectionMeta }) {
 export default function ProjectionsPage() {
   const allowZeroRates = import.meta.env.VITE_DEBUG != null && String(import.meta.env.VITE_DEBUG).trim() !== '';
   const minGrowth = allowZeroRates ? 0 : 0.01;
-  const minCola = allowZeroRates ? 0 : 0.01;
+  const minIndexPct = allowZeroRates ? 0 : 0.01;
 
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState(null);
   const [years, setYears] = useState(30);
   const [growthPct, setGrowthPct] = useState(5);
-  const [expenseColaPct, setExpenseColaPct] = useState(2.5);
+  const [expenseGrowthPct, setExpenseGrowthPct] = useState(2.5);
+  const [ssiGrowthPct, setSsiGrowthPct] = useState(2.5);
   const [requiredMonthly, setRequiredMonthly] = useState('');
+
+  const syncFormFromProjectionResponse = (payload) => {
+    if (!payload) return;
+    const y = payload.projection_horizon_years;
+    if (y != null && Number.isFinite(Number(y))) {
+      const n = parseInt(String(y), 10);
+      if (Number.isFinite(n)) setYears(Math.min(50, Math.max(5, n)));
+    }
+    const g = payload.growth_pct;
+    if (g != null && Number.isFinite(Number(g))) setGrowthPct(Math.min(20, Math.max(minGrowth, Number(g))));
+    const eg = payload.expense_growth_pct;
+    if (eg != null && Number.isFinite(Number(eg))) {
+      setExpenseGrowthPct(Math.min(10, Math.max(minIndexPct, Number(eg))));
+    }
+    const sg = payload.ssi_growth_pct;
+    if (sg != null && Number.isFinite(Number(sg))) {
+      setSsiGrowthPct(Math.min(10, Math.max(minIndexPct, Number(sg))));
+    }
+    const rmi = payload.required_monthly_income_retirement;
+    if (rmi != null && rmi > 0) setRequiredMonthly(String(rmi));
+    else setRequiredMonthly('');
+  };
 
   const load = async () => {
     try {
       setLoading(true);
       setMessage(null);
-      const res = await getProjections(years, growthPct, expenseColaPct);
+      const res = await getProjections();
       setData(res.data);
-      const rmi = res.data?.required_monthly_income_retirement;
-      if (rmi != null && rmi > 0) {
-        setRequiredMonthly(String(rmi));
-      } else {
-        setRequiredMonthly('');
-      }
+      syncFormFromProjectionResponse(res.data);
     } catch (err) {
       setMessage(err.response?.data?.error || 'Failed to load projections');
       setData(null);
@@ -469,15 +492,16 @@ export default function ProjectionsPage() {
     try {
       setLoading(true);
       setMessage(null);
-      await updateHousehold({ required_monthly_income_retirement: rmiPayload });
-      const res = await getProjections(years, growthPct, expenseColaPct);
+      await updateHousehold({
+        required_monthly_income_retirement: rmiPayload,
+        projection_horizon_years: years,
+        projection_growth_pct: growthPct,
+        projection_expense_growth_pct: expenseGrowthPct,
+        projection_ssi_growth_pct: ssiGrowthPct,
+      });
+      const res = await getProjections();
       setData(res.data);
-      const rmi = res.data?.required_monthly_income_retirement;
-      if (rmi != null && rmi > 0) {
-        setRequiredMonthly(String(rmi));
-      } else {
-        setRequiredMonthly('');
-      }
+      syncFormFromProjectionResponse(res.data);
     } catch (err) {
       setMessage(err.response?.data?.error || 'Failed to update or load projections');
       setData(null);
@@ -525,13 +549,13 @@ export default function ProjectionsPage() {
     <div className="page-scroll">
       <h1 className="page-title">Projections</h1>
       <p style={{ marginBottom: '1rem', color: '#5a6b64', fontSize: '0.95rem' }}>
-        Net worth and income vs expenses over time. Uses current account balances, income, and expense settings. Set retirement dates on Household and 401(k) on Income for accurate savings. Optional <strong>Required monthly income</strong> sets retirement spending and funds it in order: Social Security, RMDs, wages/bonus (if still working), then withdrawals from non-RMD savings. Leave it blank to use retirement expense categories plus mortgage instead. Below the income chart, annual tables list cash-flow detail, then estimated federal taxable income (after standard deduction) and marginal federal tax by bracket. Portfolio growth applies each year to non-asset accounts; asset-type accounts use expected depreciation from the Accounts page (balance × (1 − depreciation%) each year). Traditional IRA and traditional 401(k) balances drive projected RMDs (IRS Uniform Lifetime Table; included in income). Expense growth (COLA) inflates required income, category expenses, and Social Security benefits by that % per year.
+        Net worth and income vs expenses over time. Uses current account balances, income, and expense settings. Set retirement dates on Household and 401(k) on Income for accurate savings. Optional <strong>Required monthly income</strong> sets retirement spending and funds it in order: Social Security, RMDs, wages/bonus (if still working), then withdrawals from non-RMD savings. Leave it blank to use retirement expense categories plus mortgage instead. Below the income chart, annual tables list cash-flow detail, then estimated federal taxable income (after standard deduction) and marginal federal tax by bracket. Portfolio growth applies each year to non-asset accounts; asset-type accounts use expected depreciation from the Accounts page (balance × (1 − depreciation%) each year). Traditional IRA and traditional 401(k) balances drive projected RMDs (IRS Uniform Lifetime Table; included in income). <strong>Expense growth</strong> inflates required income, category expenses, and the P2 pre-Medicare bridge each year. <strong>SSI growth</strong> compounds projected Social Security only after each person retires. Use <strong>Save &amp; refresh</strong> to store these assumptions (and required monthly income) in the database.
       </p>
 
       <div className="card projections-controls-card">
         <h2>Assumptions</h2>
         {allowZeroRates && (
-          <p style={{ fontSize: '0.85rem', color: '#6b7c75', marginBottom: '0.5rem' }}>DEBUG: 0% growth and 0% COLA allowed for testing.</p>
+          <p style={{ fontSize: '0.85rem', color: '#6b7c75', marginBottom: '0.5rem' }}>DEBUG: 0% portfolio growth and 0% expense/SSI growth allowed for testing.</p>
         )}
         <form onSubmit={handleApply} className="projections-form">
           <div className="form-row">
@@ -571,23 +595,43 @@ export default function ProjectionsPage() {
               />
             </div>
             <div className="form-group">
-              <label htmlFor="projections-cola">Expense growth / COLA (% per year)</label>
+              <label htmlFor="projections-expense-growth">Expense growth (% per year)</label>
               <input
-                id="projections-cola"
+                id="projections-expense-growth"
                 type="number"
                 inputMode="decimal"
-                min={minCola}
+                min={minIndexPct}
                 max={10}
                 step="any"
-                value={expenseColaPct}
+                value={expenseGrowthPct}
                 onChange={(e) => {
                   const raw = e.target.value.trim();
                   if (raw === '' || raw === '-') return;
                   const v = parseFloat(raw);
                   if (!Number.isFinite(v)) return;
-                  setExpenseColaPct(Math.min(10, Math.max(minCola, v)));
+                  setExpenseGrowthPct(Math.min(10, Math.max(minIndexPct, v)));
                 }}
-                title={allowZeroRates ? 'DEBUG: 0% allowed for testing. Expenses and Social Security benefits increase each year by this %.' : 'Expenses and Social Security benefits increase each year by this % (SS COLA–style, default ~2.5%). Any value from 0.01% to 10%.'}
+                title={allowZeroRates ? 'DEBUG: 0% allowed. Inflates expenses, required monthly income in retirement, and P2 pre-Medicare bridge.' : 'Inflates expenses, required monthly income in retirement, and P2 pre-Medicare bridge (default ~2.5%). 0.01% to 10%.'}
+              />
+            </div>
+            <div className="form-group">
+              <label htmlFor="projections-ssi-growth">SSI growth (% per year)</label>
+              <input
+                id="projections-ssi-growth"
+                type="number"
+                inputMode="decimal"
+                min={minIndexPct}
+                max={10}
+                step="any"
+                value={ssiGrowthPct}
+                onChange={(e) => {
+                  const raw = e.target.value.trim();
+                  if (raw === '' || raw === '-') return;
+                  const v = parseFloat(raw);
+                  if (!Number.isFinite(v)) return;
+                  setSsiGrowthPct(Math.min(10, Math.max(minIndexPct, v)));
+                }}
+                title={allowZeroRates ? 'DEBUG: 0% allowed. Compounds on projected Social Security after each person’s retirement year.' : 'Annual increase on Social Security benefits after retirement (default ~2.5%). 0.01% to 10%.'}
               />
             </div>
             <div className="form-group">
@@ -600,11 +644,11 @@ export default function ProjectionsPage() {
                 placeholder="Use expense categories instead"
                 value={requiredMonthly}
                 onChange={(e) => setRequiredMonthly(e.target.value)}
-                title="If set, retirement spending uses this monthly amount (with COLA from the year expenses switch to retirement). Income is funded: Social Security → RMD → wages/bonus → non-RMD savings. Clear to use retirement amounts from the Expenses page plus mortgage."
+                title="If set, retirement spending uses this monthly amount (with expense growth from the year expenses switch to retirement). Income is funded: Social Security → RMD → wages/bonus → non-RMD savings. Clear to use retirement amounts from the Expenses page plus mortgage."
               />
             </div>
             <div className="form-group" style={{ alignSelf: 'flex-end' }}>
-              <button type="submit" className="btn btn-primary">Update</button>
+              <button type="submit" className="btn btn-primary">Save &amp; refresh</button>
             </div>
           </div>
         </form>

@@ -18,6 +18,10 @@ CREATE TABLE IF NOT EXISTS household (
     filing_status VARCHAR(40) NOT NULL DEFAULT 'married_filing_jointly'
         CHECK (filing_status IN ('single', 'married_filing_jointly', 'married_filing_separately', 'head_of_household')),
     required_monthly_income_retirement DECIMAL(12, 2),
+    projection_horizon_years INTEGER NOT NULL DEFAULT 30 CHECK (projection_horizon_years >= 5 AND projection_horizon_years <= 50),
+    projection_growth_pct DECIMAL(5, 2) NOT NULL DEFAULT 5 CHECK (projection_growth_pct >= 0 AND projection_growth_pct <= 20),
+    projection_expense_growth_pct DECIMAL(5, 2) NOT NULL DEFAULT 2.5 CHECK (projection_expense_growth_pct >= 0 AND projection_expense_growth_pct <= 10),
+    projection_ssi_growth_pct DECIMAL(5, 2) NOT NULL DEFAULT 2.5 CHECK (projection_ssi_growth_pct >= 0 AND projection_ssi_growth_pct <= 10),
     modified TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 

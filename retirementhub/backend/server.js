@@ -54,6 +54,10 @@ app.put('/api/household', async (req, res) => {
       p2_ss_at_fra,
       filing_status,
       required_monthly_income_retirement,
+      projection_horizon_years,
+      projection_growth_pct,
+      projection_expense_growth_pct,
+      projection_ssi_growth_pct,
     } = req.body;
     const shouldSetRmi = Object.prototype.hasOwnProperty.call(req.body, 'required_monthly_income_retirement');
     const rmiStored = shouldSetRmi
@@ -67,6 +71,26 @@ app.put('/api/household', async (req, res) => {
     const shouldSetP2SsEst = Object.prototype.hasOwnProperty.call(req.body, 'p2_ss_monthly_estimate');
     const shouldSetP1SsFra = Object.prototype.hasOwnProperty.call(req.body, 'p1_ss_at_fra');
     const shouldSetP2SsFra = Object.prototype.hasOwnProperty.call(req.body, 'p2_ss_at_fra');
+    const shouldSetProjYears = Object.prototype.hasOwnProperty.call(req.body, 'projection_horizon_years');
+    const shouldSetProjGrowth = Object.prototype.hasOwnProperty.call(req.body, 'projection_growth_pct');
+    const shouldSetProjExpenseGrowth = Object.prototype.hasOwnProperty.call(req.body, 'projection_expense_growth_pct');
+    const shouldSetProjSsiGrowth = Object.prototype.hasOwnProperty.call(req.body, 'projection_ssi_growth_pct');
+    const clamp = (n, lo, hi, fallback) => {
+      if (!Number.isFinite(n)) return fallback;
+      return Math.min(hi, Math.max(lo, n));
+    };
+    const projYearsStored = shouldSetProjYears
+      ? clamp(parseInt(projection_horizon_years, 10), 5, 50, 30)
+      : null;
+    const projGrowthStored = shouldSetProjGrowth
+      ? clamp(parseFloat(projection_growth_pct), 0.01, 20, 5)
+      : null;
+    const projExpenseGrowthStored = shouldSetProjExpenseGrowth
+      ? clamp(parseFloat(projection_expense_growth_pct), 0.01, 10, 2.5)
+      : null;
+    const projSsiGrowthStored = shouldSetProjSsiGrowth
+      ? clamp(parseFloat(projection_ssi_growth_pct), 0.01, 10, 2.5)
+      : null;
     const result = await pool.query(
       `UPDATE household SET
         p1_display_name = COALESCE($1, p1_display_name),
@@ -81,6 +105,10 @@ app.put('/api/household', async (req, res) => {
         p2_ss_at_fra = CASE WHEN $19::boolean THEN $10 ELSE p2_ss_at_fra END,
         filing_status = COALESCE($11, filing_status),
         required_monthly_income_retirement = CASE WHEN $13::boolean THEN $12 ELSE required_monthly_income_retirement END,
+        projection_horizon_years = CASE WHEN $20::boolean THEN $21 ELSE projection_horizon_years END,
+        projection_growth_pct = CASE WHEN $22::boolean THEN $23 ELSE projection_growth_pct END,
+        projection_expense_growth_pct = CASE WHEN $24::boolean THEN $25 ELSE projection_expense_growth_pct END,
+        projection_ssi_growth_pct = CASE WHEN $26::boolean THEN $27 ELSE projection_ssi_growth_pct END,
         modified = CURRENT_TIMESTAMP
        WHERE id = (SELECT id FROM household LIMIT 1)
        RETURNING *`,
@@ -104,6 +132,14 @@ app.put('/api/household', async (req, res) => {
         shouldSetP2SsEst,
         shouldSetP1SsFra,
         shouldSetP2SsFra,
+        shouldSetProjYears,
+        projYearsStored,
+        shouldSetProjGrowth,
+        projGrowthStored,
+        shouldSetProjExpenseGrowth,
+        projExpenseGrowthStored,
+        shouldSetProjSsiGrowth,
+        projSsiGrowthStored,
       ]
     );
     if (result.rows.length === 0) {
@@ -1368,22 +1404,20 @@ function buildPartyLimitsForYear(birthYear, base, year) {
 app.get('/api/projections', async (req, res) => {
   try {
     const allowZeroRates = !!process.env.DEBUG;
-    const yearsParam = req.query.years != null ? parseInt(String(req.query.years).trim(), 10) : 30;
-    const growthPctParam = req.query.growth_pct != null ? parseFloat(String(req.query.growth_pct).trim()) : 5;
-    const expenseColaParam = req.query.expense_cola_pct != null ? parseFloat(String(req.query.expense_cola_pct).trim()) : 2.5;
-    const horizonYears = Number.isFinite(yearsParam) && yearsParam >= 1 && yearsParam <= 50 ? yearsParam : 30;
     const minGrowth = allowZeroRates ? 0 : 0.01;
-    const minCola = allowZeroRates ? 0 : 0.01;
-    const growthPct = Number.isFinite(growthPctParam) && growthPctParam >= minGrowth && growthPctParam <= 20 ? growthPctParam : 5;
-    const expenseColaPct = Number.isFinite(expenseColaParam) && expenseColaParam >= minCola && expenseColaParam <= 10 ? expenseColaParam : 2.5;
-    const expenseColaFactor = 1 + expenseColaPct / 100;
+    const minIndexPct = allowZeroRates ? 0 : 0.01;
 
     const now = new Date();
     const startYear = now.getFullYear();
 
     const [householdRes, incomeRes, balancesRes, summaryRes] = await Promise.all([
       pool.query(
-        'SELECT p1_display_name, p2_display_name, p1_birth_year, p2_birth_year, p1_retirement_date, p2_retirement_date, p1_ss_at_fra, p2_ss_at_fra, filing_status, required_monthly_income_retirement FROM household ORDER BY id LIMIT 1'
+        `SELECT p1_display_name, p2_display_name, p1_birth_year, p2_birth_year,
+                p1_retirement_date, p2_retirement_date, p1_ss_at_fra, p2_ss_at_fra, filing_status,
+                required_monthly_income_retirement,
+                projection_horizon_years, projection_growth_pct,
+                projection_expense_growth_pct, projection_ssi_growth_pct
+         FROM household ORDER BY id LIMIT 1`
       ),
       pool.query('SELECT * FROM income ORDER BY as_of DESC, id DESC LIMIT 1'),
       pool.query(
@@ -1403,6 +1437,51 @@ app.get('/api/projections', async (req, res) => {
 
     const household = householdRes.rows[0] || null;
     const income = incomeRes.rows[0] || null;
+
+    const tryParseFloat = (v) => {
+      if (v == null || v === '') return null;
+      const p = parseFloat(String(v).trim());
+      return Number.isFinite(p) ? p : null;
+    };
+    const tryParseInt = (v) => {
+      if (v == null || v === '') return null;
+      const n = parseInt(String(v).trim(), 10);
+      return Number.isFinite(n) ? n : null;
+    };
+    const yearsQ = tryParseInt(req.query.years);
+    const yearsDb = tryParseInt(household?.projection_horizon_years);
+    let horizonYears = Number.isFinite(yearsQ) ? yearsQ : yearsDb;
+    if (!Number.isFinite(horizonYears)) horizonYears = 30;
+    horizonYears = Math.min(50, Math.max(5, horizonYears));
+
+    const growthQ = tryParseFloat(req.query.growth_pct);
+    let growthPct = Number.isFinite(growthQ) && growthQ >= minGrowth && growthQ <= 20 ? growthQ : null;
+    if (growthPct == null) {
+      const gDb = tryParseFloat(household?.projection_growth_pct);
+      growthPct =
+        Number.isFinite(gDb) && gDb >= minGrowth && gDb <= 20 ? gDb : 5;
+    }
+
+    const expenseGQ =
+      tryParseFloat(req.query.expense_growth_pct) ?? tryParseFloat(req.query.expense_cola_pct);
+    let expenseGrowthPct =
+      Number.isFinite(expenseGQ) && expenseGQ >= minIndexPct && expenseGQ <= 10 ? expenseGQ : null;
+    if (expenseGrowthPct == null) {
+      const eDb = tryParseFloat(household?.projection_expense_growth_pct);
+      expenseGrowthPct =
+        Number.isFinite(eDb) && eDb >= minIndexPct && eDb <= 10 ? eDb : 2.5;
+    }
+
+    const ssiGQ = tryParseFloat(req.query.ssi_growth_pct);
+    let ssiGrowthPct = Number.isFinite(ssiGQ) && ssiGQ >= minIndexPct && ssiGQ <= 10 ? ssiGQ : null;
+    if (ssiGrowthPct == null) {
+      const sDb = tryParseFloat(household?.projection_ssi_growth_pct);
+      ssiGrowthPct = Number.isFinite(sDb) && sDb >= minIndexPct && sDb <= 10 ? sDb : 2.5;
+    }
+
+    const expenseGrowthFactor = 1 + expenseGrowthPct / 100;
+    const ssiGrowthFactor = 1 + ssiGrowthPct / 100;
+
     const filingStatus = household?.filing_status || 'married_filing_jointly';
     const p1BirthYear = household?.p1_birth_year != null ? parseInt(household.p1_birth_year, 10) : null;
     const p2BirthYear = household?.p2_birth_year != null ? parseInt(household.p2_birth_year, 10) : null;
@@ -1534,8 +1613,8 @@ app.get('/api/projections', async (req, res) => {
       const bonusAnnual = (expenseRetirementYear != null && y >= expenseRetirementYear) ? 0 : bonusQuarterly * 4;
       const ssColaYearsP1 = p1Retired && p1RetirementYear != null ? Math.max(0, y - p1RetirementYear) : 0;
       const ssColaYearsP2 = p2Retired && p2RetirementYear != null ? Math.max(0, y - p2RetirementYear) : 0;
-      const annualSsP1 = p1Retired ? p1SsAnnual * Math.pow(expenseColaFactor, ssColaYearsP1) : 0;
-      const annualSsP2 = p2Retired ? p2SsAnnual * Math.pow(expenseColaFactor, ssColaYearsP2) : 0;
+      const annualSsP1 = p1Retired ? p1SsAnnual * Math.pow(ssiGrowthFactor, ssColaYearsP1) : 0;
+      const annualSsP2 = p2Retired ? p2SsAnnual * Math.pow(ssiGrowthFactor, ssColaYearsP2) : 0;
       const totalSs = annualSsP1 + annualSsP2;
 
       const age1 = ageAtEoy(p1BirthYear, y);
@@ -1567,13 +1646,13 @@ app.get('/api/projections', async (req, res) => {
 
       if (useRequiredMonthlyIncome && expensesUseRetirement && expenseRetirementYear != null) {
         const expenseGrowthYears = y - expenseRetirementYear;
-        const baseNeed = rmiMonthly * 12 * Math.pow(expenseColaFactor, Math.max(0, expenseGrowthYears));
+        const baseNeed = rmiMonthly * 12 * Math.pow(expenseGrowthFactor, Math.max(0, expenseGrowthYears));
         expensesAmount = Math.round(baseNeed * 100) / 100;
         if (inP2HealthBridge && p2HealthUntilMedicareMonthly.length > 0) {
           const bridgeColaYears = y - p1RetirementYear;
           let bridgeAnnual = 0;
           for (const monthly of p2HealthUntilMedicareMonthly) {
-            bridgeAnnual += monthly * 12 * Math.pow(expenseColaFactor, Math.max(0, bridgeColaYears));
+            bridgeAnnual += monthly * 12 * Math.pow(expenseGrowthFactor, Math.max(0, bridgeColaYears));
           }
           expensesAmount = Math.round((expensesAmount + bridgeAnnual) * 100) / 100;
         }
@@ -1589,12 +1668,12 @@ app.get('/api/projections', async (req, res) => {
         const expenseBase = expensesUseRetirement ? retirementAnnual : currentAnnual;
         const expenseGrowthYears =
           expensesUseRetirement && expenseRetirementYear != null ? y - expenseRetirementYear : y - startYear;
-        expensesAmount = Math.round(expenseBase * Math.pow(expenseColaFactor, Math.max(0, expenseGrowthYears)) * 100) / 100;
+        expensesAmount = Math.round(expenseBase * Math.pow(expenseGrowthFactor, Math.max(0, expenseGrowthYears)) * 100) / 100;
         if (inP2HealthBridge && p2HealthUntilMedicareMonthly.length > 0) {
           const bridgeColaYears = y - p1RetirementYear;
           let bridgeAnnual = 0;
           for (const monthly of p2HealthUntilMedicareMonthly) {
-            bridgeAnnual += monthly * 12 * Math.pow(expenseColaFactor, Math.max(0, bridgeColaYears));
+            bridgeAnnual += monthly * 12 * Math.pow(expenseGrowthFactor, Math.max(0, bridgeColaYears));
           }
           expensesAmount = Math.round((expensesAmount + bridgeAnnual) * 100) / 100;
         }
@@ -1711,8 +1790,10 @@ app.get('/api/projections', async (req, res) => {
     res.json({
       start_year: startYear,
       end_year: endYear,
+      projection_horizon_years: horizonYears,
       growth_pct: growthPct,
-      expense_cola_pct: expenseColaPct,
+      expense_growth_pct: expenseGrowthPct,
+      ssi_growth_pct: ssiGrowthPct,
       target_25x_retirement: target25xRetirement,
       retirement_year: retirementYear,
       starting_net_worth: startingNetWorth,
@@ -1746,7 +1827,7 @@ app.get('/api/projections', async (req, res) => {
           'Excludes NIIT, AMT, state/local tax, credits, and payroll taxes. Brackets and standard deduction are approximations.',
         use_required_monthly_income: useRequiredMonthlyIncome,
         required_monthly_income_note: useRequiredMonthlyIncome
-          ? 'Retirement spending uses Required monthly income (COLA from first year expenses use retirement amounts). Cash flow: Social Security and RMDs first, then wages/bonus, then withdrawals from non-RMD savings (taxable, Roth, etc.). P2 pre-Medicare bridge adds on top. Federal tax treats savings draws as ordinary income (approximation).'
+          ? 'Retirement spending uses Required monthly income (expense growth from first year expenses use retirement amounts). Cash flow: Social Security and RMDs first, then wages/bonus, then withdrawals from non-RMD savings (taxable, Roth, etc.). P2 pre-Medicare bridge adds on top. Federal tax treats savings draws as ordinary income (approximation).'
           : null,
       },
     });
