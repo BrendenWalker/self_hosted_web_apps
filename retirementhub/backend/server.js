@@ -61,18 +61,24 @@ app.put('/api/household', async (req, res) => {
         ? parseFloat(required_monthly_income_retirement)
         : null
       : null;
+    const shouldSetP1Ret = Object.prototype.hasOwnProperty.call(req.body, 'p1_retirement_date');
+    const shouldSetP2Ret = Object.prototype.hasOwnProperty.call(req.body, 'p2_retirement_date');
+    const shouldSetP1SsEst = Object.prototype.hasOwnProperty.call(req.body, 'p1_ss_monthly_estimate');
+    const shouldSetP2SsEst = Object.prototype.hasOwnProperty.call(req.body, 'p2_ss_monthly_estimate');
+    const shouldSetP1SsFra = Object.prototype.hasOwnProperty.call(req.body, 'p1_ss_at_fra');
+    const shouldSetP2SsFra = Object.prototype.hasOwnProperty.call(req.body, 'p2_ss_at_fra');
     const result = await pool.query(
       `UPDATE household SET
         p1_display_name = COALESCE($1, p1_display_name),
         p2_display_name = COALESCE($2, p2_display_name),
         p1_birth_year = COALESCE($3, p1_birth_year),
         p2_birth_year = COALESCE($4, p2_birth_year),
-        p1_retirement_date = $5,
-        p2_retirement_date = $6,
-        p1_ss_monthly_estimate = $7,
-        p2_ss_monthly_estimate = $8,
-        p1_ss_at_fra = $9,
-        p2_ss_at_fra = $10,
+        p1_retirement_date = CASE WHEN $14::boolean THEN $5 ELSE p1_retirement_date END,
+        p2_retirement_date = CASE WHEN $15::boolean THEN $6 ELSE p2_retirement_date END,
+        p1_ss_monthly_estimate = CASE WHEN $16::boolean THEN $7 ELSE p1_ss_monthly_estimate END,
+        p2_ss_monthly_estimate = CASE WHEN $17::boolean THEN $8 ELSE p2_ss_monthly_estimate END,
+        p1_ss_at_fra = CASE WHEN $18::boolean THEN $9 ELSE p1_ss_at_fra END,
+        p2_ss_at_fra = CASE WHEN $19::boolean THEN $10 ELSE p2_ss_at_fra END,
         filing_status = COALESCE($11, filing_status),
         required_monthly_income_retirement = CASE WHEN $13::boolean THEN $12 ELSE required_monthly_income_retirement END,
         modified = CURRENT_TIMESTAMP
@@ -92,6 +98,12 @@ app.put('/api/household', async (req, res) => {
         filing_status != null ? String(filing_status).trim() : null,
         rmiStored,
         shouldSetRmi,
+        shouldSetP1Ret,
+        shouldSetP2Ret,
+        shouldSetP1SsEst,
+        shouldSetP2SsEst,
+        shouldSetP1SsFra,
+        shouldSetP2SsFra,
       ]
     );
     if (result.rows.length === 0) {
