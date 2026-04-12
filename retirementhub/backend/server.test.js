@@ -137,6 +137,29 @@ describe('RetirementHub API', () => {
       expect(res.body).toMatchObject({ p1_display_name: 'Alice', filing_status: 'married' });
     });
 
+    it('PUT /api/household with only required_monthly_income_retirement does not flag retirement/SS fields for update', async () => {
+      const captured = [];
+      mockPool.query.mockImplementation((sql, params) => {
+        if ((sql || '').includes('UPDATE household SET')) {
+          captured.push(params);
+        }
+        return defaultQueryHandler(sql, params);
+      });
+      const res = await request(serverModule.app)
+        .put('/api/household')
+        .send({ required_monthly_income_retirement: 4500 });
+      expect(res.status).toBe(200);
+      expect(captured.length).toBe(1);
+      const p = captured[0];
+      expect(p[12]).toBe(true);
+      expect(p[13]).toBe(false);
+      expect(p[14]).toBe(false);
+      expect(p[15]).toBe(false);
+      expect(p[16]).toBe(false);
+      expect(p[17]).toBe(false);
+      expect(p[18]).toBe(false);
+    });
+
     it('PUT /api/household returns 404 when not found', async () => {
       mockPool.query.mockImplementation((sql) => {
         if (sql && sql.includes('UPDATE household SET')) {

@@ -555,17 +555,19 @@ export default function ProjectionsPage() {
               <input
                 id="projections-growth"
                 type="number"
+                inputMode="decimal"
                 min={minGrowth}
                 max={20}
-                step={allowZeroRates ? 0.1 : 0.5}
+                step="any"
                 value={growthPct}
                 onChange={(e) => {
-                  const v = parseFloat(e.target.value);
-                  const fallback = 5;
-                  const clamped = Number.isFinite(v) ? Math.min(20, Math.max(minGrowth, v)) : fallback;
-                  setGrowthPct(clamped);
+                  const raw = e.target.value.trim();
+                  if (raw === '' || raw === '-') return;
+                  const v = parseFloat(raw);
+                  if (!Number.isFinite(v)) return;
+                  setGrowthPct(Math.min(20, Math.max(minGrowth, v)));
                 }}
-                title={allowZeroRates ? 'DEBUG: 0% allowed for testing' : undefined}
+                title={allowZeroRates ? 'DEBUG: 0% allowed for testing' : 'Portfolio growth on non-asset accounts; any percentage from 0.01 to 20.'}
               />
             </div>
             <div className="form-group">
@@ -573,17 +575,19 @@ export default function ProjectionsPage() {
               <input
                 id="projections-cola"
                 type="number"
+                inputMode="decimal"
                 min={minCola}
                 max={10}
-                step={allowZeroRates ? 0.1 : 0.25}
+                step="any"
                 value={expenseColaPct}
                 onChange={(e) => {
-                  const v = parseFloat(e.target.value);
-                  const fallback = 2.5;
-                  const clamped = Number.isFinite(v) ? Math.min(10, Math.max(minCola, v)) : fallback;
-                  setExpenseColaPct(clamped);
+                  const raw = e.target.value.trim();
+                  if (raw === '' || raw === '-') return;
+                  const v = parseFloat(raw);
+                  if (!Number.isFinite(v)) return;
+                  setExpenseColaPct(Math.min(10, Math.max(minCola, v)));
                 }}
-                title={allowZeroRates ? 'DEBUG: 0% allowed for testing. Expenses and Social Security benefits increase each year by this %.' : 'Expenses and Social Security benefits increase each year by this % (SS COLA–style, default ~2.5%)'}
+                title={allowZeroRates ? 'DEBUG: 0% allowed for testing. Expenses and Social Security benefits increase each year by this %.' : 'Expenses and Social Security benefits increase each year by this % (SS COLA–style, default ~2.5%). Any value from 0.01% to 10%.'}
               />
             </div>
             <div className="form-group">
