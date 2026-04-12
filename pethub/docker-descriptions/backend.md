@@ -1,0 +1,1 @@
+PetHub backend: Flask + SQLAlchemy + PostgreSQL, migrated from the standalone PetDB project. Exposes `/api/health` for orchestration health checks. Runs Alembic migrations on container start when `DATABASE_URL` or `DB_*` credentials are set.

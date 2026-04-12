@@ -1,6 +1,6 @@
 # Self-Hosted Web Apps
 
-A monorepo of self-hosted web applications. Each service follows a consistent pattern: Node.js/Express backend, React + Vite frontend, PostgreSQL, and Docker.
+A monorepo of self-hosted web applications. **KitchenHub**, **VehicleHub**, and **RetirementHub** each ship a Node.js + Express REST API, a React + Vite SPA, PostgreSQL, and Docker-friendly layouts. **PetHub** is the same React + Vite and PostgreSQL pattern, but its API is Python + Flask (Gunicorn in the published backend image). **MailHub** is a separate multi-container mail stack (see [MailHub README](mailhub/README.md)).
 
 ## Overview
 
@@ -12,11 +12,12 @@ Each app has its own API, UI, and database schema. They are intended to run on a
 - **VehicleHub** — Vehicle maintenance and service history
 - **RetirementHub** — Retirement-oriented budgeting, savings limits, and projections
 - **MailHub** — Multi-container mail stack (SMTP, filtering, IMAP/LMTP). Different layout than the other hubs
+- **PetHub** — Pet activity tracking (ports backend `8120`, frontend `8130`)
 
-## Architecture (KitchenHub, VehicleHub, RetirementHub)
+## Architecture (KitchenHub, VehicleHub, RetirementHub, PetHub)
 
-- **Backend**: Node.js/Express REST API  
-- **Frontend**: React + Vite (often served by nginx in production)  
+- **Backend**: Node.js + Express (KitchenHub, VehicleHub, RetirementHub); Python + Flask (PetHub), with Gunicorn as the WSGI server in its Docker image  
+- **Frontend**: React + Vite for KitchenHub, VehicleHub, RetirementHub, and PetHub (often served by nginx in production)  
 - **Database**: PostgreSQL  
 - **Deployment**: Docker / Compose (see each service)
 
@@ -27,6 +28,7 @@ Default ports are spaced to avoid clashes:
 - **KitchenHub**: backend `8080`, frontend `8081`
 - **VehicleHub**: backend `8090`, frontend `8091`
 - **RetirementHub**: backend `8100`, frontend `8110`
+- **PetHub**: backend `8120`, frontend `8130`
 - Future services: continue the pattern (e.g. +10 per service)
 
 ## Deployment (high level)
@@ -61,6 +63,7 @@ Backends expose `/api/health` for readiness checks.
 ├── vehiclehub/
 ├── retirementhub/
 ├── mailhub/
+├── pethub/
 └── README.md
 ```
 
@@ -69,7 +72,8 @@ Backends expose `/api/health` for readiness checks.
 - [KitchenHub README](kitchenhub/README.md)  
 - [VehicleHub README](vehiclehub/README.md)  
 - [RetirementHub README](retirementhub/README.md)  
-- [MailHub README](mailhub/README.md)
+- [MailHub README](mailhub/README.md)  
+- [PetHub README](pethub/README.md)
 
 ## Shared code
 

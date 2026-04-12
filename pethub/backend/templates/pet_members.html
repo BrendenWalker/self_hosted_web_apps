@@ -1,0 +1,122 @@
+{% extends "base.html" %}
+{% block content %}
+<section class="card">
+  <h2>Manage Pet Memberships</h2>
+  <p>Invite or add users to pets you manage.</p>
+  <div style="margin-bottom:12px;">
+    <label for="new_pet_name">Create new pet</label>
+    <input id="new_pet_name" placeholder="Pet name">
+    <button id="create_pet_btn">Create</button>
+  </div>
+  {% for p in pets %}
+  <div class="card" style="margin-bottom:12px;">
+    <h3>{{ p.name }} <button class="secondary btn-delete-pet" data-pid="{{ p.id }}" style="margin-left:12px;">Delete Pet</button></h3>
+    <div style="margin:8px 0;">
+      <label for="birthdate_{{ p.id }}">Birthdate</label>
+      <input type="date" id="birthdate_{{ p.id }}" value="{{ p.birthdate.strftime('%Y-%m-%d') if p.birthdate else '' }}">
+      <button class="btn-save-birthdate" data-pid="{{ p.id }}">Save Birthdate</button>
+    </div>
+    <div>Members:
+      <ul class="member-list">
+        {% for m in p.members %}
+          <li data-user-id="{{ m.id }}">{{ m.email }} <button class="secondary remove-member" data-pid="{{ p.id }}" data-user-id="{{ m.id }}">Remove</button></li>
+        {% endfor %}
+      </ul>
+    </div>
+    <div>Pending invites:
+      <ul class="invite-list">
+        {% for inv in p.invites %}
+          <li data-inv-id="{{ inv.id }}">{{ inv.invite_email }} (expires {{ inv.expires_at|localtime }}) <button class="secondary revoke-invite" data-pid="{{ p.id }}" data-inv-id="{{ inv.id }}">Revoke</button></li>
+        {% endfor %}
+      </ul>
+    </div>
+    <div style="margin-top:8px;">
+      <label for="email_{{ p.id }}">Add user (email)</label>
+      <input id="email_{{ p.id }}" name="email" placeholder="user@example.com">
+      <button class="btn-invite" data-pid="{{ p.id }}">Invite</button>
+      <button class="btn-add" data-pid="{{ p.id }}">Add</button>
+    </div>
+  </div>
+  {% endfor %}
+</section>
+<script>
+document.addEventListener('DOMContentLoaded', ()=>{
+  // create pet
+  const createBtn = document.querySelector('#create_pet_btn');
+  if (createBtn) {
+    createBtn.addEventListener('click', async ()=>{
+      const name = document.querySelector('#new_pet_name').value.trim();
+      if (!name) { alert('Name required'); return; }
+      const resp = await fetch('/pets', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({name}) });
+      const data = await resp.json();
+      if (data.ok) location.reload(); else alert(data.error || 'error');
+    });
+  }
+  document.querySelectorAll('.btn-add').forEach(btn=>{
+    btn.addEventListener('click', async ()=>{
+      const pid = btn.dataset.pid;
+      const email = document.querySelector('#email_'+pid).value;
+      const resp = await fetch('/pets/'+pid+'/add_user', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({email}) });
+      const data = await resp.json();
+      if (data.ok) {
+        location.reload();
+      } else { alert(data.error || 'error'); }
+    });
+  });
+
+  document.querySelectorAll('.btn-invite').forEach(btn=>{
+    btn.addEventListener('click', async ()=>{
+      const pid = btn.dataset.pid;
+      const email = document.querySelector('#email_'+pid).value;
+      const resp = await fetch('/pets/'+pid+'/invite', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({email}) });
+      const data = await resp.json();
+      if (data.ok) { alert('Invite link:\n'+data.invite_link); location.reload(); } else { alert(data.error || 'error'); }
+    });
+  });
+
+  document.querySelectorAll('.remove-member').forEach(btn=>{
+    btn.addEventListener('click', async ()=>{
+      const pid = btn.dataset.pid; const uid = btn.dataset.userId;
+      if (!confirm('Remove this user?')) return;
+      const resp = await fetch('/pets/'+pid+'/remove_user', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({user_id: uid}) });
+      const data = await resp.json(); if (data.ok) location.reload(); else alert(data.error || 'error');
+    });
+  });
+
+  document.querySelectorAll('.revoke-invite').forEach(btn=>{
+    btn.addEventListener('click', async ()=>{
+      const pid = btn.dataset.pid; const inv = btn.dataset.invId;
+      if (!confirm('Revoke invite?')) return;
+      const resp = await fetch('/pets/'+pid+'/invites/'+inv+'/revoke', { method: 'POST' });
+      const data = await resp.json(); if (data.ok) location.reload(); else alert(data.error || 'error');
+    });
+  });
+
+  document.querySelectorAll('.btn-save-birthdate').forEach(btn=>{
+    btn.addEventListener('click', async ()=>{
+      const pid = btn.dataset.pid;
+      const birthdate = document.querySelector('#birthdate_'+pid).value;
+      const resp = await fetch('/pets/'+pid+'/update', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({birthdate}) });
+      const data = await resp.json();
+      if (data.ok) {
+        alert('Birthdate saved');
+        location.reload();
+      } else {
+        alert(data.error || 'error');
+      }
+    });
+  });
+
+  // delete pet
+  document.querySelectorAll('.btn-delete-pet').forEach(btn=>{
+    btn.addEventListener('click', async ()=>{
+      const pid = btn.dataset.pid;
+      if (!confirm('Delete this pet and all its activities?')) return;
+      const resp = await fetch('/pets/'+pid+'/delete', { method: 'POST' });
+      const data = await resp.json();
+      if (data.ok) location.reload(); else alert(data.error || 'error');
+    });
+  });
+});
+</script>
+{% endblock %}
