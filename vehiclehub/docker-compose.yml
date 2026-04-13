@@ -20,7 +20,9 @@ services:
     extra_hosts:
       - "host.docker.internal:host-gateway"
     networks:
-      - vehiclehub-network
+      vehiclehub-network:
+        aliases:
+          - vehiclehub-backend
     restart: unless-stopped
 
   frontend:
@@ -33,7 +35,9 @@ services:
     depends_on:
       - backend
     networks:
-      - vehiclehub-network
+      vehiclehub-network:
+        aliases:
+          - vehiclehub-frontend
     restart: unless-stopped
 
   # Note: You mentioned you already have a PostgreSQL container

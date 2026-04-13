@@ -1,3 +1,6 @@
+# Deploy in Portainer as a Compose stack on Docker Standalone (not a Swarm stack).
+# Under `networks:` declare BOTH the stack bridge and the shared external net (`edge` or `web`).
+# Portainer may 500 if the bridge network is only implicit. Create external net once if needed.
 version: '3.8'
 
 services:
@@ -17,7 +20,12 @@ services:
     extra_hosts:
       - "host.docker.internal:host-gateway"
     networks:
-      - retirementhub-network
+      retirementhub-network:
+        aliases:
+          - retirementhub-backend
+      edge:
+        aliases:
+          - retirementhub-backend
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:80/api/health"]
@@ -34,9 +42,16 @@ services:
     depends_on:
       - backend
     networks:
-      - retirementhub-network
+      retirementhub-network:
+        aliases:
+          - retirementhub-frontend
+      edge:
+        aliases:
+          - retirementhub-frontend
     restart: unless-stopped
 
 networks:
   retirementhub-network:
     driver: bridge
+  edge:
+    external: true

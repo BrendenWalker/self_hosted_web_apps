@@ -1,3 +1,6 @@
+# Deploy in Portainer as a Compose stack on Docker Standalone (not a Swarm stack).
+# Under `networks:` declare BOTH the stack bridge and the shared external net (`edge` or `web`).
+# Portainer may 500 if the bridge network is only implicit. Create external net once if needed.
 version: '3.8'
 
 services:
@@ -14,7 +17,12 @@ services:
       - DB_USER=${DB_USER}
       - DB_PASSWORD=${DB_PASSWORD}
     networks:
-      - kitchenhub-network
+      kitchenhub-network:
+        aliases:
+          - kitchenhub-backend
+      edge:
+        aliases:
+          - kitchenhub-backend
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:80/api/health"]
@@ -31,9 +39,16 @@ services:
     depends_on:
       - backend
     networks:
-      - kitchenhub-network
+      kitchenhub-network:
+        aliases:
+          - kitchenhub-frontend
+      edge:
+        aliases:
+          - kitchenhub-frontend
     restart: unless-stopped
 
 networks:
   kitchenhub-network:
     driver: bridge
+  edge:
+    external: true
