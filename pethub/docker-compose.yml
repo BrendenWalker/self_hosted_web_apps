@@ -1,7 +1,8 @@
 version: '3.8'
 
 services:
-  backend:
+  # Service name must be unique on shared Docker networks (avoid generic `backend`).
+  pethub-backend:
     build:
       context: ..
       dockerfile: pethub/backend/Dockerfile
@@ -27,7 +28,7 @@ services:
       - pethub-network
     restart: unless-stopped
 
-  frontend:
+  pethub-frontend:
     build:
       context: ..
       dockerfile: pethub/frontend/Dockerfile
@@ -35,7 +36,7 @@ services:
     ports:
       - "8130:80"
     depends_on:
-      - backend
+      - pethub-backend
     networks:
       - pethub-network
     restart: unless-stopped

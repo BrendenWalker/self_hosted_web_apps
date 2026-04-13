@@ -1,7 +1,8 @@
 version: '3.8'
 
 services:
-  backend:
+  # DNS name on the stack network — unique vs other hubs that use service key `backend`.
+  pethub-backend:
     image: ${DOCKER_HUB_REGISTRY_USERNAME}/${DOCKER_HUB_BACKEND_IMAGE_NAME:-pethub-backend}:${IMAGE_TAG:-latest}
     container_name: pethub-backend
     ports:
@@ -37,13 +38,13 @@ services:
       retries: 3
       start_period: 60s
 
-  frontend:
+  pethub-frontend:
     image: ${DOCKER_HUB_REGISTRY_USERNAME}/${DOCKER_HUB_FRONTEND_IMAGE_NAME:-pethub-frontend}:${IMAGE_TAG:-latest}
     container_name: pethub-frontend
     ports:
       - "${FRONTEND_PORT:-8130}:80"
     depends_on:
-      - backend
+      - pethub-backend
     networks:
       - pethub-network
     restart: unless-stopped
