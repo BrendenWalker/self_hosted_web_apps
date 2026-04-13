@@ -14,6 +14,25 @@ The hub layout matches other services: `backend/`, `frontend/`, `database/`, `do
 
 Ports follow the monorepo convention after RetirementHub (8100/8110): **backend 8120**, **frontend 8130** (host maps to container port 80).
 
+### HAProxy / health checks
+
+- **Frontend (nginx)**: use `GET /healthz` — returns `200` with body `ok` and does not hit Flask or the SPA.
+- **Backend (Flask)**: use `GET /api/health` — returns `200` JSON (`status`, `timestamp`, `version`); no DB and no login.
+
+Example:
+
+```text
+backend pethub_frontend
+    option httpchk GET /healthz
+    http-check expect status 200
+    server pethub-frontend pethub-frontend:80 check
+
+backend pethub_backend_api
+    option httpchk GET /api/health
+    http-check expect status 200
+    server pethub-backend pethub-backend:80 check
+```
+
 ## Local development
 
 From `pethub/`:

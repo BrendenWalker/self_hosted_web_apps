@@ -36,6 +36,116 @@ function fmtTime(iso) {
   return `${label} ${d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}`;
 }
 
+/** Horizontal bar: elapsed time since last event vs typical gap (average). */
+function PottyGapBar({ hoursSince, avgHours, accentColor }) {
+  const hasSince = hoursSince != null && Number.isFinite(Number(hoursSince));
+  const hasAvg = avgHours != null && Number.isFinite(Number(avgHours)) && Number(avgHours) > 0;
+  const since = hasSince ? Number(hoursSince) : 0;
+  const avg = hasAvg ? Number(avgHours) : 0;
+
+  if (!hasSince && !hasAvg) return null;
+
+  const maxScale = Math.max(hasSince ? since : 0, hasAvg ? avg : 0, 0.25) * 1.15;
+  const fillPct = hasSince ? Math.min(100, (since / maxScale) * 100) : 0;
+  const avgPct = hasAvg ? Math.min(100, (avg / maxScale) * 100) : null;
+
+  let fillColor = accentColor;
+  if (hasSince && hasAvg) {
+    const ratio = since / avg;
+    if (ratio >= 1) fillColor = '#dc2626';
+    else if (ratio >= 0.6) fillColor = '#d97706';
+    else fillColor = '#059669';
+  }
+
+  const ratio = hasSince && hasAvg ? since / avg : null;
+  let statusLine = null;
+  if (ratio != null) {
+    if (ratio >= 1) statusLine = `${(ratio * 100 - 100).toFixed(0)}% past typical gap`;
+    else statusLine = `${(100 - ratio * 100).toFixed(0)}% of typical gap remaining`;
+  } else if (hasSince && !hasAvg) {
+    statusLine = 'Typical gap: need more history';
+  } else if (!hasSince && hasAvg) {
+    statusLine = `Typical gap about ${avg.toFixed(1)} h — log an event to track`;
+  }
+
+  const aria = [
+    hasSince ? `${since.toFixed(1)} hours since last` : 'No time since last logged',
+    hasAvg ? `typical gap ${avg.toFixed(1)} hours` : 'no typical gap yet',
+  ].join('; ');
+
+  return (
+    <div className="potty-gap-wrap">
+      <div
+        className="potty-gap-track"
+        role="img"
+        aria-label={aria}
+      >
+        {hasSince ? (
+          <div
+            className="potty-gap-fill"
+            style={{ width: `${fillPct}%`, background: fillColor }}
+          />
+        ) : null}
+        {avgPct != null ? (
+          <div
+            className="potty-gap-avg"
+            style={{ left: `${avgPct}%` }}
+            title={`Typical gap (~${avg.toFixed(1)} h)`}
+          >
+            <span className="potty-gap-avg-cap">Avg</span>
+          </div>
+        ) : null}
+      </div>
+      <div className="potty-gap-scale">
+        <span>0 h</span>
+        <span>{maxScale.toFixed(1)} h</span>
+      </div>
+      {statusLine ? <p className="potty-gap-status">{statusLine}</p> : null}
+    </div>
+  );
+}
+
+function Meter({ title, data, color }) {
+  const block = data?.[title === 'Poop' ? 'poop' : 'pee'];
+  if (!block) {
+    return (
+      <div className="meter-card">
+        <h3>{title}</h3>
+        <p className="muted">—</p>
+      </div>
+    );
+  }
+  const { hours_since: hoursSince, avg_hours: avgHours, last_time: lastTime } = block;
+  const hasAny = hoursSince != null || avgHours != null || lastTime;
+  if (!hasAny) {
+    return (
+      <div className="meter-card">
+        <h3>{title}</h3>
+        <p className="muted">No data yet</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="meter-card">
+      <h3>{title}</h3>
+      <p className="meter-big">
+        {hoursSince != null ? `${hoursSince} h ago` : 'No recent log'}
+      </p>
+      <p className="muted small">
+        Avg gap: {avgHours != null ? `${avgHours} h` : '—'}
+        {lastTime ? (
+          <>
+            {' '}
+            · Last {fmtTime(lastTime)}
+          </>
+        ) : null}
+      </p>
+      <PottyGapBar hoursSince={hoursSince} avgHours={avgHours} accentColor={color} />
+    </div>
+  );
+}
+
 export default function HomePage() {
   const { postActivityResilient } = useOfflineQueue();
   const [pets, setPets] = useState([]);
@@ -159,19 +269,6 @@ export default function HomePage() {
     } finally {
       setSaving(false);
     }
-  };
-
-  const Meter = ({ title, data, color }) => {
-    const block = data?.[title === 'Poop' ? 'poop' : 'pee'];
-    if (!block) return <div className="meter-card"><h3>{title}</h3><p className="muted">—</p></div>;
-    return (
-      <div className="meter-card">
-        <h3>{title}</h3>
-        <p className="meter-big">{block.hours_since != null ? `${block.hours_since} h ago` : '—'}</p>
-        <p className="muted small">Avg gap: {block.avg_hours != null ? `${block.avg_hours} h` : '—'}</p>
-        <div className="meter-bar" style={{ background: color }} />
-      </div>
-    );
   };
 
   return (
