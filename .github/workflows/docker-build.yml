@@ -25,7 +25,7 @@ jobs:
       checks: write   # required for publish-unit-test-result-action to create check runs
     strategy:
       matrix:
-        project: [kitchenhub, retirementhub]
+        project: [kitchenhub, vehiclehub, retirementhub]
     steps:
       - name: Checkout code
         uses: actions/checkout@v6
