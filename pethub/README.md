@@ -19,7 +19,15 @@ Ports follow the monorepo convention after RetirementHub (8100/8110): **backend 
 - **Frontend (nginx)**: use `GET /healthz` — returns `200` with body `ok` and does not hit Flask or the SPA.
 - **Backend (Flask)**: use `GET /api/health` — returns `200` JSON (`status`, `timestamp`, `version`); no DB and no login.
 
-Example:
+**`use_backend` order:** HAProxy applies the **first matching** `use_backend`. If you have both “whole site” and “API only” backends, put the **API** rule **before** the generic host rule, otherwise every request (including `/api/...`) hits the frontend line first and the API line is never used (usually still OK because nginx proxies `/api/`, but wrong ordering plus a bad nginx/upstream config is harder to debug).
+
+```text
+# Recommended: API first, then SPA
+use_backend pethub_backend_api if host_pethub path_beg /api
+use_backend pethub_frontend if host_pethub
+```
+
+Example backends:
 
 ```text
 backend pethub_frontend
@@ -32,6 +40,10 @@ backend pethub_backend_api
     http-check expect status 200
     server pethub-backend pethub-backend:80 check
 ```
+
+**If the SPA shows axios “404”:** In DevTools → Network, open the failing request. Confirm **Request URL** is `https://<your-host>/api/...` (same host as the UI). If the **response body** is HTML (e.g. another app’s 404 page), the request is hitting the **wrong backend** in HAProxy (fix ACLs / default backend). If the body is JSON from Flask, it’s a real “not found” from the API.
+
+**Shared Docker networks:** Other hubs use the generic Compose service name `backend`, which is also the Docker DNS name. If PetHub shares a network with them, `backend` can resolve to **the wrong container** (e.g. you see `X-Powered-By: Express` and `/api/health` with `"status":"ready"` instead of PetHub’s `"status":"ok"`). PetHub’s compose/stack therefore uses **`pethub-backend`** / **`pethub-frontend`** as service keys, and nginx proxies to **`http://pethub-backend:80`**. From inside the frontend container, `wget -qO- http://pethub-backend:80/api/health` must return JSON with **`"status":"ok"`**.
 
 ## Local development
 
