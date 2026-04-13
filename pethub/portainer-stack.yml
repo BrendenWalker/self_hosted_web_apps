@@ -1,8 +1,10 @@
+# Deploy in Portainer as a Compose stack on Docker Standalone (not a Swarm stack).
+# Under `networks:` declare BOTH the stack bridge and the shared external net (`edge` or `web`).
+# Portainer may 500 if the bridge network is only implicit. Create external net once if needed.
 version: '3.8'
 
 services:
-  # DNS name on the stack network — unique vs other hubs that use service key `backend`.
-  pethub-backend:
+  backend:
     image: ${DOCKER_HUB_REGISTRY_USERNAME}/${DOCKER_HUB_BACKEND_IMAGE_NAME:-pethub-backend}:${IMAGE_TAG:-latest}
     container_name: pethub-backend
     ports:
@@ -29,7 +31,12 @@ services:
       - SUMMARY_HOUR=${SUMMARY_HOUR:-18}
       - SUMMARY_TZ=${SUMMARY_TZ:-America/Los_Angeles}
     networks:
-      - pethub-network
+      pethub-network:
+        aliases:
+          - pethub-backend
+      edge:
+        aliases:
+          - pethub-backend
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:80/api/health"]
@@ -38,17 +45,24 @@ services:
       retries: 3
       start_period: 60s
 
-  pethub-frontend:
+  frontend:
     image: ${DOCKER_HUB_REGISTRY_USERNAME}/${DOCKER_HUB_FRONTEND_IMAGE_NAME:-pethub-frontend}:${IMAGE_TAG:-latest}
     container_name: pethub-frontend
     ports:
       - "${FRONTEND_PORT:-8130}:80"
     depends_on:
-      - pethub-backend
+      - backend
     networks:
-      - pethub-network
+      pethub-network:
+        aliases:
+          - pethub-frontend
+      edge:
+        aliases:
+          - pethub-frontend
     restart: unless-stopped
 
 networks:
   pethub-network:
     driver: bridge
+  edge:
+    external: true

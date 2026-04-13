@@ -21,7 +21,9 @@ services:
     extra_hosts:
       - "host.docker.internal:host-gateway"
     networks:
-      - retirementhub-network
+      retirementhub-network:
+        aliases:
+          - retirementhub-backend
     restart: unless-stopped
 
   frontend:
@@ -36,7 +38,9 @@ services:
     depends_on:
       - backend
     networks:
-      - retirementhub-network
+      retirementhub-network:
+        aliases:
+          - retirementhub-frontend
     restart: unless-stopped
 
 networks:

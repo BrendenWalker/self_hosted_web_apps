@@ -1,3 +1,7 @@
+# Deploy in Portainer as a Compose stack on Docker Standalone (not a Swarm stack).
+# Under `networks:` declare BOTH the stack bridge (below) and the shared external net
+# (rename `edge` to `web` if you use that). Portainer may 500 if the bridge is only implicit.
+# One-time: docker network create edge   (or use your existing `web` network)
 version: '3.8'
 
 services:
@@ -14,7 +18,12 @@ services:
       - DB_USER=${DB_USER}
       - DB_PASSWORD=${DB_PASSWORD}
     networks:
-      - vehiclehub-network
+      vehiclehub-network:
+        aliases:
+          - vehiclehub-backend
+      edge:
+        aliases:
+          - vehiclehub-backend
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:80/api/health"]
@@ -31,9 +40,16 @@ services:
     depends_on:
       - backend
     networks:
-      - vehiclehub-network
+      vehiclehub-network:
+        aliases:
+          - vehiclehub-frontend
+      edge:
+        aliases:
+          - vehiclehub-frontend
     restart: unless-stopped
 
 networks:
   vehiclehub-network:
     driver: bridge
+  edge:
+    external: true

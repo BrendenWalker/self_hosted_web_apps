@@ -1,0 +1,25 @@
+# Minimal HAProxy config so the container starts. Add frontends/backends for each hub.
+# Server hostnames on network `edge` use per-hub aliases, e.g. kitchenhub-frontend, pethub-backend.
+
+global
+    maxconn 4000
+
+defaults
+    mode http
+    log stdout format raw local0
+    option httplog
+    timeout connect 5s
+    timeout client  60s
+    timeout server  60s
+
+listen stats
+    bind *:8404
+    stats enable
+    stats uri /
+    stats refresh 10s
+
+# Example backends (uncomment; hostnames exist when stacks join network `edge`):
+# backend be_kitchen_frontend
+#     server s1 kitchenhub-frontend:80 check
+# backend be_pethub_api
+#     server s1 pethub-backend:80 check

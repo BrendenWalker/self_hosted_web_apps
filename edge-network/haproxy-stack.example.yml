@@ -1,0 +1,30 @@
+# Example: HAProxy on the shared Docker network `edge` (no manual docker network connect).
+#
+# One-time on the Docker host (before deploying hub stacks that reference `edge:`):
+#   docker network create edge
+#
+# Hub stacks (kitchenhub, vehiclehub, retirementhub, pethub) attach backend+frontend to
+# `edge` with unique aliases: kitchenhub-backend, vehiclehub-frontend, pethub-backend, etc.
+# Point server lines at those names on port 80.
+#
+# Copy into Portainer as its own stack; set secrets / image as needed. This is only a skeleton.
+# Config: copy haproxy.cfg.example to haproxy.cfg (same directory as this file) and extend it.
+
+version: '3.8'
+
+services:
+  haproxy:
+    image: haproxy:3.0-alpine
+    ports:
+      - "443:443"
+      - "80:80"
+      - "8404:8404"
+    volumes:
+      - ./haproxy.cfg:/usr/local/etc/haproxy/haproxy.cfg:ro
+    networks:
+      - edge
+    restart: unless-stopped
+
+networks:
+  edge:
+    external: true

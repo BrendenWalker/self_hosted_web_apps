@@ -43,7 +43,9 @@ backend pethub_backend_api
 
 **If the SPA shows axios “404”:** In DevTools → Network, open the failing request. Confirm **Request URL** is `https://<your-host>/api/...` (same host as the UI). If the **response body** is HTML (e.g. another app’s 404 page), the request is hitting the **wrong backend** in HAProxy (fix ACLs / default backend). If the body is JSON from Flask, it’s a real “not found” from the API.
 
-**Shared Docker networks:** Other hubs use the generic Compose service name `backend`, which is also the Docker DNS name. If PetHub shares a network with them, `backend` can resolve to **the wrong container** (e.g. you see `X-Powered-By: Express` and `/api/health` with `"status":"ready"` instead of PetHub’s `"status":"ok"`). PetHub’s compose/stack therefore uses **`pethub-backend`** / **`pethub-frontend`** as service keys, and nginx proxies to **`http://pethub-backend:80`**. From inside the frontend container, `wget -qO- http://pethub-backend:80/api/health` must return JSON with **`"status":"ok"`**.
+**Shared `edge` network (recommended with HAProxy):** On the host once: `docker network create edge`. Hub `portainer-stack.yml` files attach **`pethub-backend`**, **`kitchenhub-backend`**, etc. as **aliases** on both the stack’s internal network and **`edge`**. nginx proxies to **`http://pethub-backend:80`** (unique name). Deploy HAProxy as its **own** Portainer stack that **only** joins `edge` (see repo root **`edge-network/haproxy-stack.example.yml`**): no `docker network connect` scripts—declare `networks: { edge: { external: true } }` in the HAProxy compose. In HAProxy, use server names **`pethub-frontend`**, **`pethub-backend`**, **`kitchenhub-frontend`**, … on port 80.
+
+**Local `docker compose`:** Only the internal network is defined (no `edge`); aliases still make **`pethub-backend`** resolve inside the stack. Portainer deploys need the **`edge`** network created first or stack deploy will fail on missing external network.
 
 ## Local development
 
@@ -86,6 +88,16 @@ python app.py
 ## CI and releases
 
 GitHub Actions builds `pethub-backend` and `pethub-frontend` images on pull requests (no push) and on tags `pethub/X.Y.Z`, same semver rules as other hubs.
+
+### Portainer: deploy returns HTTP 500
+
+The stack file is normal Compose; a generic **500** comes from **Portainer’s API** when the engine rejects the deploy. Typical causes:
+
+1. **Wrong stack type in Portainer** — These files target **Docker Standalone** with **`docker compose`** (in Portainer: a **Compose** stack on a normal Docker endpoint, not a **Swarm** stack on a swarm cluster). On Compose, `container_name`, `depends_on`, and `restart` are all valid. **`docker stack deploy` / Swarm stacks** reject `container_name` and `depends_on`, which often surfaces as a failed deploy or HTTP 500. If you are not using Swarm, ensure the environment is **Docker** (standalone) and you are not forcing a Swarm-type stack deploy.
+
+2. **Invalid image after env substitution** — `image` must not start with `/`. Set **`DOCKER_HUB_REGISTRY_USERNAME`** (e.g. `myuser`) in the stack environment so the image is `myuser/pethub-backend:tag`, not `/pethub-backend:tag`.
+
+3. **Engine error** — On the Portainer host: `docker logs portainer` (or `portainer-ce`) around the deploy time, or use **Portainer → Host → Events** / Docker CLI to see the real message (invalid reference, pull denied, etc.).
 
 ## Legacy Jinja UI
 
