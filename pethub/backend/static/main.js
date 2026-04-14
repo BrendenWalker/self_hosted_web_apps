@@ -669,10 +669,14 @@ const wizard = {
         </div>
 
         <div id="toilet_pee_options">
-          <h3>Amount (1=Interrupted, 7=Full)</h3>
+          <h3>Pee amount</h3>
           <div class="row" style="align-items: center; margin-bottom: 0;">
             <input type="range" min="1" max="7" value="7" id="toilet_score" style="flex: 1; max-width: 400px;">
             <span id="toilet_score_val" style="min-width: 40px; text-align: center; font-weight: bold;">7</span>
+          </div>
+          <div class="row" style="justify-content: space-between; max-width: 400px; font-size: 0.85rem; opacity: 0.85; margin-top: 6px;">
+            <span>Interrupted</span>
+            <span>Full</span>
           </div>
         </div>
         
@@ -826,7 +830,7 @@ const wizard = {
         this.data.subType = 'poop';
         this.data.amount = null;
       } else {
-        // Pee now uses a 1..7 scale (1=interrupted, 7=full), default to 7
+        // Pee uses a 1..7 scale (1=little bit, 7=full pee), default to 7
         this.data.rating = parseInt($('#toilet_score')?.value || '7', 10);
         this.data.subType = 'pee';
         this.data.amount = null;

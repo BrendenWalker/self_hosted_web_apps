@@ -36,6 +36,21 @@ function fmtTime(iso) {
   return `${label} ${d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}`;
 }
 
+/** Value for `<input type="datetime-local">` in local time. */
+function toDatetimeLocalValue(d = new Date()) {
+  const pad = (n) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(
+    d.getMinutes()
+  )}`;
+}
+
+function datetimeLocalToISO(localStr) {
+  if (!localStr?.trim()) return new Date().toISOString();
+  const d = new Date(localStr);
+  if (Number.isNaN(d.getTime())) return new Date().toISOString();
+  return d.toISOString();
+}
+
 /** Horizontal bar: elapsed time since last event vs typical gap (average). */
 function PottyGapBar({ hoursSince, avgHours, accentColor }) {
   const hasSince = hoursSince != null && Number.isFinite(Number(hoursSince));
@@ -371,8 +386,29 @@ export default function HomePage() {
 function WizardBody({ wizard, setWizard, petId, saving, onSave }) {
   const [subType, setSubType] = useState('pee');
   const [location, setLocation] = useState('outside');
-  const [rating, setRating] = useState(4);
+  const [rating, setRating] = useState(7);
   const [notes, setNotes] = useState('');
+  const [eventAt, setEventAt] = useState(() => toDatetimeLocalValue());
+
+  useEffect(() => {
+    setEventAt(toDatetimeLocalValue());
+    if (wizard.type === 'toilet') {
+      setSubType('pee');
+      setLocation('outside');
+      setRating(7);
+      setNotes('');
+    } else if (wizard.type === 'water') {
+      setRating(4);
+      setNotes('');
+    } else if (wizard.type === 'food') {
+      setRating(7);
+      setNotes('');
+    } else if (wizard.type === 'notes') {
+      setNotes('');
+    }
+  }, [wizard]);
+
+  const createdAt = datetimeLocalToISO(eventAt);
 
   if (wizard.type === 'toilet') {
     return (
@@ -380,7 +416,14 @@ function WizardBody({ wizard, setWizard, petId, saving, onSave }) {
         <h3>Toilet</h3>
         <label>
           Type
-          <select value={subType} onChange={(e) => setSubType(e.target.value)}>
+          <select
+            value={subType}
+            onChange={(e) => {
+              const v = e.target.value;
+              setSubType(v);
+              setRating(v === 'pee' ? 7 : 2);
+            }}
+          >
             <option value="pee">Pee</option>
             <option value="poop">Poop</option>
           </select>
@@ -393,15 +436,31 @@ function WizardBody({ wizard, setWizard, petId, saving, onSave }) {
           </select>
         </label>
         <label>
-          Rating (1–7)
+          {subType === 'pee' ? 'Pee amount (1–7)' : 'Poop score (1–7)'}
+          <div className="row gap" style={{ alignItems: 'center', flexWrap: 'wrap' }}>
+            <input
+              type="range"
+              min={1}
+              max={7}
+              value={rating}
+              onChange={(e) => setRating(Number(e.target.value))}
+            />
+            <span>{rating}</span>
+          </div>
+          {subType === 'pee' ? (
+            <div className="row-between muted small" style={{ marginTop: 4 }}>
+              <span>Little bit</span>
+              <span>Full pee</span>
+            </div>
+          ) : null}
+        </label>
+        <label>
+          Date and time
           <input
-            type="range"
-            min={1}
-            max={7}
-            value={rating}
-            onChange={(e) => setRating(Number(e.target.value))}
+            type="datetime-local"
+            value={eventAt}
+            onChange={(e) => setEventAt(e.target.value)}
           />
-          <span>{rating}</span>
         </label>
         <div className="row gap end">
           <button type="button" className="secondary" onClick={() => setWizard(null)} disabled={saving}>
@@ -419,6 +478,7 @@ function WizardBody({ wizard, setWizard, petId, saving, onSave }) {
                 rating,
                 pet_id: Number(petId),
                 notes: null,
+                created_at: createdAt,
               })
             }
           >
@@ -444,6 +504,14 @@ function WizardBody({ wizard, setWizard, petId, saving, onSave }) {
           />
           <span>{rating}</span>
         </label>
+        <label>
+          Date and time
+          <input
+            type="datetime-local"
+            value={eventAt}
+            onChange={(e) => setEventAt(e.target.value)}
+          />
+        </label>
         <div className="row gap end">
           <button type="button" className="secondary" onClick={() => setWizard(null)} disabled={saving}>
             Cancel
@@ -458,6 +526,7 @@ function WizardBody({ wizard, setWizard, petId, saving, onSave }) {
                 rating,
                 pet_id: Number(petId),
                 notes: null,
+                created_at: createdAt,
               })
             }
           >
@@ -473,6 +542,14 @@ function WizardBody({ wizard, setWizard, petId, saving, onSave }) {
       <div className="stack">
         <h3>Notes</h3>
         <textarea rows={4} value={notes} onChange={(e) => setNotes(e.target.value)} />
+        <label>
+          Date and time
+          <input
+            type="datetime-local"
+            value={eventAt}
+            onChange={(e) => setEventAt(e.target.value)}
+          />
+        </label>
         <div className="row gap end">
           <button type="button" className="secondary" onClick={() => setWizard(null)} disabled={saving}>
             Cancel
@@ -486,6 +563,7 @@ function WizardBody({ wizard, setWizard, petId, saving, onSave }) {
                 activity_type: 'notes',
                 notes,
                 pet_id: Number(petId),
+                created_at: createdAt,
               })
             }
           >
