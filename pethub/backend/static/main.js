@@ -663,8 +663,8 @@ const wizard = {
         <div id="toilet_poop_options" style="display: none;">
           <h3>Poop Score</h3>
           <div class="row" style="align-items: center; margin-bottom: 0;">
-            <input type="range" min="1" max="7" value="2" id="poop_score" style="flex: 1; max-width: 400px;">
-            <span id="poop_score_val" style="min-width: 40px; text-align: center; font-weight: bold;">2</span>
+            <input type="range" min="1" max="7" value="4" id="poop_score" style="flex: 1; max-width: 400px;">
+            <span id="poop_score_val" style="min-width: 40px; text-align: center; font-weight: bold;">4</span>
           </div>
         </div>
 
@@ -825,8 +825,8 @@ const wizard = {
       this.data.location = $('input[name="toilet_location"]:checked')?.value || 'outside';
       const tt = $('input[name="toilet_type"]:checked')?.value || 'pee';
       if (tt === 'poop') {
-        // Poop rating uses 1..7, default to 2
-        this.data.rating = parseInt($('#poop_score')?.value || '2', 10);
+        // Poop rating uses 1..7, default to 4
+        this.data.rating = parseInt($('#poop_score')?.value || '4', 10);
         this.data.subType = 'poop';
         this.data.amount = null;
       } else {

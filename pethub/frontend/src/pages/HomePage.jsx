@@ -414,27 +414,58 @@ function WizardBody({ wizard, setWizard, petId, saving, onSave }) {
     return (
       <div className="stack">
         <h3>Toilet</h3>
-        <label>
-          Type
-          <select
-            value={subType}
-            onChange={(e) => {
-              const v = e.target.value;
-              setSubType(v);
-              setRating(v === 'pee' ? 7 : 2);
-            }}
-          >
-            <option value="pee">Pee</option>
-            <option value="poop">Poop</option>
-          </select>
-        </label>
-        <label>
-          Location
-          <select value={location} onChange={(e) => setLocation(e.target.value)}>
-            <option value="inside">Inside</option>
-            <option value="outside">Outside</option>
-          </select>
-        </label>
+        <div>
+          <div>Type</div>
+          <div className="row gap">
+            <label className="row gap">
+              <input
+                type="radio"
+                name="toilet-type"
+                checked={subType === 'pee'}
+                onChange={() => {
+                  setSubType('pee');
+                  setRating(7);
+                }}
+              />
+              <span>Pee</span>
+            </label>
+            <label className="row gap">
+              <input
+                type="radio"
+                name="toilet-type"
+                checked={subType === 'poop'}
+                onChange={() => {
+                  setSubType('poop');
+                  setRating(4);
+                }}
+              />
+              <span>Poop</span>
+            </label>
+          </div>
+        </div>
+        <div>
+          <div>Location</div>
+          <div className="row gap">
+            <label className="row gap">
+              <input
+                type="radio"
+                name="toilet-location"
+                checked={location === 'inside'}
+                onChange={() => setLocation('inside')}
+              />
+              <span>Inside</span>
+            </label>
+            <label className="row gap">
+              <input
+                type="radio"
+                name="toilet-location"
+                checked={location === 'outside'}
+                onChange={() => setLocation('outside')}
+              />
+              <span>Outside</span>
+            </label>
+          </div>
+        </div>
         <label>
           {subType === 'pee' ? 'Pee amount (1–7)' : 'Poop score (1–7)'}
           <div className="row gap" style={{ alignItems: 'center', flexWrap: 'wrap' }}>
