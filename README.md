@@ -75,6 +75,36 @@ Backends expose `/api/health` for readiness checks.
 - [MailHub README](mailhub/README.md)  
 - [PetHub README](pethub/README.md)
 
+## Demo data
+
+The repo includes reusable seed scripts for screenshot/demo environments:
+
+- `kitchenhub/database/demo-seed.sql`
+- `vehiclehub/database/demo-seed.sql`
+- `retirementhub/database/demo-seed.sql`
+- `pethub/database/demo-seed.sql`
+
+Run these from the repo root to apply demo data to the hosted demo databases:
+
+```powershell
+$env:PGPASSWORD="<db-password>"
+```
+
+```powershell
+docker run --rm -v "${PWD}:/workspace" -e PGPASSWORD="$env:PGPASSWORD" postgres:16 psql -h <db-host> -p 5432 -U <db-user> -d demo_kitchenhub -f /workspace/kitchenhub/database/demo-seed.sql
+docker run --rm -v "${PWD}:/workspace" -e PGPASSWORD="$env:PGPASSWORD" postgres:16 psql -h <db-host> -p 5432 -U <db-user> -d demo_vehiclehub -f /workspace/vehiclehub/database/demo-seed.sql
+docker run --rm -v "${PWD}:/workspace" -e PGPASSWORD="$env:PGPASSWORD" postgres:16 psql -h <db-host> -p 5432 -U <db-user> -d demo_retirementhub -f /workspace/retirementhub/database/demo-seed.sql
+docker run --rm -v "${PWD}:/workspace" -e PGPASSWORD="$env:PGPASSWORD" postgres:16 psql -h <db-host> -p 5432 -U <db-user> -d demo_pethub -f /workspace/pethub/database/demo-seed.sql
+```
+
+Notes:
+- The seed scripts are idempotent and safe to rerun.
+- Apply each service schema once before seeding a fresh database:
+  - `kitchenhub/database/schema.sql`
+  - `vehiclehub/database/schema.sql`
+  - `retirementhub/database/schema.sql`
+  - `pethub/database/schema.sql`
+
 ## Shared code
 
 `common/database/db-config.js` — PostgreSQL pool  
