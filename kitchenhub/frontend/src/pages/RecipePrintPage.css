@@ -1,0 +1,188 @@
+.recipe-print-page {
+  width: 100%;
+}
+
+.recipe-print-toolbar {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem 0;
+  background: #f4f6f8;
+  border-bottom: 1px solid #dfe6e9;
+}
+
+.recipe-print-toolbar-left {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.recipe-print-scale-control {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  color: #555;
+  font-size: 0.9rem;
+}
+
+.recipe-print-scale-control select {
+  padding: 0.4rem 0.55rem;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  background: #fff;
+}
+
+.recipe-print-document {
+  background: #fff;
+  margin: 1rem auto;
+  width: min(880px, 100%);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
+  border-radius: 8px;
+  padding: 1.25rem 1.5rem;
+  box-sizing: border-box;
+}
+
+.recipe-print-document h1 {
+  margin: 0 0 0.45rem 0;
+  color: #2c3e50;
+  font-size: 1.9rem;
+}
+
+.recipe-print-meta {
+  margin: 0 0 1.25rem 0;
+  color: #666;
+  font-size: 0.95rem;
+}
+
+.recipe-print-section {
+  margin: 1rem 0 1.25rem 0;
+}
+
+.recipe-print-section h2 {
+  margin: 0 0 0.55rem 0;
+  color: #2c3e50;
+  font-size: 1.2rem;
+}
+
+.recipe-print-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.recipe-print-list.recipe-print-steps {
+  list-style: decimal;
+  padding-left: 1.4rem;
+}
+
+.recipe-print-row {
+  width: 100%;
+  margin: 0;
+  padding: 0.45rem 0;
+  border: none;
+  border-bottom: 1px solid #edf1f2;
+  background: transparent;
+  color: #1f2d3d;
+  display: flex;
+  align-items: flex-start;
+  gap: 0.65rem;
+  text-align: left;
+  font: inherit;
+  line-height: 1.45;
+  cursor: pointer;
+}
+
+.recipe-print-row:hover {
+  background: #f8fbfc;
+}
+
+.recipe-print-row:focus-visible {
+  outline: 2px solid #3498db;
+  outline-offset: 2px;
+}
+
+.recipe-print-checkbox {
+  width: 1rem;
+  height: 1rem;
+  margin-top: 0.2rem;
+  border: 1.5px solid #7f8c8d;
+  border-radius: 2px;
+  flex: 0 0 auto;
+  box-sizing: border-box;
+}
+
+.recipe-print-row-done {
+  color: #7f8c8d;
+}
+
+.recipe-print-row-done .recipe-print-checkbox {
+  background: #2ecc71;
+  border-color: #27ae60;
+}
+
+.recipe-print-empty,
+.recipe-print-loading,
+.recipe-print-error {
+  color: #666;
+}
+
+@media print {
+  @page {
+    size: auto;
+    margin: 0.45in;
+  }
+
+  .no-print {
+    display: none !important;
+  }
+
+  .recipe-print-page {
+    margin: 0;
+    padding: 0;
+  }
+
+  .recipe-print-document {
+    width: 100%;
+    max-width: none;
+    margin: 0;
+    border-radius: 0;
+    box-shadow: none;
+    padding: 0;
+  }
+
+  .recipe-print-document h1 {
+    font-size: 20pt;
+  }
+
+  .recipe-print-section h2 {
+    font-size: 13pt;
+    page-break-after: avoid;
+  }
+
+  .recipe-print-list,
+  .recipe-print-list li,
+  .recipe-print-row {
+    page-break-inside: avoid;
+    break-inside: avoid;
+  }
+
+  .recipe-print-row {
+    padding: 0.22rem 0;
+    border-bottom-color: #cfd8dc;
+  }
+
+  .recipe-print-row:hover {
+    background: transparent;
+  }
+
+  .recipe-print-checkbox {
+    width: 0.16in;
+    height: 0.16in;
+    margin-top: 0.05in;
+    border-width: 1.2px;
+  }
+}

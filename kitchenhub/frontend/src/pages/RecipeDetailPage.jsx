@@ -211,6 +211,13 @@ function RecipeDetailPage() {
     }
   };
 
+  const openPrintPage = () => {
+    if (isNew || !id) return;
+    const scale = Number(recipeScale) || 1;
+    const url = `/recipes/${id}/print?scale=${encodeURIComponent(String(scale))}`;
+    window.open(url, '_blank', 'noopener,noreferrer');
+  };
+
   const executeDeleteRecipe = async () => {
     setDeleteConfirmOpen(false);
     setError(null);
@@ -450,6 +457,13 @@ function RecipeDetailPage() {
                         onClick={() => setMakeItOpen(true)}
                       >
                         Make it
+                      </button>
+                      <button
+                        type="button"
+                        className="btn btn-secondary"
+                        onClick={openPrintPage}
+                      >
+                        Print / PDF
                       </button>
                       <button
                         type="button"
