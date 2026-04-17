@@ -9,7 +9,7 @@ ON CONFLICT DO NOTHING;
 
 -- Users
 INSERT INTO users (email, password_hash, is_active, is_admin, default_pet_id)
-SELECT 'owner@example.com', '$2b$12$demo.owner.hash.value', true, true, p.id
+SELECT 'owner@example.com', '', true, true, p.id
 FROM pets p
 WHERE p.name = 'Luna'
 ON CONFLICT (email) DO UPDATE

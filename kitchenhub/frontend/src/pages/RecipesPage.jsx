@@ -7,6 +7,15 @@ import {
 } from '../utils/recipeShoppingListNotice';
 import './RecipesPage.css';
 
+const RECIPE_SCALE_OPTIONS = [
+  { value: 0.5, label: '0.5x' },
+  { value: 1, label: '1x' },
+  { value: 2, label: '2x' },
+  { value: 3, label: '3x' },
+  { value: 4, label: '4x' },
+  { value: 5, label: '5x' },
+];
+
 function RecipesPage() {
   const [recipes, setRecipes] = useState([]);
   const [categories, setCategories] = useState([]);
@@ -16,6 +25,7 @@ function RecipesPage() {
   const [recipeFilter, setRecipeFilter] = useState('');
   const [addingShopRecipeId, setAddingShopRecipeId] = useState(null);
   const [shopNotice, setShopNotice] = useState(null); // { text, className }
+  const [recipeScale, setRecipeScale] = useState('1');
 
   useEffect(() => {
     loadRecipes();
@@ -55,7 +65,8 @@ function RecipesPage() {
     setShopNotice(null);
     setError(null);
     try {
-      const res = await addRecipeToShoppingList(recipeId);
+      const scale = Number(recipeScale) || 1;
+      const res = await addRecipeToShoppingList(recipeId, scale);
       setShopNotice({
         text: buildRecipeShoppingListNoticeText(recipeName, res.data || {}),
         className: recipeShoppingListNoticeClassName(res.data || {}),
@@ -157,6 +168,20 @@ function RecipesPage() {
                 >
                   {addingShopRecipeId === r.id ? 'Adding…' : 'Add to shopping list'}
                 </button>
+                <label className="recipe-scale-control">
+                  <span>Scale</span>
+                  <select
+                    value={recipeScale}
+                    onChange={(e) => setRecipeScale(e.target.value)}
+                    disabled={addingShopRecipeId === r.id}
+                  >
+                    {RECIPE_SCALE_OPTIONS.map((opt) => (
+                      <option key={opt.value} value={String(opt.value)}>
+                        {opt.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
               </div>
             </li>
           ))}

@@ -29,6 +29,20 @@ function defaultQueryHandler(sql, params) {
   if (s.includes('SELECT id FROM recipe.recipe WHERE id')) {
     return { rows: params?.[0] == 999 ? [] : [{ id: Number(params[0]) }] };
   }
+  if (s.includes('SELECT id, name, servings, instructions FROM recipe.recipe WHERE id = $1')) {
+    return {
+      rows: params?.[0] == 999
+        ? []
+        : [{ id: Number(params[0]), name: 'Recipe', servings: 2, instructions: 'Mix' }],
+    };
+  }
+  if (s.includes('FROM recipe.recipe r') && s.includes('AS planned_at') && s.includes('WHERE r.id = $1')) {
+    return {
+      rows: params?.[0] == 999
+        ? []
+        : [{ id: Number(params[0]), name: 'Recipe', servings: 2, instructions: 'Mix', planned_at: null }],
+    };
+  }
   if (s.includes('FROM recipe.recipe_ingredients ri') && s.includes('common.measurements im')) {
     return {
       rows: [
@@ -152,6 +166,12 @@ function defaultQueryHandler(sql, params) {
   if (s.includes('UPDATE items SET qty = COALESCE(qty, 0) + $1')) {
     const name = params?.[1]; // name or id; when by name params are [addQty, name]
     return { rows: [{ id: 1, name: typeof name === 'string' ? name : 'Milk', department: 1, qty: params?.[0] ?? 1 }] };
+  }
+  if (s.includes('INSERT INTO mealplanner.meals (meal_date, meal_slot_id, recipe_id)')) {
+    return { rows: [{ id: 1, meal_date: new Date().toISOString(), meal_slot_id: 4, recipe_id: params?.[0] ?? 1 }] };
+  }
+  if (s.includes('DELETE FROM mealplanner.meals WHERE recipe_id = $1')) {
+    return { rows: [] };
   }
   // Shopping list: set qty (legacy direct grams), DELETE remove
   if (s.includes('UPDATE items SET qty = $1 WHERE name = $2') || s.includes('UPDATE items SET qty = 0 WHERE name = $1')) {
@@ -509,8 +529,27 @@ describe('KitchenHub API', () => {
       expect(res.body.added[0]).toMatchObject({
         item_id: 1,
         grams_added: 10,
+        scale: 1,
       });
       expect(res.body.skipped).toEqual([]);
+      expect(res.body.scale).toBe(1);
+    });
+
+    it('POST /api/recipes/:id/shopping-list scales ingredient quantities', async () => {
+      const res = await request(serverModule.app).post('/api/recipes/1/shopping-list').send({ scale: 3 });
+      expect(res.status).toBe(201);
+      expect(res.body.added).toHaveLength(1);
+      expect(res.body.added[0]).toMatchObject({
+        item_id: 1,
+        grams_added: 30,
+        scale: 3,
+      });
+      expect(res.body.scale).toBe(3);
+    });
+
+    it('POST /api/recipes/:id/shopping-list returns 400 when scale is invalid', async () => {
+      const res = await request(serverModule.app).post('/api/recipes/1/shopping-list').send({ scale: 1.5 });
+      expect(res.status).toBe(400);
     });
 
     it('POST /api/recipes/:id/shopping-list returns 404 when recipe missing', async () => {

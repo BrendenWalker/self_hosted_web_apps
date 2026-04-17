@@ -34,6 +34,15 @@ function parseItemInt(value) {
   return n;
 }
 
+const RECIPE_SCALE_OPTIONS = new Set([0.5, 1, 2, 3, 4, 5]);
+
+function normalizeRecipeScale(value) {
+  if (value == null || value === '') return 1;
+  const n = typeof value === 'string' ? parseFloat(value) : Number(value);
+  if (!Number.isFinite(n) || !RECIPE_SCALE_OPTIONS.has(n)) return null;
+  return n;
+}
+
 const PACK1_GRAMS_EPS = 1e-6;
 
 /** When count per pack is 1, ingredient grams and shopping measure grams must match if either is set. */
@@ -1149,7 +1158,12 @@ app.get('/api/recipes', async (req, res) => {
       planned === 'true' ||
       String(planned).toLowerCase() === 'yes';
     let query = `
-      SELECT r.id, r.name, r.servings, r.instructions, r.planned_at,
+      SELECT r.id, r.name, r.servings, r.instructions,
+             (
+               SELECT MIN(m.meal_date)
+               FROM mealplanner.meals m
+               WHERE m.recipe_id = r.id
+             ) AS planned_at,
              (SELECT string_agg(c.name, ', ' ORDER BY c.name)
               FROM recipe.recipe_category_members m
               JOIN recipe.recipe_category c ON c.id = m.category_id
@@ -1165,12 +1179,12 @@ app.get('/api/recipes', async (req, res) => {
       );
     }
     if (plannedOnly) {
-      where.push('r.planned_at IS NOT NULL');
+      where.push('EXISTS (SELECT 1 FROM mealplanner.meals m WHERE m.recipe_id = r.id)');
     }
     if (where.length > 0) {
       query += ` WHERE ${where.join(' AND ')}`;
     }
-    query += plannedOnly ? ' ORDER BY r.planned_at ASC NULLS LAST, r.name' : ' ORDER BY r.name';
+    query += plannedOnly ? ' ORDER BY planned_at ASC NULLS LAST, r.name' : ' ORDER BY r.name';
     const result = await pool.query(query, params);
     res.json(result.rows);
   } catch (error) {
@@ -1182,7 +1196,12 @@ app.get('/api/recipes', async (req, res) => {
 app.get('/api/recipes/:id', async (req, res) => {
   try {
     const recipeResult = await pool.query(
-      `SELECT r.id, r.name, r.servings, r.instructions, r.planned_at
+      `SELECT r.id, r.name, r.servings, r.instructions,
+              (
+                SELECT MIN(m.meal_date)
+                FROM mealplanner.meals m
+                WHERE m.recipe_id = r.id
+              ) AS planned_at
        FROM recipe.recipe r
        WHERE r.id = $1`,
       [req.params.id]
@@ -1231,16 +1250,33 @@ app.patch('/api/recipes/:id/planned', async (req, res) => {
     if (planned !== true && planned !== false) {
       return res.status(400).json({ error: 'planned must be true or false' });
     }
-    const result = await pool.query(
-      `UPDATE recipe.recipe
-       SET planned_at = CASE WHEN $1::boolean THEN now() ELSE NULL END
-       WHERE id = $2
-       RETURNING id, name, servings, instructions, planned_at`,
-      [planned, recipeId]
+    const recipeCheck = await pool.query(
+      'SELECT id, name, servings, instructions FROM recipe.recipe WHERE id = $1',
+      [recipeId]
     );
-    if (result.rows.length === 0) {
+    if (recipeCheck.rows.length === 0) {
       return res.status(404).json({ error: 'Recipe not found' });
     }
+    if (planned) {
+      await pool.query(
+        `INSERT INTO mealplanner.meals (meal_date, meal_slot_id, recipe_id)
+         VALUES (now(), 4, $1)`,
+        [recipeId]
+      );
+    } else {
+      await pool.query('DELETE FROM mealplanner.meals WHERE recipe_id = $1', [recipeId]);
+    }
+    const result = await pool.query(
+      `SELECT r.id, r.name, r.servings, r.instructions,
+              (
+                SELECT MIN(m.meal_date)
+                FROM mealplanner.meals m
+                WHERE m.recipe_id = r.id
+              ) AS planned_at
+       FROM recipe.recipe r
+       WHERE r.id = $1`,
+      [recipeId]
+    );
     res.json(result.rows[0]);
   } catch (error) {
     console.error('Error updating recipe planned:', error);
@@ -1253,6 +1289,10 @@ app.post('/api/recipes/:id/shopping-list', async (req, res) => {
   const recipeId = parseInt(req.params.id, 10);
   if (Number.isNaN(recipeId) || recipeId < 1) {
     return res.status(400).json({ error: 'Invalid recipe id' });
+  }
+  const scale = normalizeRecipeScale(req.body?.scale);
+  if (scale == null) {
+    return res.status(400).json({ error: 'scale must be one of: 0.5, 1, 2, 3, 4, 5' });
   }
   const client = await pool.connect();
   try {
@@ -1288,9 +1328,10 @@ app.post('/api/recipes/:id/shopping-list', async (req, res) => {
         skip(row, 'optional');
         continue;
       }
-      const qty = row.qty != null ? Number(row.qty) : 0;
+      const qtyBase = row.qty != null ? Number(row.qty) : 0;
+      const qty = qtyBase * scale;
       if (qty <= 0) {
-        skip(row, 'no_qty', { qty: row.qty });
+        skip(row, 'no_qty', { qty: row.qty, scale });
         continue;
       }
       if (!row.measurement_id) {
@@ -1335,13 +1376,18 @@ app.post('/api/recipes/:id/shopping-list', async (req, res) => {
       added.push({
         item_id: row.ingredient_id,
         name: upd.rows[0].name,
+        scale,
         grams_added: grams,
         qty_after: upd.rows[0].qty,
       });
     }
-    await client.query(`UPDATE recipe.recipe SET planned_at = now() WHERE id = $1`, [recipeId]);
+    await client.query(
+      `INSERT INTO mealplanner.meals (meal_date, meal_slot_id, recipe_id)
+       VALUES (now(), 4, $1)`,
+      [recipeId]
+    );
     await client.query('COMMIT');
-    res.status(201).json({ added, skipped });
+    res.status(201).json({ added, skipped, scale });
   } catch (error) {
     await client.query('ROLLBACK');
     console.error('Error adding recipe to shopping list:', error);

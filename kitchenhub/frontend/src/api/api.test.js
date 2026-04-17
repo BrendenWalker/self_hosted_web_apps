@@ -173,6 +173,11 @@ describe('api', () => {
 
   it('addRecipeToShoppingList calls POST /recipes/:id/shopping-list', async () => {
     await addRecipeToShoppingList(7);
-    expect(mockInstance.post).toHaveBeenCalledWith('/recipes/7/shopping-list');
+    expect(mockInstance.post).toHaveBeenCalledWith('/recipes/7/shopping-list', { scale: 1 });
+  });
+
+  it('addRecipeToShoppingList includes provided scale', async () => {
+    await addRecipeToShoppingList(7, 2);
+    expect(mockInstance.post).toHaveBeenCalledWith('/recipes/7/shopping-list', { scale: 2 });
   });
 });

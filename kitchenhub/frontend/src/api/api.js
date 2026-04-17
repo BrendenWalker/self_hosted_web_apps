@@ -92,7 +92,8 @@ export const getRecipes = (categoryId, opts) => {
 };
 export const getRecipe = (id) => api.get(`/recipes/${id}`);
 /** Add recipe to shopping list: resolves grams per line (Each, Shopping Unit, or measurement to_grams). */
-export const addRecipeToShoppingList = (recipeId) => api.post(`/recipes/${recipeId}/shopping-list`);
+export const addRecipeToShoppingList = (recipeId, scale = 1) =>
+  api.post(`/recipes/${recipeId}/shopping-list`, { scale });
 export const createRecipe = (data) => api.post('/recipes', data);
 export const updateRecipe = (id, data) => api.put(`/recipes/${id}`, data);
 export const patchRecipePlanned = (id, planned) =>

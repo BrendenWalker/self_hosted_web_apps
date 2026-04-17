@@ -76,12 +76,9 @@ CREATE TABLE IF NOT EXISTS recipe.recipe (
     name VARCHAR(80) NOT NULL UNIQUE,
     servings INTEGER NOT NULL,
     instructions TEXT,
-    image BYTEA,
-    planned_at TIMESTAMPTZ NULL
+    image BYTEA
 );
 CREATE INDEX IF NOT EXISTS idx_recipe_name ON recipe.recipe(name);
-CREATE INDEX IF NOT EXISTS idx_recipe_planned_at ON recipe.recipe (planned_at)
-  WHERE planned_at IS NOT NULL;
 
 CREATE TABLE IF NOT EXISTS recipe.recipe_category_members (
     recipe_id INTEGER NOT NULL REFERENCES recipe.recipe(id) ON DELETE CASCADE,
@@ -126,3 +123,16 @@ CREATE TABLE IF NOT EXISTS recipe.recipe_ingredients (
 CREATE INDEX IF NOT EXISTS idx_recipe_ingredients_recipe ON recipe.recipe_ingredients(recipe_id);
 CREATE INDEX IF NOT EXISTS idx_recipe_ingredients_ingredient ON recipe.recipe_ingredients(ingredient_id);
 CREATE INDEX IF NOT EXISTS idx_recipe_ingredients_measurement ON recipe.recipe_ingredients(measurement_id);
+
+-- ========== MEAL PLANNER ==========
+CREATE SCHEMA IF NOT EXISTS mealplanner;
+
+CREATE TABLE IF NOT EXISTS mealplanner.meals (
+    id SERIAL PRIMARY KEY,
+    meal_date TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    meal_slot_id INTEGER NOT NULL DEFAULT 4,
+    recipe_id INTEGER NOT NULL REFERENCES recipe.recipe(id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_mealplanner_meals_meal_date ON mealplanner.meals(meal_date);
+CREATE INDEX IF NOT EXISTS idx_mealplanner_meals_recipe_id ON mealplanner.meals(recipe_id);
