@@ -2,6 +2,16 @@
 
 A monorepo of self-hosted web applications. **KitchenHub**, **VehicleHub**, and **RetirementHub** each ship a Node.js + Express REST API, a React + Vite SPA, PostgreSQL, and Docker-friendly layouts. **PetHub** is the same React + Vite and PostgreSQL pattern, but its API is Python + Flask (Gunicorn in the published backend image). **MailHub** is a separate multi-container mail stack (see [MailHub README](mailhub/README.md)).
 
+## Preview
+
+Screenshots use demo-style data. Click a thumbnail to open that hub’s README.
+
+| [KitchenHub](kitchenhub/README.md) | [VehicleHub](vehiclehub/README.md) | [RetirementHub](retirementhub/README.md) | [PetHub](pethub/README.md) |
+| :---: | :---: | :---: | :---: |
+| <a href="kitchenhub/README.md"><img src="images/kitchenhub_frontpage.png" alt="KitchenHub" width="220" /></a> | <a href="vehiclehub/README.md"><img src="images/vehiclehub_frontpage.png" alt="VehicleHub" width="220" /></a> | <a href="retirementhub/README.md"><img src="images/retirementhub_projections.png" alt="RetirementHub" width="220" /></a> | <a href="pethub/README.md"><img src="images/pethub_frontpage.png" alt="PetHub" width="220" /></a> |
+
+**[MailHub](mailhub/README.md)** — SMTP, filtering, and IMAP/LMTP stack (no app UI screenshots in this repo).
+
 ## Overview
 
 Each app has its own API, UI, and database schema. They are intended to run on a Docker host with a reverse proxy and TLS in front (details are up to your environment).

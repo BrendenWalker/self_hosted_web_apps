@@ -2,6 +2,16 @@
 
 Retirement-oriented budgeting and projections: household settings, income, expenses, tax-advantaged savings limits (P1/P2), balance history, and long-term projections.
 
+## Screenshots
+
+![Household and income](../images/retirementhub_household.png)
+
+![Accounts and balance history](../images/retirementhub_accounts.png)
+
+![Savings limits](../images/retirementhub_savings.png)
+
+![Projections](../images/retirementhub_projections.png)
+
 ## Setup
 
 ### Prerequisites

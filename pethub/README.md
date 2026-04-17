@@ -2,6 +2,14 @@
 
 Pet activity tracking (toilet visits, water, reports, multi-user pets). Migrated from the standalone PetDB Flask project into this monorepo and renamed to PetHub.
 
+## Screenshots
+
+![PetHub home](../images/pethub_frontpage.png)
+
+![Reports](../images/pethub_reports.png)
+
+![Admin](../images/pethub_admin.png)
+
 ## Stack
 
 | Layer | Technology |
