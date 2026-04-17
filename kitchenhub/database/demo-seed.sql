@@ -120,25 +120,22 @@ JOIN common.department d ON d.name = r.department_name
 ON CONFLICT (name, details) DO NOTHING;
 
 -- Recipes
-INSERT INTO recipe.recipe (name, servings, instructions, planned_at)
+INSERT INTO recipe.recipe (name, servings, instructions)
 VALUES
   (
     'Sheet Pan Lemon Chicken',
     4,
-    'Toss chicken and broccoli with oil, garlic, salt, and pepper. Roast at 425F for 22 minutes. Serve with rice.',
-    CURRENT_TIMESTAMP + INTERVAL '2 days'
+    'Toss chicken and broccoli with oil, garlic, salt, and pepper. Roast at 425F for 22 minutes. Serve with rice.'
   ),
   (
     'Berry Yogurt Parfait',
     2,
-    'Layer Greek yogurt and blueberries. Chill for 10 minutes before serving.',
-    CURRENT_TIMESTAMP + INTERVAL '1 day'
+    'Layer Greek yogurt and blueberries. Chill for 10 minutes before serving.'
   ),
   (
     'Meal Prep Rice Bowls',
     5,
-    'Cook rice, roast broccoli, pan-sear chicken, then portion into containers.',
-    NULL
+    'Cook rice, roast broccoli, pan-sear chicken, then portion into containers.'
   )
 ON CONFLICT (name) DO NOTHING;
 

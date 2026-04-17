@@ -28,6 +28,15 @@ import { parseRecipeSteps } from '../utils/recipeSteps';
 import { RecipeMakeItOverlay } from '../components/RecipeMakeItOverlay';
 import './RecipeDetailPage.css';
 
+const RECIPE_SCALE_OPTIONS = [
+  { value: 0.5, label: '0.5x' },
+  { value: 1, label: '1x' },
+  { value: 2, label: '2x' },
+  { value: 3, label: '3x' },
+  { value: 4, label: '4x' },
+  { value: 5, label: '5x' },
+];
+
 function RecipeDetailPage() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -53,6 +62,7 @@ function RecipeDetailPage() {
   const [markingPrepared, setMarkingPrepared] = useState(false);
   const [shopNotice, setShopNotice] = useState(null); // { text, className }
   const [makeItOpen, setMakeItOpen] = useState(false);
+  const [recipeScale, setRecipeScale] = useState('1');
 
   useEffect(() => {
     if (isNew) {
@@ -113,19 +123,22 @@ function RecipeDetailPage() {
     }
   };
 
-  const loadRecipe = async () => {
+  const loadRecipe = async (options = {}) => {
+    const { preserveForm = false } = options;
     setLoading(true);
     setError(null);
     setShopNotice(null);
     try {
       const res = await getRecipe(id);
       setRecipe(res.data);
-      setForm({
-        name: res.data.name,
-        servings: res.data.servings,
-        category_ids: res.data.category_ids || [],
-        instructions: res.data.instructions ?? '',
-      });
+      if (!preserveForm) {
+        setForm({
+          name: res.data.name,
+          servings: res.data.servings,
+          category_ids: res.data.category_ids || [],
+          instructions: res.data.instructions ?? '',
+        });
+      }
     } catch (err) {
       setError(err.response?.data?.error || err.message || 'Failed to load recipe');
       setRecipe(null);
@@ -156,7 +169,7 @@ function RecipeDetailPage() {
       });
       setRecipe((prev) => prev && { ...prev, ...form, category_names: categories.filter((c) => form.category_ids.includes(c.id)).map((c) => c.name).join(', ') });
       setEditing(false);
-      loadRecipe();
+      await loadRecipe({ preserveForm: editing });
     } catch (err) {
       setError(err.response?.data?.error || err.message || 'Failed to save recipe');
     }
@@ -168,7 +181,8 @@ function RecipeDetailPage() {
     setShopNotice(null);
     setAddingToShoppingList(true);
     try {
-      const res = await addRecipeToShoppingList(id);
+      const scale = Number(recipeScale) || 1;
+      const res = await addRecipeToShoppingList(id, scale);
       const data = res.data || {};
       setShopNotice({
         text: buildRecipeShoppingListNoticeText(recipe?.name, data),
@@ -235,7 +249,7 @@ function RecipeDetailPage() {
       setAddIngredientMeasureId('');
       setAddIngredientComment('');
       setAddIngredientOptional(false);
-      loadRecipe();
+      await loadRecipe({ preserveForm: editing });
     } catch (err) {
       setError(err.response?.data?.error || err.message || 'Failed to add ingredient');
     }
@@ -244,7 +258,7 @@ function RecipeDetailPage() {
   const handleRemoveIngredient = async (ingredientId) => {
     try {
       await removeRecipeIngredient(id, ingredientId);
-      loadRecipe();
+      await loadRecipe({ preserveForm: editing });
     } catch (err) {
       setError(err.response?.data?.error || err.message || 'Failed to remove ingredient');
     }
@@ -408,7 +422,7 @@ function RecipeDetailPage() {
           <>
             <div className="recipe-detail-header">
               <h1>{recipe.name}</h1>
-            <p className="recipe-meta">{recipe.category_names || 'Uncategorized'} · {recipe.servings} servings</p>
+            <p className="recipe-meta">{recipe.category_names || 'Uncategorized'}</p>
               <div className="recipe-detail-actions">
                 <div className="recipe-detail-actions-primary">
                   {editing ? (
@@ -481,6 +495,20 @@ function RecipeDetailPage() {
                     >
                       {addingToShoppingList ? 'Adding…' : 'Add to shopping list'}
                     </button>
+                    <label className="recipe-detail-scale-control">
+                      <span>Scale</span>
+                      <select
+                        value={recipeScale}
+                        onChange={(e) => setRecipeScale(e.target.value)}
+                        disabled={addingToShoppingList}
+                      >
+                        {RECIPE_SCALE_OPTIONS.map((opt) => (
+                          <option key={opt.value} value={String(opt.value)}>
+                            {opt.label}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
                   </div>
                 )}
               </div>
@@ -497,15 +525,6 @@ function RecipeDetailPage() {
                   />
                 </div>
                 <div className="form-row inline">
-                  <div className="form-group">
-                    <label>Servings</label>
-                    <input
-                      type="number"
-                      min={1}
-                      value={form.servings}
-                      onChange={(e) => setForm((f) => ({ ...f, servings: e.target.value }))}
-                    />
-                  </div>
                   <div className="form-group">
                     <label>Categories</label>
                     <div className="category-checkboxes">
@@ -524,6 +543,15 @@ function RecipeDetailPage() {
                 </div>
 
                 <div className="recipe-ingredients-section">
+                  <div className="form-row recipe-servings-row">
+                    <label>Servings</label>
+                    <input
+                      type="number"
+                      min={1}
+                      value={form.servings}
+                      onChange={(e) => setForm((f) => ({ ...f, servings: e.target.value }))}
+                    />
+                  </div>
                   <h2>Ingredients</h2>
                   {recipe.ingredients && recipe.ingredients.length > 0 ? (
                     <ul className="recipe-ingredients-list">
@@ -662,6 +690,7 @@ function RecipeDetailPage() {
             ) : (
               <>
                 <div className="recipe-ingredients-section">
+                  <p className="recipe-servings-display">Servings: {recipe.servings}</p>
                   <h2>Ingredients</h2>
                   {recipe.ingredients && recipe.ingredients.length > 0 ? (
                     <ul className="recipe-ingredients-list">

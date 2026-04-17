@@ -162,6 +162,22 @@
   white-space: nowrap;
 }
 
+.recipe-scale-control {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  color: #555;
+  font-size: 0.85rem;
+}
+
+.recipe-scale-control select {
+  padding: 0.45rem 0.55rem;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  font-size: 0.9rem;
+  background: #fff;
+}
+
 .btn-secondary {
   background: #ecf0f1;
   color: #2c3e50;
@@ -230,6 +246,11 @@
     align-self: stretch;
     width: 100%;
     white-space: normal;
+  }
+
+  .recipe-scale-control {
+    align-self: stretch;
+    justify-content: space-between;
   }
 
   .recipe-card {

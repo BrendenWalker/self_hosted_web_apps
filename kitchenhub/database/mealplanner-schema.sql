@@ -18,16 +18,11 @@ CREATE INDEX IF NOT EXISTS idx_meal_slot_name ON mealplanner.meal_slot(name);
 
 -- Meals table (planned meals for specific dates)
 CREATE TABLE IF NOT EXISTS mealplanner.meals (
-    meal_date TIMESTAMP NOT NULL,
-    meal_slot_id INTEGER NOT NULL REFERENCES mealplanner.meal_slot(id) ON DELETE CASCADE,
-    recipe_id INTEGER REFERENCES recipe.recipe(id) ON DELETE CASCADE,
-    option INTEGER,
-    servings INTEGER NOT NULL,
-    created TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    modified TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    PRIMARY KEY (meal_date, meal_slot_id, recipe_id)
+    id SERIAL PRIMARY KEY,
+    meal_date TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    meal_slot_id INTEGER NOT NULL DEFAULT 4,
+    recipe_id INTEGER NOT NULL REFERENCES recipe.recipe(id) ON DELETE CASCADE
 );
 
 CREATE INDEX IF NOT EXISTS idx_meals_date ON mealplanner.meals(meal_date);
-CREATE INDEX IF NOT EXISTS idx_meals_slot ON mealplanner.meals(meal_slot_id);
 CREATE INDEX IF NOT EXISTS idx_meals_recipe ON mealplanner.meals(recipe_id);
