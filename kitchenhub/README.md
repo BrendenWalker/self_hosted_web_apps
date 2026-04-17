@@ -2,6 +2,14 @@
 
 A modern, dockerized web application for managing shopping lists with store layout organization. Migrated from the original Firebird/Delphi system to PostgreSQL and React. Future plans include meal planning and adding recipe ingredients to the shopping list.
 
+## Screenshots
+
+![KitchenHub home](../images/kitchenhub_frontpage.png)
+
+![Shopping list by store layout](../images/kitchenhub_shoppinglist.png)
+
+![Recipe list](../images/kitchenhub_recipelist.png)
+
 ## Features
 
 - **Items**: Browse and manage your item catalog; add items to your shopping list

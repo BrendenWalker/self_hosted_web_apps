@@ -2,6 +2,14 @@
 
 A modern, dockerized web application for tracking and managing vehicle service intervals and maintenance history. Migrated from the original Firebird/Delphi system to PostgreSQL and React.
 
+## Screenshots
+
+![VehicleHub home](../images/vehiclehub_frontpage.png)
+
+![Service types](../images/vehiclehub_servicetypes.png)
+
+![Service history](../images/vehiclehub_servicehistory.png)
+
 ## Features
 
 - **Vehicle Management**: Add and manage your vehicles
