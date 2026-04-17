@@ -5,6 +5,7 @@ from logging.config import fileConfig
 
 from sqlalchemy import engine_from_config
 from sqlalchemy import pool
+import sqlalchemy as sa
 
 from alembic import context
 
@@ -46,6 +47,27 @@ def run_migrations_online():
         poolclass=pool.NullPool,
     )
     with connectable.connect() as connection:
+        inspector = sa.inspect(connection)
+        if 'alembic_version' not in inspector.get_table_names():
+            # Alembic's default version table uses VARCHAR(32), but this project's
+            # revision identifiers are longer. Pre-create the table wide enough
+            # so fresh databases can run migrations successfully.
+            connection.exec_driver_sql(
+                """
+                CREATE TABLE alembic_version (
+                    version_num VARCHAR(50) NOT NULL PRIMARY KEY
+                )
+                """
+            )
+        else:
+            columns = {col['name']: col for col in inspector.get_columns('alembic_version')}
+            version_col = columns.get('version_num')
+            if version_col is not None:
+                col_type = str(version_col['type']).upper()
+                if 'VARCHAR(32)' in col_type or col_type == 'VARCHAR(32)':
+                    connection.exec_driver_sql(
+                        "ALTER TABLE alembic_version ALTER COLUMN version_num TYPE VARCHAR(50)"
+                    )
         context.configure(connection=connection, target_metadata=target_metadata)
         with context.begin_transaction():
             context.run_migrations()
