@@ -313,8 +313,13 @@ label {
   align-items: center;
   text-align: center;
 }
+/* Same accent for Pee and Poop — legacy EMA vs new method, not fluid color */
+.meter-speedo-cell-ema {
+  border-top: 3px solid #3b82f6;
+}
 .meter-speedo-cell-new {
   background: #eff6ff;
+  border-top: 3px solid #1d4ed8;
 }
 .meter-speedo-gauge-wrap {
   width: 100%;
