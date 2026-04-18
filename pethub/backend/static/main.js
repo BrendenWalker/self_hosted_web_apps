@@ -1106,88 +1106,101 @@ async function refreshSpeedometers() {
   try {
     const data = await (await fetch('/api/summary/potty_speedometer?' + params.toString())).json();
     
-    // Pee speedometer (left)
+    // Pee + Poop: legacy EMA gauge + new rest-span gauge per fluid
     const peeEl = $('#speedometer-pee');
     if (peeEl && data.pee) {
-      renderSpeedometer(peeEl, data.pee, 'Pee');
+      renderDualSpeedometer(peeEl, data.pee, 'Pee');
     }
-    
-    // Poop speedometer (right)
+
     const poopEl = $('#speedometer-poop');
     if (poopEl && data.poop) {
-      renderSpeedometer(poopEl, data.poop, 'Poop');
+      renderDualSpeedometer(poopEl, data.poop, 'Poop');
     }
   } catch (e) {
     console.error('Error loading speedometer data:', e);
   }
 }
 
-function renderSpeedometer(container, data, label) {
-  const hoursSince = data.hours_since;
-  const avgHours = data.avg_hours;
-  
-  if (hoursSince === null || avgHours === null) {
-    container.innerHTML = `<div style="text-align: center; padding: 20px; color: #6b7280;">No ${label.toLowerCase()} data available</div>`;
-    return;
+/** One semi-circle gauge: hoursSince vs avgHours benchmark. */
+function speedometerGaugeHTML(hoursSince, avgHours, fluidLabel, methodLabel, size, accentNew) {
+  if (avgHours === null || avgHours === undefined) {
+    return `
+      <div style="margin-bottom: 16px;">
+        <div style="font-size: 11px; font-weight: 600; color: ${accentNew ? '#1d4ed8' : '#4b5563'}; margin-bottom: 6px;">${methodLabel}</div>
+        <div style="font-size: 12px; color: #6b7280;">No benchmark yet (need more toilet logs)</div>
+      </div>`;
   }
-  
-  // Calculate percentage relative to weighted moving average
-  // 0% = just happened, 100% = at expected time, >100% = past expected time
   const percentage = (hoursSince / avgHours) * 100;
-  
-  // Determine color based on how close we are to expected time
-  // Green: 0-60% (well before expected), Yellow: 60-100% (approaching expected), Red: >100% (past expected)
-  let color = '#10b981'; // green
-  if (percentage >= 100) color = '#ef4444'; // red - past expected time
-  else if (percentage >= 60) color = '#f59e0b'; // yellow - approaching expected time
-  
-  // Create SVG speedometer
-  const size = 200;
+  let color = '#10b981';
+  if (percentage >= 100) color = '#ef4444';
+  else if (percentage >= 60) color = '#f59e0b';
+
   const center = size / 2;
-  const radius = size / 2 - 20;
-  
-  // Calculate angle: left side (π) = 0 hours, right side (0) = expected hours
-  // Map hoursSince from 0 to avgHours onto angle from π to 0
-  const ratio = Math.min(hoursSince / avgHours, 1.0); // Cap at 1.0 (100% of expected)
-  const angleRad = Math.PI * (1 - ratio); // π at 0 hours, 0 at expected hours
-  
-  // Calculate end point of arc and needle
-  // Arc starts at left (π radians), sweeps clockwise to current position
-  const startAngle = Math.PI; // Left side (180 degrees)
-  const endAngle = angleRad; // Current position
+  const radius = size / 2 - 18;
+  const ratio = Math.min(hoursSince / avgHours, 1.0);
+  const angleRad = Math.PI * (1 - ratio);
+  const startAngle = Math.PI;
+  const endAngle = angleRad;
   const endX = center + radius * Math.cos(endAngle);
   const endY = center - radius * Math.sin(endAngle);
   const startX = center + radius * Math.cos(startAngle);
   const startY = center - radius * Math.sin(startAngle);
-  
-  // Determine if we need large arc flag (for angles > 180 degrees)
-  const sweepAngle = Math.PI - angleRad; // Angle swept from left
+  const sweepAngle = Math.PI - angleRad;
   const largeArc = sweepAngle > Math.PI ? 1 : 0;
-  
+
+  return `
+    <div style="margin-bottom: 18px;">
+      <div style="font-size: 11px; font-weight: 600; color: ${accentNew ? '#1d4ed8' : '#4b5563'}; margin-bottom: 8px;">${methodLabel}</div>
+      <svg width="${size}" height="${size / 2 + 16}" style="max-width: 100%; display: block; margin: 0 auto;">
+        <path d="M ${startX} ${startY} A ${radius} ${radius} 0 0 1 ${size - 18} ${center}"
+              stroke="#e5e7eb" stroke-width="10" fill="none" />
+        <path d="M ${startX} ${startY} A ${radius} ${radius} 0 ${largeArc} 1 ${endX} ${endY}"
+              stroke="${color}" stroke-width="10" fill="none" stroke-linecap="round" />
+        <line x1="${center}" y1="${center}" x2="${endX}" y2="${endY}" stroke="#111827" stroke-width="2.5" stroke-linecap="round" />
+        <circle cx="${center}" cy="${center}" r="5" fill="#111827" />
+      </svg>
+      <div style="margin-top: 8px;">
+        <div style="font-size: 13px; color: #9ca3af;">Benchmark: ${avgHours.toFixed(1)} h</div>
+        ${percentage >= 100
+          ? `<div style="font-size: 11px; color: #ef4444; margin-top: 2px;">${(percentage - 100).toFixed(0)}% past benchmark</div>`
+          : `<div style="font-size: 11px; color: #6b7280; margin-top: 2px;">${(100 - percentage).toFixed(0)}% to benchmark</div>`}
+      </div>
+    </div>`;
+}
+
+/** Legacy EMA + new rest-span estimate stacked in one column. */
+function renderDualSpeedometer(container, data, fluidLabel) {
+  const hoursSince = data.hours_since;
+  const leg = data.avg_hours;
+  const neu = data.avg_hours_new_method;
+
+  if (hoursSince === null) {
+    container.innerHTML = `<div style="text-align: center; padding: 20px; color: #6b7280;">No ${fluidLabel.toLowerCase()} data available</div>`;
+    return;
+  }
+
+  const size = 188;
+  const sinceBlock = `
+    <div style="margin-bottom: 14px;">
+      <div style="font-size: 22px; font-weight: bold; color: #111827;">${hoursSince.toFixed(1)} h</div>
+      <div style="font-size: 13px; color: #6b7280;">Since last ${fluidLabel.toLowerCase()}</div>
+    </div>`;
+
+  const gLegacy = speedometerGaugeHTML(hoursSince, leg, fluidLabel, 'EMA trend (legacy)', size, false);
+  const gNew = neu === null
+    ? `
+      <div>
+        <div style="font-size: 11px; font-weight: 600; color: #1d4ed8; margin-bottom: 6px;">New method (rest-span estimate)</div>
+        <div style="font-size: 12px; color: #6b7280;">Pick one pet (not &quot;all&quot;) and keep logging — or history is too sparse for a rest-span benchmark.</div>
+      </div>`
+    : speedometerGaugeHTML(hoursSince, neu, fluidLabel, 'New method (rest-span estimate)', size, true);
+
   container.innerHTML = `
     <div style="text-align: center;">
-      <h3 style="margin: 0 0 12px 0; font-size: 18px;">${label}</h3>
-      <svg width="${size}" height="${size / 2 + 20}" style="max-width: 100%;">
-        <!-- Background arc (full semi-circle) -->
-        <path d="M ${startX} ${startY} A ${radius} ${radius} 0 0 1 ${size - 20} ${center}" 
-              stroke="#e5e7eb" stroke-width="12" fill="none" />
-        <!-- Value arc (from left to current position) -->
-        <path d="M ${startX} ${startY} A ${radius} ${radius} 0 ${largeArc} 1 ${endX} ${endY}" 
-              stroke="${color}" stroke-width="12" fill="none" stroke-linecap="round" />
-        <!-- Needle -->
-        <line x1="${center}" y1="${center}" 
-              x2="${endX}" 
-              y2="${endY}" 
-              stroke="#111827" stroke-width="3" stroke-linecap="round" />
-        <!-- Center dot -->
-        <circle cx="${center}" cy="${center}" r="6" fill="#111827" />
-      </svg>
-      <div style="margin-top: 12px;">
-        <div style="font-size: 24px; font-weight: bold; color: ${color};">${hoursSince.toFixed(1)}h</div>
-        <div style="font-size: 14px; color: #6b7280;">Since last ${label.toLowerCase()}</div>
-        <div style="font-size: 12px; color: #9ca3af; margin-top: 4px;">Expected: ${avgHours.toFixed(1)}h</div>
-        ${percentage >= 100 ? `<div style="font-size: 11px; color: #ef4444; margin-top: 2px;">${(percentage - 100).toFixed(0)}% overdue</div>` : `<div style="font-size: 11px; color: #6b7280; margin-top: 2px;">${(100 - percentage).toFixed(0)}% to expected</div>`}
-      </div>
-    </div>
-  `;
+      <h3 style="margin: 0 0 4px 0; font-size: 18px;">${fluidLabel}</h3>
+      ${sinceBlock}
+      ${gLegacy}
+      ${gNew}
+    </div>`;
 }
+

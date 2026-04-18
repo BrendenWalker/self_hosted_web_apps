@@ -52,7 +52,7 @@ function datetimeLocalToISO(localStr) {
 }
 
 /** Horizontal bar: elapsed time since last event vs typical gap (average). */
-function PottyGapBar({ hoursSince, avgHours, accentColor }) {
+function PottyGapBar({ hoursSince, avgHours, accentColor, markerLabel = 'Avg' }) {
   const hasSince = hoursSince != null && Number.isFinite(Number(hoursSince));
   const hasAvg = avgHours != null && Number.isFinite(Number(avgHours)) && Number(avgHours) > 0;
   const since = hasSince ? Number(hoursSince) : 0;
@@ -107,7 +107,7 @@ function PottyGapBar({ hoursSince, avgHours, accentColor }) {
             style={{ left: `${avgPct}%` }}
             title={`Typical gap (~${avg.toFixed(1)} h)`}
           >
-            <span className="potty-gap-avg-cap">Avg</span>
+            <span className="potty-gap-avg-cap">{markerLabel}</span>
           </div>
         ) : null}
       </div>
@@ -120,7 +120,7 @@ function PottyGapBar({ hoursSince, avgHours, accentColor }) {
   );
 }
 
-function Meter({ title, data, color }) {
+function DualMethodMeter({ title, data, color }) {
   const block = data?.[title === 'Poop' ? 'poop' : 'pee'];
   if (!block) {
     return (
@@ -130,8 +130,13 @@ function Meter({ title, data, color }) {
       </div>
     );
   }
-  const { hours_since: hoursSince, avg_hours: avgHours, last_time: lastTime } = block;
-  const hasAny = hoursSince != null || avgHours != null || lastTime;
+  const {
+    hours_since: hoursSince,
+    avg_hours: avgLegacy,
+    avg_hours_new_method: avgNew,
+  } = block;
+  const hasAny =
+    hoursSince != null || avgLegacy != null || avgNew != null;
   if (!hasAny) {
     return (
       <div className="meter-card">
@@ -143,20 +148,46 @@ function Meter({ title, data, color }) {
 
   return (
     <div className="meter-card">
-      <h3>{title}</h3>
-      <p className="meter-big">
-        {hoursSince != null ? `${hoursSince} h ago` : 'No recent log'}
-      </p>
-      <p className="muted small">
-        Avg gap: {avgHours != null ? `${avgHours} h` : '—'}
-        {lastTime ? (
-          <>
-            {' '}
-            · Last {fmtTime(lastTime)}
-          </>
-        ) : null}
-      </p>
-      <PottyGapBar hoursSince={hoursSince} avgHours={avgHours} accentColor={color} />
+      <div className="meter-card-head">
+        <h3 className="meter-card-title">{title}</h3>
+        <span className={`meter-ago${hoursSince == null ? ' muted' : ''}`}>
+          {hoursSince != null ? `${hoursSince} h ago` : 'No recent log'}
+        </span>
+      </div>
+
+      <div className="meter-methods">
+        <div className="meter-method">
+          <p className="small meter-method-label">EMA trend (legacy)</p>
+          <p className="muted small">
+            Typical gap: {avgLegacy != null ? `${avgLegacy} h` : '—'}
+          </p>
+          <PottyGapBar
+            hoursSince={hoursSince}
+            avgHours={avgLegacy}
+            accentColor={color}
+            markerLabel="EMA"
+          />
+        </div>
+        <div className="meter-method meter-method-new">
+          <p className="small meter-method-label">New method (rest-span estimate)</p>
+          <p className="muted small">
+            Typical gap: {avgNew != null ? `${avgNew} h` : '—'}
+          </p>
+          {avgNew == null ? (
+            <p className="muted small meter-method-hint">
+              Not shown if &quot;all&quot; pets are selected, or when there is not enough history to infer
+              rest-span holds.
+            </p>
+          ) : (
+            <PottyGapBar
+              hoursSince={hoursSince}
+              avgHours={avgNew}
+              accentColor={color}
+              markerLabel="New"
+            />
+          )}
+        </div>
+      </div>
     </div>
   );
 }
@@ -334,8 +365,8 @@ export default function HomePage() {
       <section className="card">
         <h2>Potty status</h2>
         <div className="meter-row">
-          <Meter title="Pee" data={speed} color="#3b82f6" />
-          <Meter title="Poop" data={speed} color="#b45309" />
+          <DualMethodMeter title="Pee" data={speed} color="#3b82f6" />
+          <DualMethodMeter title="Poop" data={speed} color="#b45309" />
         </div>
       </section>
 
