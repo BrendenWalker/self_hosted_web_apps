@@ -1,12 +1,62 @@
 * {
   box-sizing: border-box;
 }
+
+/*
+ * Lock document height to one screen: body does not scroll. The scrollable region is
+ * Layout’s .main (overflow-y: auto). If #root only had min-height, it would grow with
+ * content and get clipped by body { overflow: hidden } with no way to scroll.
+ */
+html {
+  height: 100%;
+  overflow: hidden;
+}
+
 body {
   margin: 0;
+  height: 100%;
+  max-height: 100dvh;
   font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
   background: #f3f4f6;
   color: #111827;
+  overflow: hidden;
+  -webkit-text-size-adjust: 100%;
+}
+
+#root {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* Fills #root so nested flex (Layout → main scroll) gets a bounded height. */
+.app-viewport {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.app-viewport > * {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
 }
 a {
   color: #2563eb;
+}
+
+/* Faster tap response on mobile (avoids double-tap zoom delay on controls). */
+button,
+[type='submit'],
+a,
+input,
+select,
+textarea {
+  touch-action: manipulation;
 }

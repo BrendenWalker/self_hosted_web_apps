@@ -19,6 +19,7 @@ from werkzeug.security import check_password_hash, generate_password_hash
 
 from auth import UserWrapper, login_manager, bp as auth_bp
 from scheduler import schedule_weekly_summary, build_weekly_summary_text, send_email
+from potty_hold import estimate_hold_hours, split_toilet_times_by_subtype
 from sqlalchemy.orm import selectinload
 
 app = Flask(__name__)
@@ -1245,12 +1246,13 @@ def daily_counts():
 @app.route("/api/summary/potty_speedometer", methods=["GET"])
 @login_required
 def potty_speedometer():
-    """Get last poop/pee times and smoothed intervals (trend) for speedometer indicators"""
+    """Last poop/pee times: legacy EMA avg_hours plus rest-span estimate in avg_hours_new_method."""
     session = SessionLocal()
     try:
         user_id = int(current_user.get_id())
         pet_id = request.args.get("pet_id")
-        
+        summary_tz = os.getenv("SUMMARY_TZ", "America/Los_Angeles")
+
         # Build base query for user's pets
         base_where = (
             select(Activity.created_at, Activity.sub_type, Activity.trend, Activity.pet_id)
@@ -1263,23 +1265,23 @@ def potty_speedometer():
                 )
             )
         )
-        
+
         if pet_id and pet_id != "all":
             try:
                 base_where = base_where.where(Activity.pet_id == int(pet_id))
             except ValueError:
                 pass
-        
+
         # Get last toilet events ordered by date (to get most recent trend values)
         stmt = base_where.order_by(desc(Activity.created_at))
         activities = session.execute(stmt).all()
-        
+
         # Get last event times and most recent trend for each sub_type
         last_poop = None
         last_pee = None
         poop_trend = None
         pee_trend = None
-        
+
         for created_at, sub_type, trend_val, pet_id_val in activities:
             if sub_type and sub_type.lower() == 'poop':
                 if last_poop is None:
@@ -1291,30 +1293,57 @@ def potty_speedometer():
                     last_pee = created_at
                 if pee_trend is None and trend_val is not None:
                     pee_trend = trend_val
-            
+
             # Stop once we have both last times and trends
             if last_poop and last_pee and poop_trend is not None and pee_trend is not None:
                 break
-        
+
+        # Biological hold estimate from ~120d of events (single pet only; mixed pets invalid)
+        pee_hold_est = None
+        poop_hold_est = None
+        if pet_id and pet_id != "all":
+            try:
+                pid = int(pet_id)
+                lookback = datetime.now(timezone.utc) - timedelta(days=120)
+                hist_stmt = (
+                    select(Activity.created_at, Activity.sub_type)
+                    .join(Pet, Activity.pet_id == Pet.id)
+                    .join(PetUser, PetUser.pet_id == Pet.id)
+                    .where(
+                        and_(
+                            PetUser.user_id == user_id,
+                            Activity.activity_type == "toilet",
+                            Activity.pet_id == pid,
+                            Activity.created_at >= lookback,
+                        )
+                    )
+                    .order_by(asc(Activity.created_at))
+                )
+                hist_rows = session.execute(hist_stmt).all()
+                pee_times, poop_times = split_toilet_times_by_subtype(hist_rows)
+                pee_hold_est = estimate_hold_hours(pee_times, summary_tz, is_poop=False)
+                poop_hold_est = estimate_hold_hours(poop_times, summary_tz, is_poop=True)
+            except ValueError:
+                pass
+
         # Ensure now is timezone-aware UTC
         now = datetime.now(timezone.utc)
-        
-        # Helper to normalize datetime to UTC for comparison
+
         def normalize_to_utc(dt):
             if dt is None:
                 return None
             if dt.tzinfo is None:
                 return dt.replace(tzinfo=timezone.utc)
             return dt.astimezone(timezone.utc)
-        
+
         last_poop_utc = normalize_to_utc(last_poop)
         last_pee_utc = normalize_to_utc(last_pee)
-        
-        # Query water events since last pee to adjust expected pee interval
-        adjusted_pee_trend = pee_trend
-        if last_pee_utc:
+
+        def pee_water_adjusted(base_hours):
+            """Shorten expected pee interval when recent water intake was logged."""
+            if base_hours is None or last_pee_utc is None:
+                return base_hours
             water_query_start = max(last_pee_utc, now - timedelta(hours=12))
-            
             water_where = (
                 select(Activity.created_at, Activity.rating, Activity.pet_id)
                 .join(Pet, Activity.pet_id == Pet.id)
@@ -1323,54 +1352,55 @@ def potty_speedometer():
                     and_(
                         PetUser.user_id == user_id,
                         Activity.activity_type == "water",
-                        Activity.created_at >= water_query_start
+                        Activity.created_at >= water_query_start,
                     )
                 )
             )
-            
             if pet_id and pet_id != "all":
                 try:
                     water_where = water_where.where(Activity.pet_id == int(pet_id))
                 except ValueError:
                     pass
-            
             water_activities = session.execute(water_where.order_by(desc(Activity.created_at))).all()
-            
-            if water_activities and pee_trend:
-                total_reduction_factor = 0.0
-                for water_created_at, water_rating, water_pet_id in water_activities:
-                    if water_created_at.tzinfo is None:
-                        water_time = water_created_at.replace(tzinfo=timezone.utc)
+            if not water_activities:
+                return base_hours
+            total_reduction_factor = 0.0
+            for water_created_at, water_rating, _water_pet_id in water_activities:
+                if water_created_at.tzinfo is None:
+                    water_time = water_created_at.replace(tzinfo=timezone.utc)
+                else:
+                    water_time = water_created_at.astimezone(timezone.utc)
+                if water_time > last_pee_utc:
+                    hours_since_water = (now - water_time).total_seconds() / 3600.0
+                    water_rating_val = water_rating or 4
+                    if water_rating_val <= 2:
+                        rating_factor = 0.3
+                    elif water_rating_val <= 4:
+                        rating_factor = 0.6
                     else:
-                        water_time = water_created_at.astimezone(timezone.utc)
-                    
-                    if water_time > last_pee_utc:
-                        hours_since_water = (now - water_time).total_seconds() / 3600.0
-                        water_rating_val = water_rating or 4
-                        if water_rating_val <= 2:
-                            rating_factor = 0.3
-                        elif water_rating_val <= 4:
-                            rating_factor = 0.6
-                        else:
-                            rating_factor = 1.0
-                        time_factor = max(0, 1.0 - max(0, hours_since_water - 3) / 3.0)
-                        reduction = rating_factor * time_factor * 0.20
-                        total_reduction_factor += reduction
-                
-                total_reduction_factor = min(total_reduction_factor, 0.30)
-                adjusted_pee_trend = pee_trend * (1.0 - total_reduction_factor)
-        
+                        rating_factor = 1.0
+                    time_factor = max(0, 1.0 - max(0, hours_since_water - 3) / 3.0)
+                    reduction = rating_factor * time_factor * 0.20
+                    total_reduction_factor += reduction
+            total_reduction_factor = min(total_reduction_factor, 0.30)
+            return base_hours * (1.0 - total_reduction_factor)
+
+        adjusted_pee_legacy = pee_water_adjusted(pee_trend)
+        adjusted_pee_new = pee_water_adjusted(pee_hold_est) if pee_hold_est is not None else None
+
         result = {
             "poop": {
                 "last_time": last_poop.isoformat() if last_poop else None,
                 "hours_since": round((now - last_poop_utc).total_seconds() / 3600.0, 1) if last_poop_utc else None,
-                "avg_hours": round(poop_trend, 1) if poop_trend else None
+                "avg_hours": round(poop_trend, 1) if poop_trend is not None else None,
+                "avg_hours_new_method": round(poop_hold_est, 1) if poop_hold_est is not None else None,
             },
             "pee": {
                 "last_time": last_pee.isoformat() if last_pee else None,
                 "hours_since": round((now - last_pee_utc).total_seconds() / 3600.0, 1) if last_pee_utc else None,
-                "avg_hours": round(adjusted_pee_trend, 1) if adjusted_pee_trend else None
-            }
+                "avg_hours": round(adjusted_pee_legacy, 1) if adjusted_pee_legacy is not None else None,
+                "avg_hours_new_method": round(adjusted_pee_new, 1) if adjusted_pee_new is not None else None,
+            },
         }
         
         return jsonify(result)
