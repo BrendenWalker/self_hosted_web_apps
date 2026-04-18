@@ -133,7 +133,7 @@ function SpeedoPctLine({ hoursSince, avgHours }) {
   return <p className={`meter-speedo-pct${over ? ' is-over' : ''}`}>{text}</p>;
 }
 
-function DualMethodMeter({ title, data, color }) {
+function DualMethodMeter({ title, data }) {
   const block = data?.[title === 'Poop' ? 'poop' : 'pee'];
   if (!block) {
     return (
@@ -169,10 +169,7 @@ function DualMethodMeter({ title, data, color }) {
       </div>
 
       <div className="meter-speedo-row">
-        <div
-          className="meter-speedo-cell"
-          style={{ borderTop: `3px solid ${color}` }}
-        >
+        <div className="meter-speedo-cell meter-speedo-cell-ema">
           <div className="meter-speedo-gauge-wrap">
             <PottySpeedometerGauge
               hoursSince={hoursSince}
@@ -188,10 +185,7 @@ function DualMethodMeter({ title, data, color }) {
             <SpeedoPctLine hoursSince={hoursSince} avgHours={avgLegacy} />
           </div>
         </div>
-        <div
-          className="meter-speedo-cell meter-speedo-cell-new"
-          style={{ borderTop: '3px solid #1d4ed8' }}
-        >
+        <div className="meter-speedo-cell meter-speedo-cell-new">
           <div className="meter-speedo-gauge-wrap">
             {avgNew != null ? (
               <PottySpeedometerGauge
@@ -394,8 +388,8 @@ export default function HomePage() {
       <section className="card">
         <h2>Potty status</h2>
         <div className="meter-row">
-          <DualMethodMeter title="Pee" data={speed} color="#3b82f6" />
-          <DualMethodMeter title="Poop" data={speed} color="#b45309" />
+          <DualMethodMeter title="Pee" data={speed} />
+          <DualMethodMeter title="Poop" data={speed} />
         </div>
       </section>
 
