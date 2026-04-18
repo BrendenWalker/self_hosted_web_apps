@@ -51,73 +51,86 @@ function datetimeLocalToISO(localStr) {
   return d.toISOString();
 }
 
-/** Horizontal bar: elapsed time since last event vs typical gap (average). */
-function PottyGapBar({ hoursSince, avgHours, accentColor, markerLabel = 'Avg' }) {
-  const hasSince = hoursSince != null && Number.isFinite(Number(hoursSince));
-  const hasAvg = avgHours != null && Number.isFinite(Number(avgHours)) && Number(avgHours) > 0;
-  const since = hasSince ? Number(hoursSince) : 0;
-  const avg = hasAvg ? Number(avgHours) : 0;
-
-  if (!hasSince && !hasAvg) return null;
-
-  const maxScale = Math.max(hasSince ? since : 0, hasAvg ? avg : 0, 0.25) * 1.15;
-  const fillPct = hasSince ? Math.min(100, (since / maxScale) * 100) : 0;
-  const avgPct = hasAvg ? Math.min(100, (avg / maxScale) * 100) : null;
-
-  let fillColor = accentColor;
-  if (hasSince && hasAvg) {
-    const ratio = since / avg;
-    if (ratio >= 1) fillColor = '#dc2626';
-    else if (ratio >= 0.6) fillColor = '#d97706';
-    else fillColor = '#059669';
+/** Semi-circle speedometer: time since last vs benchmark hours (needle sweeps toward “due”). */
+function PottySpeedometerGauge({ hoursSince, avgHours, label }) {
+  const avg = avgHours != null ? Number(avgHours) : NaN;
+  const hs = hoursSince != null ? Number(hoursSince) : 0;
+  if (!Number.isFinite(avg) || avg <= 0) {
+    return (
+      <div className="meter-speedo-empty-gauge muted small" role="img" aria-label={label}>
+        No benchmark
+      </div>
+    );
   }
 
-  const ratio = hasSince && hasAvg ? since / avg : null;
-  let statusLine = null;
-  if (ratio != null) {
-    if (ratio >= 1) statusLine = `${(ratio * 100 - 100).toFixed(0)}% past typical gap`;
-    else statusLine = `${(100 - ratio * 100).toFixed(0)}% of typical gap remaining`;
-  } else if (hasSince && !hasAvg) {
-    statusLine = 'Typical gap: need more history';
-  } else if (!hasSince && hasAvg) {
-    statusLine = `Typical gap about ${avg.toFixed(1)} h — log an event to track`;
-  }
+  const percentage = (hs / avg) * 100;
+  let arcColor = '#10b981';
+  if (percentage >= 100) arcColor = '#ef4444';
+  else if (percentage >= 60) arcColor = '#f59e0b';
 
-  const aria = [
-    hasSince ? `${since.toFixed(1)} hours since last` : 'No time since last logged',
-    hasAvg ? `typical gap ${avg.toFixed(1)} hours` : 'no typical gap yet',
-  ].join('; ');
+  const size = 168;
+  const center = size / 2;
+  const radius = size / 2 - 14;
+  const ratio = Math.min(hs / avg, 1.0);
+  const angleRad = Math.PI * (1 - ratio);
+  const startAngle = Math.PI;
+  const endAngle = angleRad;
+  const endX = center + radius * Math.cos(endAngle);
+  const endY = center - radius * Math.sin(endAngle);
+  const startX = center + radius * Math.cos(startAngle);
+  const startY = center - radius * Math.sin(startAngle);
+  const sweepAngle = Math.PI - angleRad;
+  const largeArc = sweepAngle > Math.PI ? 1 : 0;
+  const h = size / 2 + 14;
+
+  const aria = `${label}: ${hs.toFixed(1)} h since last, benchmark ${avg.toFixed(1)} h`;
 
   return (
-    <div className="potty-gap-wrap">
-      <div
-        className="potty-gap-track"
-        role="img"
-        aria-label={aria}
-      >
-        {hasSince ? (
-          <div
-            className="potty-gap-fill"
-            style={{ width: `${fillPct}%`, background: fillColor }}
-          />
-        ) : null}
-        {avgPct != null ? (
-          <div
-            className="potty-gap-avg"
-            style={{ left: `${avgPct}%` }}
-            title={`Typical gap (~${avg.toFixed(1)} h)`}
-          >
-            <span className="potty-gap-avg-cap">{markerLabel}</span>
-          </div>
-        ) : null}
-      </div>
-      <div className="potty-gap-scale">
-        <span>0 h</span>
-        <span>{maxScale.toFixed(1)} h</span>
-      </div>
-      {statusLine ? <p className="potty-gap-status">{statusLine}</p> : null}
-    </div>
+    <svg
+      className="potty-speedo-svg"
+      width={size}
+      height={h}
+      viewBox={`0 0 ${size} ${h}`}
+      role="img"
+      aria-label={aria}
+    >
+      <path
+        d={`M ${startX} ${startY} A ${radius} ${radius} 0 0 1 ${size - 14} ${center}`}
+        stroke="#e5e7eb"
+        strokeWidth="10"
+        fill="none"
+      />
+      <path
+        d={`M ${startX} ${startY} A ${radius} ${radius} 0 ${largeArc} 1 ${endX} ${endY}`}
+        stroke={arcColor}
+        strokeWidth="10"
+        fill="none"
+        strokeLinecap="round"
+      />
+      <line
+        x1={center}
+        y1={center}
+        x2={endX}
+        y2={endY}
+        stroke="#111827"
+        strokeWidth="2.5"
+        strokeLinecap="round"
+      />
+      <circle cx={center} cy={center} r={5} fill="#111827" />
+    </svg>
   );
+}
+
+function SpeedoPctLine({ hoursSince, avgHours }) {
+  const avg = avgHours != null ? Number(avgHours) : NaN;
+  const hs = hoursSince != null ? Number(hoursSince) : NaN;
+  if (!Number.isFinite(avg) || avg <= 0 || !Number.isFinite(hs)) return null;
+  const pct = (hs / avg) * 100;
+  const over = pct >= 100;
+  const text = over
+    ? `${(pct - 100).toFixed(0)}% past benchmark`
+    : `${(100 - pct).toFixed(0)}% to benchmark`;
+  return <p className={`meter-speedo-pct${over ? ' is-over' : ''}`}>{text}</p>;
 }
 
 function DualMethodMeter({ title, data, color }) {
@@ -155,37 +168,53 @@ function DualMethodMeter({ title, data, color }) {
         </span>
       </div>
 
-      <div className="meter-methods">
-        <div className="meter-method">
-          <p className="small meter-method-label">EMA trend (legacy)</p>
-          <p className="muted small">
-            Typical gap: {avgLegacy != null ? `${avgLegacy} h` : '—'}
-          </p>
-          <PottyGapBar
-            hoursSince={hoursSince}
-            avgHours={avgLegacy}
-            accentColor={color}
-            markerLabel="EMA"
-          />
-        </div>
-        <div className="meter-method meter-method-new">
-          <p className="small meter-method-label">New method (rest-span estimate)</p>
-          <p className="muted small">
-            Typical gap: {avgNew != null ? `${avgNew} h` : '—'}
-          </p>
-          {avgNew == null ? (
-            <p className="muted small meter-method-hint">
-              Not shown if &quot;all&quot; pets are selected, or when there is not enough history to infer
-              rest-span holds.
-            </p>
-          ) : (
-            <PottyGapBar
+      <div className="meter-speedo-row">
+        <div
+          className="meter-speedo-cell"
+          style={{ borderTop: `3px solid ${color}` }}
+        >
+          <div className="meter-speedo-gauge-wrap">
+            <PottySpeedometerGauge
               hoursSince={hoursSince}
-              avgHours={avgNew}
-              accentColor={color}
-              markerLabel="New"
+              avgHours={avgLegacy}
+              label="EMA trend legacy"
             />
-          )}
+          </div>
+          <div className="meter-speedo-details">
+            <div className="meter-speedo-method-title">EMA trend (legacy)</div>
+            <p className="muted small meter-speedo-bench">
+              {avgLegacy != null ? `Benchmark: ${avgLegacy} h` : 'No benchmark yet'}
+            </p>
+            <SpeedoPctLine hoursSince={hoursSince} avgHours={avgLegacy} />
+          </div>
+        </div>
+        <div
+          className="meter-speedo-cell meter-speedo-cell-new"
+          style={{ borderTop: '3px solid #1d4ed8' }}
+        >
+          <div className="meter-speedo-gauge-wrap">
+            {avgNew != null ? (
+              <PottySpeedometerGauge
+                hoursSince={hoursSince}
+                avgHours={avgNew}
+                label="Rest-span estimate"
+              />
+            ) : (
+              <div className="meter-speedo-empty-gauge muted small">—</div>
+            )}
+          </div>
+          <div className="meter-speedo-details">
+            <div className="meter-speedo-method-title is-new">New method (rest-span)</div>
+            <p className="muted small meter-speedo-bench">
+              {avgNew != null ? `Benchmark: ${avgNew} h` : 'No benchmark yet'}
+            </p>
+            {avgNew != null ? <SpeedoPctLine hoursSince={hoursSince} avgHours={avgNew} /> : null}
+            {avgNew == null ? (
+              <p className="muted small meter-speedo-hint">
+                Not shown for &quot;all&quot; pets, or when history is too sparse to infer rest-span holds.
+              </p>
+            ) : null}
+          </div>
         </div>
       </div>
     </div>

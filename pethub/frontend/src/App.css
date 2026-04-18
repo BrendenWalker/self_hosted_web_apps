@@ -294,79 +294,98 @@ label {
   margin-top: 8px;
 }
 
-/* Potty status: time since last vs typical gap */
-.meter-methods {
+/* Potty status: side-by-side speedometers */
+.meter-speedo-row {
+  display: flex;
+  flex-direction: row;
+  gap: 10px;
+  align-items: stretch;
+  margin-top: 0.35rem;
+}
+.meter-speedo-cell {
+  flex: 1;
+  min-width: 0;
+  padding: 10px 8px 8px;
+  border-radius: 8px;
+  background: #fafafa;
   display: flex;
   flex-direction: column;
-  gap: 1rem;
-  margin-top: 0.25rem;
+  align-items: center;
+  text-align: center;
 }
-.meter-method-label {
-  margin: 0 0 0.25rem;
+.meter-speedo-cell-new {
+  background: #eff6ff;
+}
+.meter-speedo-gauge-wrap {
+  width: 100%;
+  max-width: 180px;
+  min-height: 98px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.potty-speedo-svg {
+  max-width: 100%;
+  height: auto;
+  display: block;
+}
+.meter-speedo-empty-gauge {
+  min-height: 84px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px;
+}
+.meter-speedo-details {
+  width: 100%;
+  margin-top: 6px;
+}
+.meter-speedo-method-title {
+  font-size: 0.78rem;
   font-weight: 600;
   color: #374151;
+  margin: 0 0 4px;
+  line-height: 1.25;
 }
-.meter-method-new .meter-method-label {
+.meter-speedo-method-title.is-new {
   color: #1d4ed8;
 }
-.meter-method-hint {
-  margin: 0.35rem 0 0;
-  max-width: 22rem;
+.meter-speedo-bench {
+  margin: 0 0 2px;
 }
-.potty-gap-wrap {
-  margin-top: 12px;
-}
-.potty-gap-track {
-  position: relative;
-  height: 26px;
-  border-radius: 8px;
-  background: #e5e7eb;
-  overflow: visible;
-}
-.potty-gap-fill {
-  position: absolute;
-  left: 0;
-  top: 0;
-  bottom: 0;
-  border-radius: 8px;
-  min-width: 4px;
-  transition: width 0.25s ease, background 0.2s ease;
-  opacity: 0.92;
-}
-.potty-gap-avg {
-  position: absolute;
-  top: -5px;
-  bottom: -5px;
-  width: 0;
-  border-left: 3px solid #111827;
-  transform: translateX(-1.5px);
-  z-index: 2;
-  pointer-events: none;
-}
-.potty-gap-avg-cap {
-  position: absolute;
-  left: 50%;
-  bottom: 100%;
-  transform: translateX(-50%) translateY(-2px);
-  font-size: 0.65rem;
-  font-weight: 700;
-  letter-spacing: 0.04em;
-  color: #111827;
-  white-space: nowrap;
-  pointer-events: auto;
-}
-.potty-gap-scale {
-  display: flex;
-  justify-content: space-between;
-  margin-top: 4px;
-  font-size: 0.7rem;
+.meter-speedo-pct {
+  margin: 4px 0 0;
+  font-size: 0.75rem;
   color: #6b7280;
 }
-.potty-gap-status {
-  margin: 8px 0 0;
-  font-size: 0.8rem;
-  color: #4b5563;
-  font-weight: 500;
+.meter-speedo-pct.is-over {
+  color: #dc2626;
+  font-weight: 600;
+}
+.meter-speedo-hint {
+  margin: 6px 0 0;
+  line-height: 1.35;
+}
+@media (max-width: 400px) {
+  .meter-speedo-row {
+    flex-direction: column;
+  }
+  .meter-speedo-cell {
+    flex-direction: row;
+    align-items: flex-start;
+    text-align: left;
+    gap: 10px;
+  }
+  .meter-speedo-gauge-wrap {
+    flex-shrink: 0;
+    max-width: 140px;
+    min-height: 0;
+  }
+  .meter-speedo-details {
+    margin-top: 0;
+    flex: 1;
+    min-width: 0;
+  }
 }
 .grid-4 {
   display: grid;
