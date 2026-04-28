@@ -29,6 +29,10 @@ vi.mock('./api/api', () => ({
   markPurchased: () => mockResolve({}),
   removeFromShoppingList: () => mockResolve({}),
   getRecipes: () => mockResolve([]),
+  getMealPlanner: () => mockResolve({ days: [] }),
+  assignMealPlannerMeal: () => mockResolve({}),
+  clearMealPlannerMeal: () => mockResolve({}),
+  updateMealPlannerServings: () => mockResolve({}),
   patchRecipePlanned: () => mockResolve({}),
   default: {},
 }));
@@ -45,7 +49,7 @@ describe('App', () => {
     expect(screen.getByRole('link', { name: /^Shopping List$/ })).toHaveAttribute('href', '/shopping');
     expect(screen.getByRole('link', { name: /^Items$/ })).toHaveAttribute('href', '/list');
     expect(screen.getByText('Stores')).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: /^Upcoming meals$/ })).toHaveAttribute('href', '/recipes/upcoming');
+    expect(screen.getByRole('link', { name: /^Meal planner$/ })).toHaveAttribute('href', '/recipes/upcoming');
   });
 
   it('renders HomePage at /', () => {
@@ -84,7 +88,7 @@ describe('App', () => {
         <App />
       </MemoryRouter>
     );
-    expect(await screen.findByRole('heading', { name: 'Upcoming meals' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Meal Planner' })).toBeInTheDocument();
   });
 
   it('renders StorePage at /stores', async () => {

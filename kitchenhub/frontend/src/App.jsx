@@ -26,7 +26,7 @@ function App() {
       <Link to="/shopping" className="nav-link" onClick={closeNav}>Shopping List</Link>
       <Link to="/list" className="nav-link" onClick={closeNav}>Items</Link>
       <Link to="/recipes" className="nav-link" onClick={closeNav}>Recipes</Link>
-      <Link to="/recipes/upcoming" className="nav-link" onClick={closeNav}>Upcoming meals</Link>
+      <Link to="/recipes/upcoming" className="nav-link" onClick={closeNav}>Meal planner</Link>
       <Link to="/stores" className="nav-link" onClick={closeNav}>Stores</Link>
     </>
   );
