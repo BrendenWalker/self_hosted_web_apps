@@ -99,6 +99,28 @@ export const updateRecipe = (id, data) => api.put(`/recipes/${id}`, data);
 export const patchRecipePlanned = (id, planned) =>
   api.patch(`/recipes/${id}/planned`, { planned: Boolean(planned) });
 export const deleteRecipe = (id) => api.delete(`/recipes/${id}`);
+export const getMealPlanner = (start) =>
+  api.get('/meal-planner', start ? { params: { start } } : undefined);
+export const assignMealPlannerMeal = (mealDate, mealSlotId, recipeId, source) =>
+  api.put('/meal-planner/assign', {
+    meal_date: mealDate,
+    meal_slot_id: mealSlotId,
+    recipe_id: recipeId,
+    source_meal_date: source?.meal_date,
+    source_meal_slot_id: source?.meal_slot_id,
+  });
+export const clearMealPlannerMeal = (mealDate, mealSlotId) =>
+  api.put('/meal-planner/assign', {
+    meal_date: mealDate,
+    meal_slot_id: mealSlotId,
+    recipe_id: null,
+  });
+export const updateMealPlannerServings = (mealDate, mealSlotId, servings) =>
+  api.patch('/meal-planner/servings', {
+    meal_date: mealDate,
+    meal_slot_id: mealSlotId,
+    servings,
+  });
 
 // Recipe ingredients
 export const addRecipeIngredient = (recipeId, data) =>

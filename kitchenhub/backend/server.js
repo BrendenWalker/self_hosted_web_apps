@@ -43,6 +43,34 @@ function normalizeRecipeScale(value) {
   return n;
 }
 
+function parseDateOnly(value) {
+  if (typeof value !== 'string') return null;
+  const m = value.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!m) return null;
+  const y = Number(m[1]);
+  const mo = Number(m[2]);
+  const d = Number(m[3]);
+  const dt = new Date(Date.UTC(y, mo - 1, d));
+  if (
+    dt.getUTCFullYear() !== y ||
+    dt.getUTCMonth() !== mo - 1 ||
+    dt.getUTCDate() !== d
+  ) return null;
+  return dt;
+}
+
+function formatDateOnly(date) {
+  return date.toISOString().slice(0, 10);
+}
+
+function startOfWeekMondayUtc(date = new Date()) {
+  const d = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
+  const dow = d.getUTCDay();
+  const offset = dow === 0 ? 6 : dow - 1;
+  d.setUTCDate(d.getUTCDate() - offset);
+  return d;
+}
+
 const PACK1_GRAMS_EPS = 1e-6;
 
 /** When count per pack is 1, ingredient grams and shopping measure grams must match if either is set. */
@@ -1281,6 +1309,264 @@ app.patch('/api/recipes/:id/planned', async (req, res) => {
   } catch (error) {
     console.error('Error updating recipe planned:', error);
     res.status(500).json({ error: 'Failed to update recipe planned state' });
+  }
+});
+
+app.get('/api/meal-planner', async (req, res) => {
+  try {
+    const startDate = req.query.start ? parseDateOnly(req.query.start) : startOfWeekMondayUtc();
+    if (!startDate) {
+      return res.status(400).json({ error: 'start must be YYYY-MM-DD' });
+    }
+    const weekStart = formatDateOnly(startDate);
+    const endDate = new Date(startDate);
+    endDate.setUTCDate(endDate.getUTCDate() + 6);
+    const weekEnd = formatDateOnly(endDate);
+
+    let slots = [];
+    try {
+      const slotColsResult = await pool.query(
+        `SELECT column_name
+         FROM information_schema.columns
+         WHERE table_schema = 'mealplanner' AND table_name = 'meal_slot'`
+      );
+      const slotCols = new Set((slotColsResult.rows || []).map((r) => r.column_name));
+      const hasSeq = slotCols.has('seq');
+      const hasServings = slotCols.has('servings');
+      const slotResult = await pool.query(
+        `SELECT id, name, ${
+          hasSeq ? 'seq' : 'id'
+        } AS seq, ${
+          hasServings ? 'servings' : '4'
+        }::integer AS servings
+         FROM mealplanner.meal_slot
+         ORDER BY ${hasSeq ? 'seq' : 'id'}, id`
+      );
+      slots = slotResult.rows || [];
+    } catch (error) {
+      if (error?.code !== '42P01') throw error;
+    }
+    if (slots.length === 0) {
+      slots = [{ id: 4, name: 'Dinner', seq: 4, servings: 4 }];
+    }
+    const slotServingsById = new Map(slots.map((slot) => [String(slot.id), slot.servings]));
+
+    let mealRows = [];
+    try {
+      const mealColsResult = await pool.query(
+        `SELECT column_name
+         FROM information_schema.columns
+         WHERE table_schema = 'mealplanner' AND table_name = 'meals'`
+      );
+      const mealCols = new Set((mealColsResult.rows || []).map((r) => r.column_name));
+      const hasMealSlotId = mealCols.has('meal_slot_id');
+      const hasMealServings = mealCols.has('servings');
+      const mealsResult = await pool.query(
+        `SELECT (m.meal_date::date)::text AS meal_day, ${
+          hasMealSlotId ? 'm.meal_slot_id' : '4'
+        }::integer AS meal_slot_id,
+                r.id AS recipe_id, r.name AS recipe_name, r.servings AS recipe_servings,
+                ${hasMealServings ? 'm.servings' : 'NULL'}::integer AS meal_servings
+         FROM mealplanner.meals m
+         JOIN recipe.recipe r ON r.id = m.recipe_id
+         WHERE m.meal_date::date BETWEEN $1::date AND $2::date
+         ORDER BY m.meal_date DESC`,
+        [weekStart, weekEnd]
+      );
+      mealRows = mealsResult.rows || [];
+    } catch (error) {
+      if (error?.code !== '42P01') throw error;
+    }
+
+    const byDayAndSlot = new Map();
+    for (const row of mealRows) {
+      const key = `${row.meal_day}::${row.meal_slot_id}`;
+      if (!byDayAndSlot.has(key)) {
+        byDayAndSlot.set(key, {
+          id: row.recipe_id,
+          name: row.recipe_name,
+          servings:
+            row.meal_servings ??
+            slotServingsById.get(String(row.meal_slot_id)) ??
+            row.recipe_servings,
+        });
+      }
+    }
+
+    const days = [];
+    for (let i = 0; i < 7; i += 1) {
+      const d = new Date(startDate);
+      d.setUTCDate(d.getUTCDate() + i);
+      const day = formatDateOnly(d);
+      days.push({
+        date: day,
+        slots: slots.map((slot) => ({
+          id: slot.id,
+          name: slot.name,
+          seq: slot.seq,
+          servings: slot.servings,
+          meal: byDayAndSlot.get(`${day}::${slot.id}`) || null,
+        })),
+      });
+    }
+
+    return res.json({
+      start_date: weekStart,
+      end_date: weekEnd,
+      days,
+    });
+  } catch (error) {
+    console.error('Error fetching meal planner:', error);
+    return res.status(500).json({ error: 'Failed to fetch meal planner' });
+  }
+});
+
+app.put('/api/meal-planner/assign', async (req, res) => {
+  const mealDate = parseDateOnly(req.body?.meal_date);
+  const slotId = parseInt(req.body?.meal_slot_id, 10);
+  const sourceMealDate = req.body?.source_meal_date ? parseDateOnly(req.body.source_meal_date) : null;
+  const sourceSlotId = req.body?.source_meal_slot_id != null ? parseInt(req.body.source_meal_slot_id, 10) : null;
+  if (!mealDate) {
+    return res.status(400).json({ error: 'meal_date must be YYYY-MM-DD' });
+  }
+  if (Number.isNaN(slotId) || slotId < 1) {
+    return res.status(400).json({ error: 'meal_slot_id is required' });
+  }
+
+  const recipeIdRaw = req.body?.recipe_id;
+  const recipeId = recipeIdRaw == null ? null : parseInt(recipeIdRaw, 10);
+  if (recipeIdRaw != null && (Number.isNaN(recipeId) || recipeId < 1)) {
+    return res.status(400).json({ error: 'recipe_id must be null or a positive integer' });
+  }
+
+  const mealDateText = formatDateOnly(mealDate);
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const mealColsResult = await client.query(
+      `SELECT column_name
+       FROM information_schema.columns
+       WHERE table_schema = 'mealplanner' AND table_name = 'meals'`
+    );
+    const mealCols = new Set((mealColsResult.rows || []).map((r) => r.column_name));
+    const hasMealServings = mealCols.has('servings');
+
+    await client.query(
+      `DELETE FROM mealplanner.meals
+       WHERE meal_date::date = $1::date AND meal_slot_id = $2`,
+      [mealDateText, slotId]
+    );
+
+    if (recipeId == null) {
+      await client.query('COMMIT');
+      return res.json({ meal_date: mealDateText, meal_slot_id: slotId, meal: null });
+    }
+
+    const recipeCheck = await client.query(
+      'SELECT id, name, servings FROM recipe.recipe WHERE id = $1',
+      [recipeId]
+    );
+    if (recipeCheck.rows.length === 0) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ error: 'Recipe not found' });
+    }
+
+    const slotServingsResult = await client.query(
+      `SELECT servings
+       FROM mealplanner.meal_slot
+       WHERE id = $1`,
+      [slotId]
+    );
+    const defaultMealServings =
+      slotServingsResult.rows?.[0]?.servings != null
+        ? parseInt(slotServingsResult.rows[0].servings, 10)
+        : null;
+
+    if (sourceMealDate && Number.isInteger(sourceSlotId) && sourceSlotId > 0) {
+      await client.query(
+        `DELETE FROM mealplanner.meals
+         WHERE meal_date::date = $1::date AND meal_slot_id = $2 AND recipe_id = $3`,
+        [formatDateOnly(sourceMealDate), sourceSlotId, recipeId]
+      );
+    }
+
+    await client.query(
+      hasMealServings
+        ? `INSERT INTO mealplanner.meals (meal_date, meal_slot_id, recipe_id, servings)
+           VALUES (($1::date + interval '12 hour'), $2, $3, $4)`
+        : `INSERT INTO mealplanner.meals (meal_date, meal_slot_id, recipe_id)
+           VALUES (($1::date + interval '12 hour'), $2, $3)`,
+      hasMealServings
+        ? [mealDateText, slotId, recipeId, defaultMealServings ?? recipeCheck.rows[0].servings ?? 1]
+        : [mealDateText, slotId, recipeId]
+    );
+
+    await client.query('COMMIT');
+    return res.json({
+      meal_date: mealDateText,
+      meal_slot_id: slotId,
+      meal: {
+        ...recipeCheck.rows[0],
+        servings: defaultMealServings ?? recipeCheck.rows[0].servings ?? 1,
+      },
+    });
+  } catch (error) {
+    await client.query('ROLLBACK');
+    console.error('Error assigning meal planner meal:', error);
+    return res.status(500).json({ error: 'Failed to assign meal planner meal' });
+  } finally {
+    client.release();
+  }
+});
+
+app.patch('/api/meal-planner/servings', async (req, res) => {
+  try {
+    const mealDate = parseDateOnly(req.body?.meal_date);
+    const slotId = parseInt(req.body?.meal_slot_id, 10);
+    const servings = parseInt(req.body?.servings, 10);
+    if (!mealDate) {
+      return res.status(400).json({ error: 'meal_date must be YYYY-MM-DD' });
+    }
+    if (Number.isNaN(slotId) || slotId < 1) {
+      return res.status(400).json({ error: 'meal_slot_id is required' });
+    }
+    if (Number.isNaN(servings) || servings < 1) {
+      return res.status(400).json({ error: 'servings must be a positive integer' });
+    }
+
+    const mealColsResult = await pool.query(
+      `SELECT column_name
+       FROM information_schema.columns
+       WHERE table_schema = 'mealplanner' AND table_name = 'meals'`
+    );
+    const mealCols = new Set((mealColsResult.rows || []).map((r) => r.column_name));
+    if (!mealCols.has('servings')) {
+      return res.status(400).json({ error: 'meal servings are not supported by this database schema' });
+    }
+
+    const mealDateText = formatDateOnly(mealDate);
+    const updateSql = mealCols.has('modified')
+      ? `UPDATE mealplanner.meals
+         SET servings = $3, modified = CURRENT_TIMESTAMP
+         WHERE meal_date::date = $1::date AND meal_slot_id = $2
+         RETURNING recipe_id, servings`
+      : `UPDATE mealplanner.meals
+         SET servings = $3
+         WHERE meal_date::date = $1::date AND meal_slot_id = $2
+         RETURNING recipe_id, servings`;
+    const result = await pool.query(updateSql, [mealDateText, slotId, servings]);
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Meal slot not assigned' });
+    }
+    return res.json({
+      meal_date: mealDateText,
+      meal_slot_id: slotId,
+      servings: result.rows[0].servings,
+      recipe_id: result.rows[0].recipe_id,
+    });
+  } catch (error) {
+    console.error('Error updating meal servings:', error);
+    return res.status(500).json({ error: 'Failed to update meal servings' });
   }
 });
 
