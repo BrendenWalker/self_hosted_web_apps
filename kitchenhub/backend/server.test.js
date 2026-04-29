@@ -558,6 +558,40 @@ describe('KitchenHub API', () => {
     });
   });
 
+  describe('Schedulable meal-planner filters', () => {
+    beforeEach(() => {
+      mockPool.query.mockImplementation(asyncQueryHandler);
+    });
+
+    it('GET /api/recipe-categories?schedulable=1 filters to schedulable categories', async () => {
+      mockPool.query.mockImplementation((sql, params) => {
+        const s = (sql || '').trim();
+        if (s.includes('FROM recipe.recipe_category WHERE schedulable IS TRUE')) {
+          return Promise.resolve({ rows: [{ id: 10, name: 'Dinner', schedulable: true }] });
+        }
+        return Promise.resolve(defaultQueryHandler(sql, params));
+      });
+
+      const res = await request(serverModule.app).get('/api/recipe-categories?schedulable=1');
+      expect(res.status).toBe(200);
+      expect(res.body).toEqual([{ id: 10, name: 'Dinner', schedulable: true }]);
+    });
+
+    it('GET /api/recipes?schedulable=1 includes schedulable recipe filter', async () => {
+      mockPool.query.mockImplementation((sql, params) => {
+        const s = (sql || '').trim();
+        if (s.includes('FROM recipe.recipe r') && s.includes('r.schedulable IS TRUE')) {
+          return Promise.resolve({ rows: [{ id: 11, name: 'Yummy Dish', servings: 2, instructions: 'Mix' }] });
+        }
+        return Promise.resolve(defaultQueryHandler(sql, params));
+      });
+
+      const res = await request(serverModule.app).get('/api/recipes?schedulable=1');
+      expect(res.status).toBe(200);
+      expect(res.body).toEqual([{ id: 11, name: 'Yummy Dish', servings: 2, instructions: 'Mix' }]);
+    });
+  });
+
   describe('Meal planner', () => {
     beforeEach(() => {
       mockPool.query.mockImplementation(asyncQueryHandler);

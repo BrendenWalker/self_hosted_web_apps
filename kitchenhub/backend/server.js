@@ -1004,7 +1004,15 @@ app.delete('/api/shopping-list/:name', async (req, res) => {
 
 app.get('/api/recipe-categories', async (req, res) => {
   try {
-    const result = await pool.query('SELECT * FROM recipe.recipe_category ORDER BY name');
+    const schedulableOnly =
+      req.query.schedulable === '1' ||
+      req.query.schedulable === 'true' ||
+      String(req.query.schedulable).toLowerCase() === 'yes';
+    const result = schedulableOnly
+      ? await pool.query(
+        'SELECT * FROM recipe.recipe_category WHERE schedulable IS TRUE ORDER BY name'
+      )
+      : await pool.query('SELECT * FROM recipe.recipe_category ORDER BY name');
     res.json(result.rows);
   } catch (error) {
     console.error('Error fetching recipe categories:', error);
@@ -1234,11 +1242,15 @@ app.delete('/api/ingredients/:id', async (req, res) => {
 
 app.get('/api/recipes', async (req, res) => {
   try {
-    const { category_id, planned } = req.query;
+    const { category_id, planned, schedulable } = req.query;
     const plannedOnly =
       planned === '1' ||
       planned === 'true' ||
       String(planned).toLowerCase() === 'yes';
+    const schedulableOnly =
+      schedulable === '1' ||
+      schedulable === 'true' ||
+      String(schedulable).toLowerCase() === 'yes';
     let query = `
       SELECT r.id, r.name, r.servings, r.instructions,
              (
@@ -1257,8 +1269,19 @@ app.get('/api/recipes', async (req, res) => {
     if (category_id != null && category_id !== '') {
       params.push(category_id);
       where.push(
-        `EXISTS (SELECT 1 FROM recipe.recipe_category_members m WHERE m.recipe_id = r.id AND m.category_id = $${params.length})`
+        `EXISTS (
+           SELECT 1
+           FROM recipe.recipe_category_members m
+           JOIN recipe.recipe_category c ON c.id = m.category_id
+           WHERE m.recipe_id = r.id
+             AND m.category_id = $${params.length}
+             AND ($${params.length + 1}::boolean IS FALSE OR c.schedulable IS TRUE)
+         )`
       );
+      params.push(schedulableOnly);
+    }
+    if (schedulableOnly) {
+      where.push('r.schedulable IS TRUE');
     }
     if (plannedOnly) {
       where.push('EXISTS (SELECT 1 FROM mealplanner.meals m WHERE m.recipe_id = r.id)');

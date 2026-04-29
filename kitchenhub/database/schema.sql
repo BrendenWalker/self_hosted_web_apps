@@ -67,7 +67,8 @@ CREATE SCHEMA IF NOT EXISTS recipe;
 
 CREATE TABLE IF NOT EXISTS recipe.recipe_category (
     id SERIAL PRIMARY KEY,
-    name VARCHAR(80) NOT NULL UNIQUE
+    name VARCHAR(80) NOT NULL UNIQUE,
+    schedulable BOOLEAN NOT NULL DEFAULT true
 );
 CREATE INDEX IF NOT EXISTS idx_recipe_category_name ON recipe.recipe_category(name);
 
@@ -76,7 +77,8 @@ CREATE TABLE IF NOT EXISTS recipe.recipe (
     name VARCHAR(80) NOT NULL UNIQUE,
     servings INTEGER NOT NULL,
     instructions TEXT,
-    image BYTEA
+    image BYTEA,
+    schedulable BOOLEAN NOT NULL DEFAULT true
 );
 CREATE INDEX IF NOT EXISTS idx_recipe_name ON recipe.recipe(name);
 
