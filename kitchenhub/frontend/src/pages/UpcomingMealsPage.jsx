@@ -66,9 +66,9 @@ function UpcomingMealsPage() {
       try {
         const selectedCategoryId = categoryId === '' ? undefined : categoryId;
         const [recipesRes, plannerRes, categoriesRes] = await Promise.allSettled([
-          getRecipes(selectedCategoryId),
+          getRecipes(selectedCategoryId, { schedulable: true }),
           getMealPlanner(weekStart),
-          getRecipeCategories(),
+          getRecipeCategories({ schedulable: true }),
         ]);
         if (!cancelled) {
           if (recipesRes.status === 'fulfilled') {

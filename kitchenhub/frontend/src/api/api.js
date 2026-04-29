@@ -66,7 +66,12 @@ export const removeFromShoppingList = (name) =>
   api.delete(`/shopping-list/${encodeURIComponent(name)}`);
 
 // Recipe categories
-export const getRecipeCategories = () => api.get('/recipe-categories');
+export const getRecipeCategories = (opts) => {
+  const params = {};
+  if (opts?.schedulable) params.schedulable = '1';
+  const hasParams = Object.keys(params).length > 0;
+  return api.get('/recipe-categories', hasParams ? { params } : undefined);
+};
 
 // Measurements (recipe units + kcal)
 export const getMeasurements = () => api.get('/measurements');
@@ -82,11 +87,12 @@ export const updateIngredient = (id, data) => api.put(`/ingredients/${id}`, data
 export const deleteIngredient = (id) => api.delete(`/ingredients/${id}`);
 
 // Recipes
-/** @param {number|string|undefined} categoryId @param {{ planned?: boolean }} [opts] */
+/** @param {number|string|undefined} categoryId @param {{ planned?: boolean, schedulable?: boolean }} [opts] */
 export const getRecipes = (categoryId, opts) => {
   const params = {};
   if (categoryId != null && categoryId !== '') params.category_id = categoryId;
   if (opts?.planned) params.planned = '1';
+  if (opts?.schedulable) params.schedulable = '1';
   const hasParams = Object.keys(params).length > 0;
   return api.get('/recipes', hasParams ? { params } : undefined);
 };
