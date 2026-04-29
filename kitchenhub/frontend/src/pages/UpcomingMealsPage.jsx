@@ -264,7 +264,7 @@ function UpcomingMealsPage() {
                   {day.slots.map((slot) => (
                     <li key={`${day.date}-${slot.id}`} className="meal-planner-slot-item">
                       <div className="meal-planner-slot-title">
-                        <span>{slot.name}</span>
+                        <span className="meal-planner-slot-name">{slot.name}</span>
                         <span className="meal-planner-slot-kcal-readonly">kcal: {slot.kcal ?? '—'}</span>
                       </div>
                       <div
