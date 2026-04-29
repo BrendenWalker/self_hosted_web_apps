@@ -703,6 +703,7 @@ describe('KitchenHub API', () => {
         if (s.includes("table_schema = 'mealplanner' AND table_name = 'meals'")) {
           return Promise.resolve({
             rows: [
+              { column_name: 'id' },
               { column_name: 'meal_slot_id' },
               { column_name: 'servings' },
               { column_name: 'leftover_from_meal_id' },
