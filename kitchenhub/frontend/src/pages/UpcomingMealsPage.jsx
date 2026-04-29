@@ -7,6 +7,7 @@ import {
   assignMealPlannerMeal,
   clearMealPlannerMeal,
   updateMealPlannerServings,
+  autoLinkMealPlannerLeftovers,
 } from '../api/api';
 import './RecipesPage.css';
 import './UpcomingMealsPage.css';
@@ -35,6 +36,15 @@ function dayHeaderLabel(dateText) {
   const parsed = parseDateOnly(dateText);
   if (!parsed) return dateText;
   return parsed.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
+}
+
+function getSlotKcalStatus(slot) {
+  const recipeKcal = slot?.meal?.kcal_per_serving;
+  const slotKcal = slot?.kcal;
+  if (recipeKcal == null || slotKcal == null) return null;
+  if (recipeKcal > slotKcal) return 'over';
+  if (recipeKcal < slotKcal) return 'under';
+  return 'equal';
 }
 
 function UpcomingMealsPage() {
@@ -73,7 +83,8 @@ function UpcomingMealsPage() {
           }
 
           if (plannerRes.status === 'fulfilled') {
-            setPlannerDays(plannerRes.value?.data?.days || []);
+            const days = plannerRes.value?.data?.days || [];
+            setPlannerDays(days);
           } else {
             setPlannerDays([]);
             setError((prev) => (
@@ -114,6 +125,18 @@ function UpcomingMealsPage() {
     return recipes.filter((recipe) => (recipe.name || '').toLowerCase().includes(search));
   }, [recipes, recipeFilter]);
 
+  const dayKcalTotals = useMemo(() => {
+    const totals = new Map();
+    for (const day of plannerDays) {
+      const total = (day.slots || []).reduce((sum, slot) => {
+        if (slot?.meal?.kcal_per_serving == null) return sum;
+        return sum + Number(slot.meal.kcal_per_serving || 0);
+      }, 0);
+      totals.set(day.date, total);
+    }
+    return totals;
+  }, [plannerDays]);
+
   const moveWeek = (days) => {
     const start = parseDateOnly(weekStart) || getWeekStart();
     start.setUTCDate(start.getUTCDate() + days);
@@ -132,7 +155,12 @@ function UpcomingMealsPage() {
     }
     if (!parsed?.recipeId) return;
     const source = parsed.sourceDate && parsed.sourceSlotId
-      ? { meal_date: parsed.sourceDate, meal_slot_id: parsed.sourceSlotId }
+      ? {
+        meal_date: parsed.sourceDate,
+        meal_slot_id: parsed.sourceSlotId,
+        leftover_from_meal_id: parsed.leftoverFromMealId ?? null,
+        leftover_servings: parsed.leftoverServings ?? null,
+      }
       : undefined;
     setError(null);
     setSaving(true);
@@ -171,6 +199,20 @@ function UpcomingMealsPage() {
       setPlannerDays(plannerRes.data?.days || []);
     } catch (err) {
       setError(err.response?.data?.error || err.message || 'Failed to update servings');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleAutoLinkLeftovers = async (dayDate, slotId) => {
+    setError(null);
+    setSaving(true);
+    try {
+      await autoLinkMealPlannerLeftovers(dayDate, slotId);
+      const plannerRes = await getMealPlanner(weekStart);
+      setPlannerDays(plannerRes.data?.days || []);
+    } catch (err) {
+      setError(err.response?.data?.error || err.message || 'Failed to auto-link leftovers');
     } finally {
       setSaving(false);
     }
@@ -215,12 +257,20 @@ function UpcomingMealsPage() {
             {plannerDays.map((day) => (
               <article key={day.date} className="meal-planner-day-column">
                 <h3>{dayHeaderLabel(day.date)}</h3>
+                <div className="meal-planner-day-kcal-total">
+                  Total: {dayKcalTotals.get(day.date) || 0} kcal/serving
+                </div>
                 <ul className="meal-planner-slot-list">
                   {day.slots.map((slot) => (
                     <li key={`${day.date}-${slot.id}`} className="meal-planner-slot-item">
-                      <div className="meal-planner-slot-title">{slot.name}</div>
+                      <div className="meal-planner-slot-title">
+                        <span>{slot.name}</span>
+                        <span className="meal-planner-slot-kcal-readonly">kcal: {slot.kcal ?? '—'}</span>
+                      </div>
                       <div
-                        className="meal-planner-dropzone"
+                        className={`meal-planner-dropzone ${
+                          getSlotKcalStatus(slot) ? `meal-planner-dropzone-${getSlotKcalStatus(slot)}` : ''
+                        }`}
                         onDragOver={(event) => event.preventDefault()}
                         onDrop={(event) => handleDrop(event, day.date, slot.id)}
                       >
@@ -236,6 +286,8 @@ function UpcomingMealsPage() {
                                   recipeId: slot.meal.id,
                                   sourceDate: day.date,
                                   sourceSlotId: slot.id,
+                                  leftoverFromMealId: slot.meal.leftover_from_meal_id ?? null,
+                                  leftoverServings: slot.meal.leftover_servings ?? null,
                                 })
                               );
                             }}
@@ -265,14 +317,40 @@ function UpcomingMealsPage() {
                                 +
                               </button>
                             </div>
-                            <button
-                              type="button"
-                              className="btn btn-secondary meal-planner-clear"
-                              onClick={() => handleClearSlot(day.date, slot.id)}
-                              disabled={saving}
+                            <div className={`meal-planner-kcal-row ${
+                              getSlotKcalStatus(slot) ? `meal-planner-kcal-${getSlotKcalStatus(slot)}` : ''
+                            }`}
                             >
-                              Clear
-                            </button>
+                              <span className="meal-planner-kcal-label">kcal/serving</span>
+                              <span className="meal-planner-kcal-value">{slot.meal.kcal_per_serving ?? '—'}</span>
+                            </div>
+                            {slot.meal.leftover_source && (
+                              <div className="meal-planner-leftover-badge">
+                                Leftover from {dayHeaderLabel(slot.meal.leftover_source.meal_date)} {slot.meal.leftover_source.meal_slot_name || 'meal'}
+                              </div>
+                            )}
+                            <div className="meal-planner-actions-row">
+                              <button
+                                type="button"
+                                className="btn btn-secondary meal-planner-icon-btn"
+                                onClick={() => handleClearSlot(day.date, slot.id)}
+                                disabled={saving}
+                                aria-label={`Clear ${slot.meal.name}`}
+                                title="Clear meal"
+                              >
+                                <span aria-hidden="true">🗑</span>
+                              </button>
+                              <button
+                                type="button"
+                                className="btn btn-secondary meal-planner-icon-btn"
+                                onClick={() => handleAutoLinkLeftovers(day.date, slot.id)}
+                                disabled={saving || !slot.meal}
+                                aria-label={`Auto-link leftovers for ${slot.meal.name}`}
+                                title="Auto-link leftovers"
+                              >
+                                <span aria-hidden="true">🔗</span>
+                              </button>
+                            </div>
                           </div>
                         ) : (
                           <span className="meal-planner-drop-hint">Drop recipe here</span>
