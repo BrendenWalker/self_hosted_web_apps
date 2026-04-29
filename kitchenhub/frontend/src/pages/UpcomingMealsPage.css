@@ -99,6 +99,12 @@
   font-size: 0.95rem;
 }
 
+.meal-planner-day-kcal-total {
+  font-size: 0.8rem;
+  color: #4f6372;
+  margin-bottom: 0.45rem;
+}
+
 .meal-planner-slot-list {
   list-style: none;
   margin: 0;
@@ -111,6 +117,16 @@
   font-size: 0.8rem;
   color: #4f6372;
   margin-bottom: 0.2rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: 0.35rem;
+}
+
+.meal-planner-slot-kcal-readonly {
+  font-size: 0.72rem;
+  color: #6a7f8d;
+  white-space: nowrap;
 }
 
 .meal-planner-dropzone {
@@ -121,6 +137,16 @@
   background: #fbfdff;
   display: flex;
   align-items: stretch;
+}
+
+.meal-planner-dropzone-over {
+  border-color: #e05f5f;
+  background: #fff4f4;
+}
+
+.meal-planner-dropzone-under {
+  border-color: #60ad67;
+  background: #f3fbf3;
 }
 
 .meal-planner-drop-hint {
@@ -175,6 +201,59 @@
   width: 100%;
   padding: 0.3rem 0.4rem;
   font-size: 0.85rem;
+}
+
+.meal-planner-kcal-row {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-size: 0.78rem;
+}
+
+.meal-planner-kcal-label {
+  color: #4f6372;
+}
+
+.meal-planner-kcal-value {
+  font-weight: 700;
+  color: #2c3e50;
+}
+
+.meal-planner-kcal-over .meal-planner-kcal-value {
+  color: #c64242;
+}
+
+.meal-planner-kcal-under .meal-planner-kcal-value {
+  color: #2f8a46;
+}
+
+.meal-planner-leftover-badge {
+  font-size: 0.74rem;
+  color: #355a78;
+  background: #eef6ff;
+  border-radius: 4px;
+  padding: 0.2rem 0.3rem;
+}
+
+.meal-planner-leftover-link {
+  width: 100%;
+  padding: 0.25rem 0.35rem;
+  font-size: 0.78rem;
+}
+
+.meal-planner-actions-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.35rem;
+}
+
+.meal-planner-icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 30px;
+  padding: 0.2rem 0.35rem;
+  font-size: 0.95rem;
 }
 
 @media (max-width: 980px) {

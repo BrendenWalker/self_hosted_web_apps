@@ -101,6 +101,60 @@ function deriveShoppingMeasureGrams({ ingredient_unit_grams, count_per_pack, sho
   return smg;
 }
 
+function measurementUnitGrams(measurementName, toGrams, ingredientUnitGrams, shoppingMeasureGrams) {
+  const unitName = String(measurementName || '').trim().toLowerCase();
+  if (unitName === 'each') return parseItemNumber(ingredientUnitGrams);
+  if (unitName === 'shopping unit') return parseItemNumber(shoppingMeasureGrams);
+  return parseItemNumber(toGrams);
+}
+
+function computeRecipeKcalPerServing(recipeRows) {
+  const totalsByRecipe = new Map();
+  for (const row of recipeRows) {
+    const recipeId = Number(row.recipe_id);
+    if (!Number.isInteger(recipeId)) continue;
+
+    const qty = parseItemNumber(row.qty);
+    const ingredientUnit = measurementUnitGrams(
+      row.measurement_name,
+      row.to_grams,
+      row.ingredient_unit_grams,
+      row.shopping_measure_grams
+    );
+    const kcal = parseItemNumber(row.kcal);
+    const kcalQty = parseItemNumber(row.kcal_qty);
+    const kcalUnit = measurementUnitGrams(
+      row.kcal_measurement_name,
+      row.kcal_to_grams,
+      row.ingredient_unit_grams,
+      row.shopping_measure_grams
+    );
+    const recipeServings = Math.max(1, parseItemInt(row.recipe_servings) || 1);
+
+    const grams = qty != null && ingredientUnit != null && qty > 0 && ingredientUnit > 0
+      ? qty * ingredientUnit
+      : null;
+    const basisGrams = kcalQty != null && kcalUnit != null && kcalQty > 0 && kcalUnit > 0
+      ? kcalQty * kcalUnit
+      : null;
+    if (grams == null || basisGrams == null || kcal == null || kcal < 0) continue;
+
+    const lineKcal = (grams / basisGrams) * kcal;
+    if (!Number.isFinite(lineKcal) || lineKcal < 0) continue;
+
+    const cur = totalsByRecipe.get(recipeId) || { total: 0, servings: recipeServings };
+    cur.total += lineKcal;
+    cur.servings = recipeServings;
+    totalsByRecipe.set(recipeId, cur);
+  }
+
+  const perServingByRecipe = new Map();
+  for (const [recipeId, value] of totalsByRecipe.entries()) {
+    perServingByRecipe.set(recipeId, Math.max(0, Math.round(value.total / value.servings)));
+  }
+  return perServingByRecipe;
+}
+
 // Virtual "All" store: id -1, not in DB, not editable, all departments in General zone
 const ALL_STORE_ID = -1;
 const ALL_STORE = { id: ALL_STORE_ID, name: 'All', modified: null };
@@ -1333,12 +1387,15 @@ app.get('/api/meal-planner', async (req, res) => {
       const slotCols = new Set((slotColsResult.rows || []).map((r) => r.column_name));
       const hasSeq = slotCols.has('seq');
       const hasServings = slotCols.has('servings');
+      const hasKcal = slotCols.has('kcal');
       const slotResult = await pool.query(
         `SELECT id, name, ${
           hasSeq ? 'seq' : 'id'
         } AS seq, ${
           hasServings ? 'servings' : '4'
-        }::integer AS servings
+        }::integer AS servings, ${
+          hasKcal ? 'kcal' : 'NULL'
+        }::integer AS kcal
          FROM mealplanner.meal_slot
          ORDER BY ${hasSeq ? 'seq' : 'id'}, id`
       );
@@ -1347,7 +1404,7 @@ app.get('/api/meal-planner', async (req, res) => {
       if (error?.code !== '42P01') throw error;
     }
     if (slots.length === 0) {
-      slots = [{ id: 4, name: 'Dinner', seq: 4, servings: 4 }];
+      slots = [{ id: 4, name: 'Dinner', seq: 4, servings: 4, kcal: null }];
     }
     const slotServingsById = new Map(slots.map((slot) => [String(slot.id), slot.servings]));
 
@@ -1359,14 +1416,21 @@ app.get('/api/meal-planner', async (req, res) => {
          WHERE table_schema = 'mealplanner' AND table_name = 'meals'`
       );
       const mealCols = new Set((mealColsResult.rows || []).map((r) => r.column_name));
+      const hasMealId = mealCols.has('id');
       const hasMealSlotId = mealCols.has('meal_slot_id');
       const hasMealServings = mealCols.has('servings');
+      const hasLeftoverFrom = mealCols.has('leftover_from_meal_id');
+      const hasLeftoverServings = mealCols.has('leftover_servings');
       const mealsResult = await pool.query(
-        `SELECT (m.meal_date::date)::text AS meal_day, ${
+        `SELECT ${
+          hasMealId ? 'm.id' : 'NULL'
+        }::integer AS meal_id, (m.meal_date::date)::text AS meal_day, ${
           hasMealSlotId ? 'm.meal_slot_id' : '4'
         }::integer AS meal_slot_id,
                 r.id AS recipe_id, r.name AS recipe_name, r.servings AS recipe_servings,
-                ${hasMealServings ? 'm.servings' : 'NULL'}::integer AS meal_servings
+                ${hasMealServings ? 'm.servings' : 'NULL'}::integer AS meal_servings,
+                ${hasLeftoverFrom ? 'm.leftover_from_meal_id' : 'NULL'}::integer AS leftover_from_meal_id,
+                ${hasLeftoverServings ? 'm.leftover_servings' : 'NULL'}::numeric AS leftover_servings
          FROM mealplanner.meals m
          JOIN recipe.recipe r ON r.id = m.recipe_id
          WHERE m.meal_date::date BETWEEN $1::date AND $2::date
@@ -1378,17 +1442,45 @@ app.get('/api/meal-planner', async (req, res) => {
       if (error?.code !== '42P01') throw error;
     }
 
+    const recipeIds = [...new Set((mealRows || []).map((row) => row.recipe_id).filter(Boolean))];
+    let kcalPerServingByRecipe = new Map();
+    if (recipeIds.length > 0) {
+      const kcalRows = await pool.query(
+        `SELECT ri.recipe_id, ri.qty, ri.measurement_id,
+                im.name AS measurement_name, im.to_grams,
+                i.kcal, i.kcal_qty,
+                km.name AS kcal_measurement_name, km.to_grams AS kcal_to_grams,
+                i.ingredient_unit_grams, i.shopping_measure_grams,
+                r.servings AS recipe_servings
+         FROM recipe.recipe_ingredients ri
+         JOIN recipe.recipe r ON r.id = ri.recipe_id
+         JOIN items i ON i.id = ri.ingredient_id
+         LEFT JOIN common.measurements im ON im.id = ri.measurement_id
+         LEFT JOIN common.measurements km ON km.id = i.kcal_measurement_id
+         WHERE ri.recipe_id = ANY($1::int[])`,
+        [recipeIds]
+      );
+      kcalPerServingByRecipe = computeRecipeKcalPerServing(kcalRows.rows || []);
+    }
+
     const byDayAndSlot = new Map();
+    const mealById = new Map();
     for (const row of mealRows) {
+      mealById.set(row.meal_id, row);
       const key = `${row.meal_day}::${row.meal_slot_id}`;
       if (!byDayAndSlot.has(key)) {
         byDayAndSlot.set(key, {
+          meal_id: row.meal_id,
           id: row.recipe_id,
           name: row.recipe_name,
           servings:
             row.meal_servings ??
             slotServingsById.get(String(row.meal_slot_id)) ??
             row.recipe_servings,
+          kcal_per_serving: kcalPerServingByRecipe.get(row.recipe_id) ?? null,
+          leftover_from_meal_id: row.leftover_from_meal_id ?? null,
+          leftover_servings:
+            row.leftover_servings != null ? parseFloat(row.leftover_servings) : null,
         });
       }
     }
@@ -1405,9 +1497,25 @@ app.get('/api/meal-planner', async (req, res) => {
           name: slot.name,
           seq: slot.seq,
           servings: slot.servings,
+          kcal: slot.kcal != null ? parseInt(slot.kcal, 10) : null,
           meal: byDayAndSlot.get(`${day}::${slot.id}`) || null,
         })),
       });
+    }
+
+    const slotNameById = new Map(slots.map((slot) => [slot.id, slot.name]));
+    for (const day of days) {
+      for (const slot of day.slots) {
+        if (!slot.meal?.leftover_from_meal_id) continue;
+        const source = mealById.get(slot.meal.leftover_from_meal_id);
+        if (!source) continue;
+        slot.meal.leftover_source = {
+          meal_id: source.meal_id,
+          meal_date: source.meal_day,
+          meal_slot_id: source.meal_slot_id,
+          meal_slot_name: slotNameById.get(source.meal_slot_id) || null,
+        };
+      }
     }
 
     return res.json({
@@ -1435,8 +1543,21 @@ app.put('/api/meal-planner/assign', async (req, res) => {
 
   const recipeIdRaw = req.body?.recipe_id;
   const recipeId = recipeIdRaw == null ? null : parseInt(recipeIdRaw, 10);
+  const leftoverFromRaw = req.body?.leftover_from_meal_id;
+  const leftoverFromMealId = leftoverFromRaw == null ? null : parseInt(leftoverFromRaw, 10);
+  const leftoverServingsRaw = req.body?.leftover_servings;
+  const leftoverServings =
+    leftoverServingsRaw == null || leftoverServingsRaw === ''
+      ? null
+      : parseItemNumber(leftoverServingsRaw);
   if (recipeIdRaw != null && (Number.isNaN(recipeId) || recipeId < 1)) {
     return res.status(400).json({ error: 'recipe_id must be null or a positive integer' });
+  }
+  if (leftoverFromRaw != null && (Number.isNaN(leftoverFromMealId) || leftoverFromMealId < 1)) {
+    return res.status(400).json({ error: 'leftover_from_meal_id must be a positive integer or null' });
+  }
+  if (leftoverServings != null && (!Number.isFinite(leftoverServings) || leftoverServings <= 0)) {
+    return res.status(400).json({ error: 'leftover_servings must be a positive number or null' });
   }
 
   const mealDateText = formatDateOnly(mealDate);
@@ -1449,7 +1570,10 @@ app.put('/api/meal-planner/assign', async (req, res) => {
        WHERE table_schema = 'mealplanner' AND table_name = 'meals'`
     );
     const mealCols = new Set((mealColsResult.rows || []).map((r) => r.column_name));
+    const hasMealId = mealCols.has('id');
     const hasMealServings = mealCols.has('servings');
+    const hasLeftoverFrom = mealCols.has('leftover_from_meal_id');
+    const hasLeftoverServings = mealCols.has('leftover_servings');
 
     await client.query(
       `DELETE FROM mealplanner.meals
@@ -1490,15 +1614,30 @@ app.put('/api/meal-planner/assign', async (req, res) => {
       );
     }
 
-    await client.query(
-      hasMealServings
-        ? `INSERT INTO mealplanner.meals (meal_date, meal_slot_id, recipe_id, servings)
-           VALUES (($1::date + interval '12 hour'), $2, $3, $4)`
-        : `INSERT INTO mealplanner.meals (meal_date, meal_slot_id, recipe_id)
-           VALUES (($1::date + interval '12 hour'), $2, $3)`,
-      hasMealServings
-        ? [mealDateText, slotId, recipeId, defaultMealServings ?? recipeCheck.rows[0].servings ?? 1]
-        : [mealDateText, slotId, recipeId]
+    const insertColumns = ['meal_date', 'meal_slot_id', 'recipe_id'];
+    const insertValues = ["($1::date + interval '12 hour')", '$2', '$3'];
+    const params = [mealDateText, slotId, recipeId];
+    if (hasMealServings) {
+      insertColumns.push('servings');
+      params.push(defaultMealServings ?? recipeCheck.rows[0].servings ?? 1);
+      insertValues.push(`$${params.length}`);
+    }
+    if (hasLeftoverFrom) {
+      insertColumns.push('leftover_from_meal_id');
+      params.push(leftoverFromMealId);
+      insertValues.push(`$${params.length}`);
+    }
+    if (hasLeftoverServings) {
+      insertColumns.push('leftover_servings');
+      params.push(leftoverServings);
+      insertValues.push(`$${params.length}`);
+    }
+    const insertMealResult = await client.query(
+      `INSERT INTO mealplanner.meals (${insertColumns.join(', ')})
+       VALUES (${insertValues.join(', ')})${
+         hasMealId ? '\n       RETURNING id' : ''
+       }`,
+      params
     );
 
     await client.query('COMMIT');
@@ -1506,8 +1645,11 @@ app.put('/api/meal-planner/assign', async (req, res) => {
       meal_date: mealDateText,
       meal_slot_id: slotId,
       meal: {
+        meal_id: hasMealId ? (insertMealResult.rows?.[0]?.id ?? null) : null,
         ...recipeCheck.rows[0],
         servings: defaultMealServings ?? recipeCheck.rows[0].servings ?? 1,
+        leftover_from_meal_id: leftoverFromMealId,
+        leftover_servings: leftoverServings,
       },
     });
   } catch (error) {
@@ -1567,6 +1709,157 @@ app.patch('/api/meal-planner/servings', async (req, res) => {
   } catch (error) {
     console.error('Error updating meal servings:', error);
     return res.status(500).json({ error: 'Failed to update meal servings' });
+  }
+});
+
+app.patch('/api/meal-planner/slot-kcal', async (req, res) => {
+  try {
+    const slotId = parseInt(req.body?.meal_slot_id, 10);
+    const kcalRaw = req.body?.kcal;
+    const kcal = kcalRaw == null || kcalRaw === '' ? null : parseInt(kcalRaw, 10);
+    if (Number.isNaN(slotId) || slotId < 1) {
+      return res.status(400).json({ error: 'meal_slot_id is required' });
+    }
+    if (kcal != null && (Number.isNaN(kcal) || kcal < 1)) {
+      return res.status(400).json({ error: 'kcal must be null or a positive integer' });
+    }
+
+    const slotColsResult = await pool.query(
+      `SELECT column_name
+       FROM information_schema.columns
+       WHERE table_schema = 'mealplanner' AND table_name = 'meal_slot'`
+    );
+    const slotCols = new Set((slotColsResult.rows || []).map((r) => r.column_name));
+    if (!slotCols.has('kcal')) {
+      return res.status(400).json({ error: 'meal slot kcal is not supported by this database schema' });
+    }
+
+    const updateResult = await pool.query(
+      `UPDATE mealplanner.meal_slot
+       SET kcal = $2
+       WHERE id = $1
+       RETURNING id, kcal`,
+      [slotId, kcal]
+    );
+    if (updateResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Meal slot not found' });
+    }
+    return res.json({
+      meal_slot_id: updateResult.rows[0].id,
+      kcal: updateResult.rows[0].kcal != null ? parseInt(updateResult.rows[0].kcal, 10) : null,
+    });
+  } catch (error) {
+    console.error('Error updating meal slot kcal:', error);
+    return res.status(500).json({ error: 'Failed to update meal slot kcal' });
+  }
+});
+
+app.post('/api/meal-planner/leftovers/auto-link', async (req, res) => {
+  const sourceMealDate = parseDateOnly(req.body?.source_meal_date);
+  const sourceSlotId = parseInt(req.body?.source_meal_slot_id, 10);
+  if (!sourceMealDate) {
+    return res.status(400).json({ error: 'source_meal_date must be YYYY-MM-DD' });
+  }
+  if (Number.isNaN(sourceSlotId) || sourceSlotId < 1) {
+    return res.status(400).json({ error: 'source_meal_slot_id is required' });
+  }
+
+  const sourceDateText = formatDateOnly(sourceMealDate);
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const mealColsResult = await client.query(
+      `SELECT column_name
+       FROM information_schema.columns
+       WHERE table_schema = 'mealplanner' AND table_name = 'meals'`
+    );
+    const mealCols = new Set((mealColsResult.rows || []).map((r) => r.column_name));
+    const hasMealId = mealCols.has('id');
+    const hasMealServings = mealCols.has('servings');
+    const hasLeftoverFrom = mealCols.has('leftover_from_meal_id');
+    const hasLeftoverServings = mealCols.has('leftover_servings');
+    if (!hasMealId || !hasMealServings || !hasLeftoverFrom || !hasLeftoverServings) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ error: 'leftovers are not supported by this database schema' });
+    }
+
+    const sourceResult = await client.query(
+      `SELECT m.id, m.recipe_id, m.servings, ms.servings AS slot_servings
+       FROM mealplanner.meals m
+       JOIN mealplanner.meal_slot ms ON ms.id = m.meal_slot_id
+       WHERE m.meal_date::date = $1::date AND m.meal_slot_id = $2
+       LIMIT 1`,
+      [sourceDateText, sourceSlotId]
+    );
+    if (sourceResult.rows.length === 0) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ error: 'Source meal not found' });
+    }
+    const sourceMeal = sourceResult.rows[0];
+    const sourceServings = parseItemNumber(sourceMeal.servings) || 0;
+    const sourceSlotServings = parseItemNumber(sourceMeal.slot_servings) || 0;
+    let remaining = sourceServings - sourceSlotServings;
+    if (remaining <= 0) {
+      await client.query('COMMIT');
+      return res.json({ linked: [], leftover_servings_remaining: 0 });
+    }
+
+    const lunchSlotResult = await client.query(
+      `SELECT id, servings
+       FROM mealplanner.meal_slot
+       WHERE lower(name) = 'lunch'
+       ORDER BY seq, id
+       LIMIT 1`
+    );
+    if (lunchSlotResult.rows.length === 0) {
+      await client.query('COMMIT');
+      return res.json({ linked: [], leftover_servings_remaining: remaining });
+    }
+    const lunchSlotId = lunchSlotResult.rows[0].id;
+    const lunchSlotServings = parseItemNumber(lunchSlotResult.rows[0].servings) || 1;
+
+    const linked = [];
+    const maxDaysToTry = 14;
+    for (let dayOffset = 1; dayOffset <= maxDaysToTry && remaining > 0; dayOffset += 1) {
+      const targetDate = new Date(sourceMealDate);
+      targetDate.setUTCDate(targetDate.getUTCDate() + dayOffset);
+      const targetDateText = formatDateOnly(targetDate);
+      const existingResult = await client.query(
+        `SELECT id
+         FROM mealplanner.meals
+         WHERE meal_date::date = $1::date AND meal_slot_id = $2
+         LIMIT 1`,
+        [targetDateText, lunchSlotId]
+      );
+      if (existingResult.rows.length > 0) continue;
+
+      const useServings = Math.min(remaining, lunchSlotServings);
+      const insertResult = await client.query(
+        `INSERT INTO mealplanner.meals (meal_date, meal_slot_id, recipe_id, servings, leftover_from_meal_id, leftover_servings)
+         VALUES (($1::date + interval '12 hour'), $2, $3, $4, $5, $6)
+         RETURNING id`,
+        [targetDateText, lunchSlotId, sourceMeal.recipe_id, useServings, sourceMeal.id, useServings]
+      );
+      linked.push({
+        meal_id: insertResult.rows[0].id,
+        meal_date: targetDateText,
+        meal_slot_id: lunchSlotId,
+        servings: useServings,
+      });
+      remaining -= useServings;
+    }
+
+    await client.query('COMMIT');
+    return res.json({
+      linked,
+      leftover_servings_remaining: Math.max(0, Math.round(remaining * 100) / 100),
+    });
+  } catch (error) {
+    await client.query('ROLLBACK');
+    console.error('Error auto-linking leftovers:', error);
+    return res.status(500).json({ error: 'Failed to auto-link leftovers' });
+  } finally {
+    client.release();
   }
 });
 

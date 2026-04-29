@@ -558,6 +558,149 @@ describe('KitchenHub API', () => {
     });
   });
 
+  describe('Meal planner', () => {
+    beforeEach(() => {
+      mockPool.query.mockImplementation(asyncQueryHandler);
+      mockPool.connect.mockResolvedValue({
+        query: jest.fn().mockImplementation(asyncQueryHandler),
+        release: jest.fn(),
+      });
+    });
+
+    it('GET /api/meal-planner returns slot kcal and meal kcal/leftover metadata', async () => {
+      mockPool.query.mockImplementation((sql, params) => {
+        const s = (sql || '').trim();
+        if (s.includes("table_schema = 'mealplanner' AND table_name = 'meal_slot'")) {
+          return Promise.resolve({ rows: [{ column_name: 'seq' }, { column_name: 'servings' }, { column_name: 'kcal' }] });
+        }
+        if (s.includes('FROM mealplanner.meal_slot')) {
+          return Promise.resolve({ rows: [{ id: 2, name: 'Lunch', seq: 2, servings: 2, kcal: 550 }] });
+        }
+        if (s.includes("table_schema = 'mealplanner' AND table_name = 'meals'")) {
+          return Promise.resolve({
+            rows: [
+              { column_name: 'id' },
+              { column_name: 'meal_slot_id' },
+              { column_name: 'servings' },
+              { column_name: 'leftover_from_meal_id' },
+              { column_name: 'leftover_servings' },
+            ],
+          });
+        }
+        if (s.includes('FROM mealplanner.meals m') && s.includes('JOIN recipe.recipe r')) {
+          return Promise.resolve({
+            rows: [
+              {
+                meal_id: 7,
+                meal_day: '2026-04-27',
+                meal_slot_id: 2,
+                recipe_id: 11,
+                recipe_name: 'Yummy Dish',
+                recipe_servings: 2,
+                meal_servings: 2,
+                leftover_from_meal_id: 6,
+                leftover_servings: '2',
+              },
+              {
+                meal_id: 6,
+                meal_day: '2026-04-26',
+                meal_slot_id: 4,
+                recipe_id: 11,
+                recipe_name: 'Yummy Dish',
+                recipe_servings: 2,
+                meal_servings: 8,
+                leftover_from_meal_id: null,
+                leftover_servings: null,
+              },
+            ],
+          });
+        }
+        if (s.includes('FROM recipe.recipe_ingredients ri')) {
+          return Promise.resolve({
+            rows: [
+              {
+                recipe_id: 11,
+                qty: 100,
+                measurement_name: 'Gram',
+                to_grams: 1,
+                kcal: 200,
+                kcal_qty: 100,
+                kcal_measurement_name: 'Gram',
+                kcal_to_grams: 1,
+                ingredient_unit_grams: null,
+                shopping_measure_grams: null,
+                recipe_servings: 2,
+              },
+            ],
+          });
+        }
+        return Promise.resolve(defaultQueryHandler(sql, params));
+      });
+
+      const res = await request(serverModule.app).get('/api/meal-planner?start=2026-04-27');
+      expect(res.status).toBe(200);
+      expect(res.body.days[0].slots[0].kcal).toBe(550);
+      expect(res.body.days[0].slots[0].meal.kcal_per_serving).toBe(100);
+      expect(res.body.days[0].slots[0].meal.leftover_from_meal_id).toBe(6);
+    });
+
+    it('PATCH /api/meal-planner/slot-kcal updates slot kcal', async () => {
+      mockPool.query.mockImplementation((sql, params) => {
+        const s = (sql || '').trim();
+        if (s.includes("table_schema = 'mealplanner' AND table_name = 'meal_slot'")) {
+          return Promise.resolve({ rows: [{ column_name: 'kcal' }] });
+        }
+        if (s.includes('UPDATE mealplanner.meal_slot')) {
+          return Promise.resolve({ rows: [{ id: params[0], kcal: params[1] }] });
+        }
+        return Promise.resolve(defaultQueryHandler(sql, params));
+      });
+      const res = await request(serverModule.app)
+        .patch('/api/meal-planner/slot-kcal')
+        .send({ meal_slot_id: 2, kcal: 600 });
+      expect(res.status).toBe(200);
+      expect(res.body).toMatchObject({ meal_slot_id: 2, kcal: 600 });
+    });
+
+    it('POST /api/meal-planner/leftovers/auto-link defaults to next lunch slot', async () => {
+      const clientQuery = jest.fn().mockImplementation((sql, params) => {
+        const s = (sql || '').trim();
+        if (s === 'BEGIN' || s === 'COMMIT' || s === 'ROLLBACK') return Promise.resolve({ rows: [] });
+        if (s.includes("table_schema = 'mealplanner' AND table_name = 'meals'")) {
+          return Promise.resolve({
+            rows: [
+              { column_name: 'meal_slot_id' },
+              { column_name: 'servings' },
+              { column_name: 'leftover_from_meal_id' },
+              { column_name: 'leftover_servings' },
+            ],
+          });
+        }
+        if (s.includes('FROM mealplanner.meals m') && s.includes('JOIN mealplanner.meal_slot ms')) {
+          return Promise.resolve({ rows: [{ id: 10, recipe_id: 11, servings: 8, slot_servings: 4 }] });
+        }
+        if (s.includes("WHERE lower(name) = 'lunch'")) {
+          return Promise.resolve({ rows: [{ id: 2, servings: 2 }] });
+        }
+        if (s.includes('SELECT id') && s.includes('WHERE meal_date::date = $1::date AND meal_slot_id = $2')) {
+          return Promise.resolve({ rows: [] });
+        }
+        if (s.includes('INSERT INTO mealplanner.meals (meal_date, meal_slot_id, recipe_id, servings, leftover_from_meal_id, leftover_servings)')) {
+          return Promise.resolve({ rows: [{ id: 101 }] });
+        }
+        return Promise.resolve(defaultQueryHandler(sql, params));
+      });
+      mockPool.connect.mockResolvedValue({ query: clientQuery, release: jest.fn() });
+
+      const res = await request(serverModule.app)
+        .post('/api/meal-planner/leftovers/auto-link')
+        .send({ source_meal_date: '2026-04-27', source_meal_slot_id: 4 });
+      expect(res.status).toBe(200);
+      expect(res.body.linked.length).toBeGreaterThan(0);
+      expect(res.body.leftover_servings_remaining).toBe(0);
+    });
+  });
+
   describe('Error handling', () => {
     it('GET /api/stores returns 500 on DB error', async () => {
       mockPool.query.mockRejectedValueOnce(new Error('DB down'));

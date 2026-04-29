@@ -33,6 +33,8 @@ vi.mock('./api/api', () => ({
   assignMealPlannerMeal: () => mockResolve({}),
   clearMealPlannerMeal: () => mockResolve({}),
   updateMealPlannerServings: () => mockResolve({}),
+  updateMealPlannerSlotKcal: () => mockResolve({}),
+  autoLinkMealPlannerLeftovers: () => mockResolve({}),
   patchRecipePlanned: () => mockResolve({}),
   default: {},
 }));

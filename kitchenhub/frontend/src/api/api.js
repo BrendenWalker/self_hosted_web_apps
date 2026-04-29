@@ -108,6 +108,8 @@ export const assignMealPlannerMeal = (mealDate, mealSlotId, recipeId, source) =>
     recipe_id: recipeId,
     source_meal_date: source?.meal_date,
     source_meal_slot_id: source?.meal_slot_id,
+    leftover_from_meal_id: source?.leftover_from_meal_id,
+    leftover_servings: source?.leftover_servings,
   });
 export const clearMealPlannerMeal = (mealDate, mealSlotId) =>
   api.put('/meal-planner/assign', {
@@ -120,6 +122,16 @@ export const updateMealPlannerServings = (mealDate, mealSlotId, servings) =>
     meal_date: mealDate,
     meal_slot_id: mealSlotId,
     servings,
+  });
+export const updateMealPlannerSlotKcal = (mealSlotId, kcal) =>
+  api.patch('/meal-planner/slot-kcal', {
+    meal_slot_id: mealSlotId,
+    kcal,
+  });
+export const autoLinkMealPlannerLeftovers = (sourceMealDate, sourceMealSlotId) =>
+  api.post('/meal-planner/leftovers/auto-link', {
+    source_meal_date: sourceMealDate,
+    source_meal_slot_id: sourceMealSlotId,
   });
 
 // Recipe ingredients
