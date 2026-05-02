@@ -25,3 +25,4 @@ test-results/
 coverage/
 /retirementhub/backend/package-lock.json
 /retirementhub/backend/junit.xml
+*.tar

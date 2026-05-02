@@ -163,7 +163,7 @@ function IngredientsCatalogPage() {
       <section className="ingredients-catalog-card">
         <h1 className="ingredients-catalog-title">Ingredients catalog</h1>
         <p className="ingredients-catalog-description">
-          Add and edit ingredients. kcal and qty are per measurement (e.g. kcal for 5 oz). Shopping measure is how you buy the item. Set ingredient unit grams and count per pack to auto-fill shopping grams; use measurements Each and Shopping Unit in recipes.
+          Add and edit ingredients. kcal and qty are per measurement (e.g. kcal for 5 oz). Shopping measure is how you buy the item. Set ingredient unit grams and count per pack to auto-fill shopping grams; use measurements Each and Shopping Unit in recipes. To seed many commodity foods from USDA bulk CSV, use the bootstrap script in the README.
         </p>
 
         <form onSubmit={handleSubmit} className="ingredients-catalog-form">

@@ -1120,7 +1120,7 @@ app.post('/api/ingredients', async (req, res) => {
     const cppIng = parseItemInt(count_per_pack);
     const result = await pool.query(
       `INSERT INTO items (name, details, kcal, kcal_qty, qty, kcal_measurement_id, department, shopping_measure, ingredient_unit_grams, count_per_pack, shopping_measure_grams)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
        RETURNING id, name, details, kcal, kcal_qty, qty, kcal_measurement_id, department as department_id, shopping_measure, ingredient_unit_grams, count_per_pack, shopping_measure_grams`,
       [
         name.trim(),

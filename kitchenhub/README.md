@@ -102,6 +102,33 @@ DB_USER=postgres
 DB_PASSWORD=your_password
 ```
 
+#### Bootstrap ingredients from USDA (bulk CSV, no API key)
+
+To seed an empty (or sparse) database with **commodity** foods from USDA FoodData Central—**Foundation** and **SR Legacy** only (no branded products, no live API):
+
+1. Download the **CSV** bundles from [FoodData Central — Downloadable Data](https://fdc.nal.usda.gov/download-datasets.html) (e.g. *Foundation Foods* and *SR Legacy*).
+2. Unzip each archive so you have folders containing at least `food.csv`, `food_nutrient.csv`, and `nutrient.csv`.
+3. Target department: **`--department-name=Pantry`** (case-insensitive, must be an `ingredient` department) or **`--department-id=1`**. With `--department-name`, the generated SQL joins `common.department` at apply time, so you do not need to look up ids by hand.
+4. Generate SQL, then load it:
+
+```bash
+# from repo root (paths are examples)
+node kitchenhub/database/scripts/bootstrap-usda-commodities.mjs ^
+  --csv-dir="D:/downloads/Foundation_csv" ^
+  --csv-dir="D:/downloads/SR_Legacy_csv" ^
+  --department-name=Pantry ^
+  --limit=800
+
+psql -U postgres -d kitchenhub -v ON_ERROR_STOP=1 -f kitchenhub/database/sql/bootstrap-usda-items.sql
+```
+
+- Default output file: `kitchenhub/database/sql/bootstrap-usda-items.sql` (override with `--out=...`).
+- From `kitchenhub/backend`, `npm run bootstrap-usda -- --csv-dir=... --department-name=Pantry` runs the same script (pass script args after `--`).
+- Rows use **kcal per 100 g** and resolve `kcal_measurement_id` to the `g` row in `common.measurements` (ensure migration `018` or demo seed created `g`).
+- `ON CONFLICT (name) DO NOTHING` skips duplicates if you re-run the script.
+
+Optional: `--apply` runs the generated SQL through `pg` using `DB_*` env vars (run from a machine that has `kitchenhub/backend/node_modules` installed).
+
 2. **For local development** (running `npm run dev`): Also copy `.env` to the `backend` directory:
 
 ```bash
