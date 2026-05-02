@@ -49,10 +49,15 @@ CREATE TABLE IF NOT EXISTS items (
     shopping_measure VARCHAR(255),
     ingredient_unit_grams NUMERIC(10, 2),
     count_per_pack INTEGER,
-    shopping_measure_grams NUMERIC(10, 2)
+    shopping_measure_grams NUMERIC(10, 2),
+    usda_fdc_id INTEGER,
+    usda_data_type TEXT,
+    usda_description TEXT,
+    nutrition_synced_at TIMESTAMPTZ
 );
 CREATE INDEX IF NOT EXISTS idx_items_department ON items(department);
 CREATE INDEX IF NOT EXISTS idx_items_kcal_measurement_id ON items(kcal_measurement_id);
+CREATE INDEX IF NOT EXISTS idx_items_usda_fdc_id ON items(usda_fdc_id);
 
 -- ========== CONFIG ==========
 CREATE SCHEMA IF NOT EXISTS config;
