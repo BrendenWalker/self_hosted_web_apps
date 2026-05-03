@@ -1,6 +1,6 @@
 .upcoming-meals-page .recipes-header {
-  padding: 1rem 1.25rem;
-  margin-bottom: 0.9rem;
+  padding: 0.75rem 1rem;
+  margin-bottom: 0.65rem;
 }
 
 .meal-planner-header-row {
@@ -42,8 +42,8 @@
 }
 
 .meal-planner-shop-notice {
-  margin: 0 1.25rem 0.75rem;
-  padding: 0.5rem 0.75rem;
+  margin: 0 1rem 0.55rem;
+  padding: 0.45rem 0.65rem;
   background: #e8f6ef;
   color: #1e6b45;
   border-radius: 6px;
@@ -74,15 +74,20 @@
 
 .meal-planner-layout {
   display: grid;
-  gap: 0.75rem;
+  gap: 0.6rem;
   grid-template-columns: 1fr;
+  align-items: start;
+}
+
+.meal-planner-layout .meal-planner-grid {
+  min-width: 0;
 }
 
 .meal-planner-recipes {
   background: #fff;
   border-radius: 8px;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-  padding: 0.75rem;
+  padding: 0.6rem;
 }
 
 .meal-planner-recipes h2 {
@@ -93,19 +98,21 @@
 
 .meal-planner-recipe-filters {
   display: grid;
-  gap: 0.3rem;
-  margin-bottom: 0.55rem;
-  max-width: 280px;
+  gap: 0.25rem;
+  margin-bottom: 0.45rem;
+  width: 100%;
 }
 
 .meal-planner-recipe-list {
   list-style: none;
-  margin: 0.5rem 0 0;
+  margin: 0.4rem 0 0;
   padding: 0;
   display: grid;
-  gap: 0.4rem;
+  gap: 0.35rem;
   max-height: 45vh;
   overflow: auto;
+  flex: 1 1 auto;
+  min-height: 0;
 }
 
 .meal-planner-recipe-chip {
@@ -121,8 +128,8 @@
 
 .meal-planner-grid {
   display: grid;
-  gap: 0.55rem;
-  grid-template-columns: repeat(7, minmax(150px, 1fr));
+  gap: 0.45rem;
+  grid-template-columns: repeat(7, minmax(118px, 1fr));
   overflow-x: auto;
 }
 
@@ -130,7 +137,7 @@
   background: #fff;
   border-radius: 8px;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-  padding: 0.55rem;
+  padding: 0.5rem;
   min-width: 0;
 }
 
@@ -358,6 +365,31 @@
   padding: 0.1rem 0.2rem;
   font-size: 0.85rem;
   line-height: 1;
+}
+
+/* Week grid left, recipe picker right; sticky recipe column on wide viewports */
+@media (min-width: 960px) {
+  .meal-planner-layout {
+    grid-template-columns: minmax(0, 1fr) minmax(200px, 248px);
+    gap: 0.65rem;
+  }
+
+  .meal-planner-grid {
+    grid-template-columns: repeat(7, minmax(0, 1fr));
+  }
+
+  .meal-planner-recipes {
+    position: sticky;
+    top: 0.35rem;
+    max-height: calc(100vh - 5.5rem);
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+  }
+
+  .meal-planner-recipe-list {
+    max-height: none;
+  }
 }
 
 @media (max-width: 980px) {
