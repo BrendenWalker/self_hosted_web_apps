@@ -8,9 +8,12 @@ import {
   clearMealPlannerMeal,
   updateMealPlannerServings,
   autoLinkMealPlannerLeftovers,
+  addMealPlannerWeekToShoppingList,
 } from '../api/api';
 import './RecipesPage.css';
 import './UpcomingMealsPage.css';
+
+const MEAL_PLAN_SHOP_SCALE_OPTIONS = [0.5, 1, 2, 3, 4, 5];
 
 function parseDateOnly(dateText) {
   const [y, m, d] = String(dateText || '').split('-').map(Number);
@@ -57,6 +60,9 @@ function UpcomingMealsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [saving, setSaving] = useState(false);
+  const [shopScale, setShopScale] = useState(1);
+  const [addingWeekShop, setAddingWeekShop] = useState(false);
+  const [shopNotice, setShopNotice] = useState(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -218,6 +224,30 @@ function UpcomingMealsPage() {
     }
   };
 
+  const handleAddWeekToShoppingList = async () => {
+    setError(null);
+    setShopNotice(null);
+    setAddingWeekShop(true);
+    try {
+      const res = await addMealPlannerWeekToShoppingList(weekStart, shopScale);
+      const data = res.data || {};
+      const meals = data.meals || [];
+      const withAdds = meals.filter((m) => m.added_count > 0).length;
+      const skippedMeals = meals.length - withAdds;
+      setShopNotice(
+        `Shopping list: ${withAdds} meal${withAdds === 1 ? '' : 's'} updated` +
+          (skippedMeals ? ` (${skippedMeals} already added or had nothing to add)` : '') +
+          `.`
+      );
+      const plannerRes = await getMealPlanner(weekStart);
+      setPlannerDays(plannerRes.data?.days || []);
+    } catch (err) {
+      setError(err.response?.data?.error || err.message || 'Failed to add week to shopping list');
+    } finally {
+      setAddingWeekShop(false);
+    }
+  };
+
   return (
     <div className="recipes-page upcoming-meals-page page-scroll">
       <header className="recipes-header">
@@ -228,10 +258,36 @@ function UpcomingMealsPage() {
               Drag recipes into meal slots for each day of the week.
             </p>
           </div>
-          <div className="meal-planner-week-controls">
-            <button type="button" className="btn btn-secondary" onClick={() => moveWeek(-7)}>Previous week</button>
-            <div className="meal-planner-week-label">{dayHeaderLabel(weekStart)} week</div>
-            <button type="button" className="btn btn-secondary" onClick={() => moveWeek(7)}>Next week</button>
+          <div className="meal-planner-header-right">
+            <div className="meal-planner-week-controls">
+              <button type="button" className="btn btn-secondary" onClick={() => moveWeek(-7)}>Previous week</button>
+              <div className="meal-planner-week-label">{dayHeaderLabel(weekStart)} week</div>
+              <button type="button" className="btn btn-secondary" onClick={() => moveWeek(7)}>Next week</button>
+            </div>
+            <div className="meal-planner-bulk-shop">
+              <label className="meal-planner-bulk-shop-scale">
+                <span>List scale</span>
+                <select
+                  value={String(shopScale)}
+                  onChange={(e) => setShopScale(Number(e.target.value))}
+                  disabled={addingWeekShop || saving}
+                >
+                  {MEAL_PLAN_SHOP_SCALE_OPTIONS.map((v) => (
+                    <option key={v} value={String(v)}>
+                      {v === 1 ? '1×' : `${v}×`}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <button
+                type="button"
+                className="btn btn-primary"
+                onClick={() => handleAddWeekToShoppingList()}
+                disabled={addingWeekShop || saving}
+              >
+                {addingWeekShop ? 'Adding…' : 'Add week to shopping list'}
+              </button>
+            </div>
           </div>
         </div>
       </header>
@@ -239,6 +295,12 @@ function UpcomingMealsPage() {
       {error && (
         <div className="recipes-error" role="alert">
           {error}
+        </div>
+      )}
+
+      {shopNotice && (
+        <div className="meal-planner-shop-notice" role="status">
+          {shopNotice}
         </div>
       )}
 
@@ -292,9 +354,16 @@ function UpcomingMealsPage() {
                               );
                             }}
                           >
-                            <Link to={`/recipes/${slot.meal.id}`} className="meal-planner-assigned-link">
-                              {recipeMap.get(String(slot.meal.id))?.name || slot.meal.name}
-                            </Link>
+                            <div className="meal-planner-assigned-title-row">
+                              <Link to={`/recipes/${slot.meal.id}`} className="meal-planner-assigned-link">
+                                {recipeMap.get(String(slot.meal.id))?.name || slot.meal.name}
+                              </Link>
+                              {slot.meal.ingredients_added_to_shopping_at != null && (
+                                <span className="meal-planner-on-shopping-list" title="Ingredients added to shopping list">
+                                  On list
+                                </span>
+                              )}
+                            </div>
                             <div className="meal-planner-servings-row">
                               <span className="meal-planner-servings-label">Servings</span>
                               <button

@@ -138,7 +138,8 @@ CREATE TABLE IF NOT EXISTS mealplanner.meals (
     id SERIAL PRIMARY KEY,
     meal_date TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
     meal_slot_id INTEGER NOT NULL DEFAULT 4,
-    recipe_id INTEGER NOT NULL REFERENCES recipe.recipe(id) ON DELETE CASCADE
+    recipe_id INTEGER NOT NULL REFERENCES recipe.recipe(id) ON DELETE CASCADE,
+    ingredients_added_to_shopping_at TIMESTAMPTZ
 );
 
 CREATE INDEX IF NOT EXISTS idx_mealplanner_meals_meal_date ON mealplanner.meals(meal_date);

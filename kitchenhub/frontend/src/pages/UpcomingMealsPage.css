@@ -8,6 +8,46 @@
   align-items: flex-start;
   justify-content: space-between;
   gap: 0.9rem;
+  flex-wrap: wrap;
+}
+
+.meal-planner-header-right {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.55rem;
+}
+
+.meal-planner-bulk-shop {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.5rem 0.75rem;
+}
+
+.meal-planner-bulk-shop-scale {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.85rem;
+  color: #555;
+}
+
+.meal-planner-bulk-shop-scale select {
+  padding: 0.35rem 0.45rem;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  font-size: 0.85rem;
+}
+
+.meal-planner-shop-notice {
+  margin: 0 1.25rem 0.75rem;
+  padding: 0.5rem 0.75rem;
+  background: #e8f6ef;
+  color: #1e6b45;
+  border-radius: 6px;
+  font-size: 0.9rem;
 }
 
 .meal-planner-header-copy h1 {
@@ -196,6 +236,33 @@
   min-width: 0;
   font-size: 0.82rem;
   line-height: 1.25;
+}
+
+.meal-planner-assigned-title-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.35rem;
+  min-width: 0;
+}
+
+.meal-planner-assigned-title-row .meal-planner-assigned-link {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.meal-planner-on-shopping-list {
+  flex: 0 0 auto;
+  font-size: 0.68rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  color: #1e6b45;
+  background: #d8f0e4;
+  border-radius: 4px;
+  padding: 0.15rem 0.35rem;
+  white-space: nowrap;
+  line-height: 1.2;
 }
 
 .meal-planner-servings-row {

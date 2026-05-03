@@ -139,6 +139,9 @@ export const autoLinkMealPlannerLeftovers = (sourceMealDate, sourceMealSlotId) =
     source_meal_date: sourceMealDate,
     source_meal_slot_id: sourceMealSlotId,
   });
+/** Add planned meals in the week (start … start+6) to shopping list; skips meals already synced. */
+export const addMealPlannerWeekToShoppingList = (start, scale = 1) =>
+  api.post('/meal-planner/add-to-shopping-list', { start, scale });
 
 // Recipe ingredients
 export const addRecipeIngredient = (recipeId, data) =>
