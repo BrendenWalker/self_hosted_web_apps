@@ -742,6 +742,127 @@ describe('KitchenHub API', () => {
       expect(res.body.linked.length).toBeGreaterThan(0);
       expect(res.body.leftover_servings_remaining).toBe(0);
     });
+
+    it('GET /api/meal-planner/meal-slots returns ordered slots', async () => {
+      mockPool.query.mockImplementation((sql) => {
+        const s = (sql || '').trim();
+        if (s.includes("table_schema = 'mealplanner' AND table_name = 'meal_slot'")) {
+          return Promise.resolve({
+            rows: [
+              { column_name: 'name' },
+              { column_name: 'seq' },
+              { column_name: 'servings' },
+              { column_name: 'kcal' },
+            ],
+          });
+        }
+        if (s.includes('FROM mealplanner.meal_slot') && s.includes('ORDER BY')) {
+          return Promise.resolve({
+            rows: [
+              { id: 1, name: 'Breakfast', seq: 1, servings: 2, kcal: 400 },
+              { id: 2, name: 'Lunch', seq: 2, servings: 2, kcal: 550 },
+            ],
+          });
+        }
+        return Promise.resolve(defaultQueryHandler(sql));
+      });
+      const res = await request(serverModule.app).get('/api/meal-planner/meal-slots');
+      expect(res.status).toBe(200);
+      expect(res.body.supported).toBe(true);
+      expect(res.body.slots.map((x) => x.name)).toEqual(['Breakfast', 'Lunch']);
+    });
+
+    it('POST /api/meal-planner/meal-slots creates a slot', async () => {
+      mockPool.query.mockImplementation((sql, params) => {
+        const s = (sql || '').trim();
+        if (s.includes("table_schema = 'mealplanner' AND table_name = 'meal_slot'")) {
+          return Promise.resolve({
+            rows: [
+              { column_name: 'name' },
+              { column_name: 'seq' },
+              { column_name: 'servings' },
+              { column_name: 'kcal' },
+            ],
+          });
+        }
+        if (s.includes('COALESCE(MAX(seq)')) {
+          return Promise.resolve({ rows: [{ n: 3 }] });
+        }
+        if (s.includes('INSERT INTO mealplanner.meal_slot')) {
+          return Promise.resolve({
+            rows: [{ id: 9, name: params[0], seq: params[1], servings: params[2], kcal: params[3] }],
+          });
+        }
+        return Promise.resolve(defaultQueryHandler(sql, params));
+      });
+      const res = await request(serverModule.app)
+        .post('/api/meal-planner/meal-slots')
+        .send({ name: 'Snack', servings: 1, kcal: 200 });
+      expect(res.status).toBe(201);
+      expect(res.body.slot.name).toBe('Snack');
+    });
+
+    it('PATCH /api/meal-planner/meal-slots/:id updates a slot', async () => {
+      mockPool.query.mockImplementation((sql, params) => {
+        const s = (sql || '').trim();
+        if (s.includes("table_schema = 'mealplanner' AND table_name = 'meal_slot'")) {
+          return Promise.resolve({
+            rows: [
+              { column_name: 'name' },
+              { column_name: 'seq' },
+              { column_name: 'servings' },
+              { column_name: 'kcal' },
+            ],
+          });
+        }
+        if (s.includes('UPDATE mealplanner.meal_slot') && s.includes('RETURNING')) {
+          return Promise.resolve({
+            rows: [{ id: 2, name: 'Lunch', seq: 2, servings: 3, kcal: 600 }],
+          });
+        }
+        return Promise.resolve(defaultQueryHandler(sql, params));
+      });
+      const res = await request(serverModule.app)
+        .patch('/api/meal-planner/meal-slots/2')
+        .send({ servings: 3, kcal: 600 });
+      expect(res.status).toBe(200);
+      expect(res.body.slot.servings).toBe(3);
+    });
+
+    it('PUT /api/meal-planner/meal-slots/order rewrites seq values', async () => {
+      const clientQuery = jest.fn().mockImplementation((sql, params) => {
+        const s = (sql || '').trim();
+        if (s === 'BEGIN' || s === 'COMMIT' || s === 'ROLLBACK') return Promise.resolve({ rows: [] });
+        if (s.includes("table_schema = 'mealplanner' AND table_name = 'meal_slot'")) {
+          return Promise.resolve({
+            rows: [{ column_name: 'name' }, { column_name: 'seq' }, { column_name: 'servings' }, { column_name: 'kcal' }],
+          });
+        }
+        if (s.includes('SELECT id FROM mealplanner.meal_slot ORDER BY seq')) {
+          return Promise.resolve({ rows: [{ id: 2 }, { id: 1 }] });
+        }
+        if (s.includes('UPDATE mealplanner.meal_slot SET seq =')) {
+          return Promise.resolve({ rows: [] });
+        }
+        if (s.includes('FROM mealplanner.meal_slot') && s.includes('ORDER BY seq')) {
+          return Promise.resolve({
+            rows: [
+              { id: 1, name: 'A', seq: 1, servings: 2, kcal: null },
+              { id: 2, name: 'B', seq: 2, servings: 2, kcal: null },
+            ],
+          });
+        }
+        return Promise.resolve(defaultQueryHandler(sql, params));
+      });
+      mockPool.query.mockImplementation(clientQuery);
+      mockPool.connect.mockResolvedValue({ query: clientQuery, release: jest.fn() });
+
+      const res = await request(serverModule.app)
+        .put('/api/meal-planner/meal-slots/order')
+        .send({ ordered_ids: [1, 2] });
+      expect(res.status).toBe(200);
+      expect(res.body.slots).toHaveLength(2);
+    });
   });
 
   describe('Error handling', () => {

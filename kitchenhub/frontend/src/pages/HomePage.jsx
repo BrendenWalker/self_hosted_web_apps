@@ -29,6 +29,12 @@ function HomePage() {
               Browse recipes by category, view ingredients with quantities and optional notes, and see shopping measures for future list building.
             </p>
           </Link>
+          <Link to="/recipes/upcoming" className="home-card">
+            <h2>Meal planner</h2>
+            <p>
+              Plan the week by dragging recipes into daily meal slots, adjust servings, and add the week to your shopping list.
+            </p>
+          </Link>
           <Link to="/stores" className="home-card">
             <h2>Stores & Layouts</h2>
             <p>
@@ -45,6 +51,7 @@ function HomePage() {
             Your items live in the master catalog on the <strong>Items</strong> page. When you are planning a trip,
             you add items from that catalog onto your list. On the <strong>Shopping List</strong> page, those items are
             grouped and ordered according to the zones you configure per store on the <strong>Stores &amp; Layouts</strong> page.
+            Use <strong>Meal planner</strong> and <strong>Meal slots</strong> (under Recipes) to shape how you plan meals each week.
           </p>
         </div>
         <div className="home-detail-card">
@@ -52,6 +59,7 @@ function HomePage() {
           <ul>
             <li>Set up your primary store and its zones under <strong>Stores &amp; Layouts</strong>.</li>
             <li>Add your common items on the <strong>Items</strong> page.</li>
+            <li>Optional: configure <strong>Meal slots</strong> under Recipes, then use <strong>Meal planner</strong> for the week.</li>
             <li>Head to <strong>Shopping List</strong> when you are in the store to walk the aisles in order.</li>
           </ul>
         </div>

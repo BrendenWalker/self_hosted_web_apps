@@ -14,7 +14,7 @@ describe('HomePage', () => {
     expect(screen.getByText(/manage your pantry|shopping lists|store layouts/i)).toBeInTheDocument();
   });
 
-  it('renders quick link cards to shopping, list, and stores', () => {
+  it('renders quick link cards including meal planner before stores', () => {
     render(
       <MemoryRouter>
         <HomePage />
@@ -22,6 +22,7 @@ describe('HomePage', () => {
     );
     expect(screen.getByRole('link', { name: /^Shopping List/i })).toHaveAttribute('href', '/shopping');
     expect(screen.getByRole('link', { name: /^Items/i })).toHaveAttribute('href', '/list');
+    expect(screen.getByRole('link', { name: /^Meal planner/i })).toHaveAttribute('href', '/recipes/upcoming');
     expect(screen.getByRole('link', { name: /stores & layouts/i })).toHaveAttribute('href', '/stores');
   });
 

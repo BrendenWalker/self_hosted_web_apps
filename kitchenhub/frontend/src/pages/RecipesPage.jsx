@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { Link, NavLink } from 'react-router-dom';
+import { Link } from 'react-router-dom';
+import RecipesSectionNav from '../components/RecipesSectionNav';
 import { getRecipes, getRecipeCategories, addRecipeToShoppingList } from '../api/api';
 import {
   buildRecipeShoppingListNoticeText,
@@ -92,14 +93,7 @@ function RecipesPage() {
     <div className="recipes-page page-scroll">
       <header className="recipes-header">
         <h1>Recipes</h1>
-        <nav className="recipes-subnav" aria-label="Recipes section">
-          <NavLink to="/recipes" end className={({ isActive }) => isActive ? 'recipes-subnav-link active' : 'recipes-subnav-link'}>
-            Recipes
-          </NavLink>
-          <NavLink to="/recipes/ingredients" className={({ isActive }) => isActive ? 'recipes-subnav-link active' : 'recipes-subnav-link'}>
-            Ingredients
-          </NavLink>
-        </nav>
+        <RecipesSectionNav />
         <p className="recipes-subtitle">Browse recipes by category. Open a recipe to see ingredients and instructions.</p>
         <div className="recipes-toolbar">
           <label htmlFor="recipe-category-filter" className="filter-label">Category</label>

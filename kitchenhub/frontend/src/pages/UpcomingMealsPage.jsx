@@ -1,5 +1,6 @@
 import React, { useMemo, useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
+import RecipesSectionNav from '../components/RecipesSectionNav';
 import {
   getMealPlanner,
   getRecipes,
@@ -251,6 +252,7 @@ function UpcomingMealsPage() {
   return (
     <div className="recipes-page upcoming-meals-page page-scroll">
       <header className="recipes-header">
+        <RecipesSectionNav />
         <div className="meal-planner-header-row">
           <div className="meal-planner-header-copy">
             <h1>Meal Planner</h1>
