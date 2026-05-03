@@ -107,6 +107,12 @@ export const patchRecipePlanned = (id, planned) =>
 export const deleteRecipe = (id) => api.delete(`/recipes/${id}`);
 export const getMealPlanner = (start) =>
   api.get('/meal-planner', start ? { params: { start } } : undefined);
+export const getMealPlannerSlots = () => api.get('/meal-planner/meal-slots');
+export const createMealPlannerSlot = (data) => api.post('/meal-planner/meal-slots', data);
+export const updateMealPlannerSlot = (id, data) => api.patch(`/meal-planner/meal-slots/${id}`, data);
+export const reorderMealPlannerSlots = (orderedIds) =>
+  api.put('/meal-planner/meal-slots/order', { ordered_ids: orderedIds });
+export const deleteMealPlannerSlot = (id) => api.delete(`/meal-planner/meal-slots/${id}`);
 export const assignMealPlannerMeal = (mealDate, mealSlotId, recipeId, source) =>
   api.put('/meal-planner/assign', {
     meal_date: mealDate,

@@ -72,6 +72,15 @@ function startOfWeekMondayUtc(date = new Date()) {
   return d;
 }
 
+async function fetchMealSlotColumnSet(db = pool) {
+  const slotColsResult = await db.query(
+    `SELECT column_name
+     FROM information_schema.columns
+     WHERE table_schema = 'mealplanner' AND table_name = 'meal_slot'`
+  );
+  return new Set((slotColsResult.rows || []).map((r) => r.column_name));
+}
+
 const PACK1_GRAMS_EPS = 1e-6;
 
 /** When count per pack is 1, ingredient grams and shopping measure grams must match if either is set. */
@@ -1620,6 +1629,313 @@ app.get('/api/meal-planner', async (req, res) => {
   } catch (error) {
     console.error('Error fetching meal planner:', error);
     return res.status(500).json({ error: 'Failed to fetch meal planner' });
+  }
+});
+
+app.get('/api/meal-planner/meal-slots', async (req, res) => {
+  try {
+    const slotCols = await fetchMealSlotColumnSet();
+    if (slotCols.size === 0) {
+      return res.json({ slots: [], supported: false });
+    }
+    const hasSeq = slotCols.has('seq');
+    const hasServings = slotCols.has('servings');
+    const hasKcal = slotCols.has('kcal');
+    const slotResult = await pool.query(
+      `SELECT id, name, ${hasSeq ? 'seq' : 'id'} AS seq, ${
+        hasServings ? 'servings' : '4'
+      }::integer AS servings, ${hasKcal ? 'kcal' : 'NULL'}::integer AS kcal
+       FROM mealplanner.meal_slot
+       ORDER BY ${hasSeq ? 'seq' : 'id'}, id`
+    );
+    return res.json({ slots: slotResult.rows || [], supported: true });
+  } catch (error) {
+    if (error?.code === '42P01') {
+      return res.json({ slots: [], supported: false });
+    }
+    console.error('Error fetching meal slots:', error);
+    return res.status(500).json({ error: 'Failed to fetch meal slots' });
+  }
+});
+
+app.post('/api/meal-planner/meal-slots', async (req, res) => {
+  try {
+    const slotCols = await fetchMealSlotColumnSet();
+    if (!slotCols.has('name')) {
+      return res.status(503).json({ error: 'Meal planner meal slots are not available' });
+    }
+    const name = String(req.body?.name || '').trim();
+    if (!name || name.length > 80) {
+      return res.status(400).json({ error: 'name is required (max 80 characters)' });
+    }
+
+    let seq = parseInt(req.body?.seq, 10);
+    if (Number.isNaN(seq) || seq < 1) {
+      if (!slotCols.has('seq')) {
+        seq = 1;
+      } else {
+        const maxR = await pool.query(
+          'SELECT COALESCE(MAX(seq), 0) + 1 AS n FROM mealplanner.meal_slot'
+        );
+        seq = parseInt(maxR.rows[0].n, 10) || 1;
+      }
+    }
+
+    let servings = parseInt(req.body?.servings, 10);
+    if (Number.isNaN(servings) || servings < 1) {
+      servings = 4;
+    }
+
+    const kcalRaw = req.body?.kcal;
+    const kcal =
+      kcalRaw == null || kcalRaw === '' ? null : parseInt(kcalRaw, 10);
+    if (kcal != null && (Number.isNaN(kcal) || kcal < 1)) {
+      return res.status(400).json({ error: 'kcal must be null or a positive integer' });
+    }
+
+    const cols = ['name'];
+    const vals = [];
+    const params = [];
+    let pi = 1;
+    params.push(name);
+    vals.push(`$${pi}`);
+    pi += 1;
+    if (slotCols.has('seq')) {
+      cols.push('seq');
+      params.push(seq);
+      vals.push(`$${pi}`);
+      pi += 1;
+    }
+    if (slotCols.has('servings')) {
+      cols.push('servings');
+      params.push(servings);
+      vals.push(`$${pi}`);
+      pi += 1;
+    }
+    if (slotCols.has('kcal')) {
+      cols.push('kcal');
+      params.push(kcal);
+      vals.push(`$${pi}`);
+      pi += 1;
+    }
+
+    const returningCols = ['id', 'name'];
+    if (slotCols.has('seq')) returningCols.push('seq');
+    if (slotCols.has('servings')) returningCols.push('servings');
+    if (slotCols.has('kcal')) returningCols.push('kcal');
+    const insertResult = await pool.query(
+      `INSERT INTO mealplanner.meal_slot (${cols.join(', ')})
+       VALUES (${vals.join(', ')})
+       RETURNING ${returningCols.join(', ')}`,
+      params
+    );
+    const row = insertResult.rows[0];
+    return res.status(201).json({
+      slot: {
+        id: row.id,
+        name: row.name,
+        seq: row.seq != null ? parseInt(row.seq, 10) : seq,
+        servings: row.servings != null ? parseInt(row.servings, 10) : servings,
+        kcal: row.kcal != null ? parseInt(row.kcal, 10) : kcal,
+      },
+    });
+  } catch (error) {
+    if (error?.code === '23505') {
+      return res.status(409).json({ error: 'A meal slot with this name already exists' });
+    }
+    if (error?.code === '42P01') {
+      return res.status(503).json({ error: 'Meal planner meal slots are not available' });
+    }
+    console.error('Error creating meal slot:', error);
+    return res.status(500).json({ error: 'Failed to create meal slot' });
+  }
+});
+
+app.patch('/api/meal-planner/meal-slots/:id', async (req, res) => {
+  try {
+    const id = parseInt(req.params.id, 10);
+    if (Number.isNaN(id) || id < 1) {
+      return res.status(400).json({ error: 'Invalid meal slot id' });
+    }
+    const slotCols = await fetchMealSlotColumnSet();
+    if (!slotCols.has('name')) {
+      return res.status(503).json({ error: 'Meal planner meal slots are not available' });
+    }
+
+    const updates = [];
+    const params = [];
+    let pi = 1;
+
+    if (req.body?.name !== undefined) {
+      const name = String(req.body.name || '').trim();
+      if (!name || name.length > 80) {
+        return res.status(400).json({ error: 'name must be 1–80 characters' });
+      }
+      updates.push(`name = $${pi}`);
+      params.push(name);
+      pi += 1;
+    }
+    if (req.body?.seq !== undefined && slotCols.has('seq')) {
+      const seq = parseInt(req.body.seq, 10);
+      if (Number.isNaN(seq) || seq < 1) {
+        return res.status(400).json({ error: 'seq must be a positive integer' });
+      }
+      updates.push(`seq = $${pi}`);
+      params.push(seq);
+      pi += 1;
+    }
+    if (req.body?.servings !== undefined && slotCols.has('servings')) {
+      const servings = parseInt(req.body.servings, 10);
+      if (Number.isNaN(servings) || servings < 1) {
+        return res.status(400).json({ error: 'servings must be a positive integer' });
+      }
+      updates.push(`servings = $${pi}`);
+      params.push(servings);
+      pi += 1;
+    }
+    if (req.body?.kcal !== undefined && slotCols.has('kcal')) {
+      const kcalRaw = req.body.kcal;
+      const kcal = kcalRaw == null || kcalRaw === '' ? null : parseInt(kcalRaw, 10);
+      if (kcal != null && (Number.isNaN(kcal) || kcal < 1)) {
+        return res.status(400).json({ error: 'kcal must be null or a positive integer' });
+      }
+      updates.push(`kcal = $${pi}`);
+      params.push(kcal);
+      pi += 1;
+    }
+
+    if (updates.length === 0) {
+      return res.status(400).json({ error: 'No fields to update' });
+    }
+
+    params.push(id);
+    const returningCols = ['id', 'name'];
+    if (slotCols.has('seq')) returningCols.push('seq');
+    if (slotCols.has('servings')) returningCols.push('servings');
+    if (slotCols.has('kcal')) returningCols.push('kcal');
+    const updateResult = await pool.query(
+      `UPDATE mealplanner.meal_slot
+       SET ${updates.join(', ')}
+       WHERE id = $${pi}
+       RETURNING ${returningCols.join(', ')}`,
+      params
+    );
+
+    if (updateResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Meal slot not found' });
+    }
+    const row = updateResult.rows[0];
+    return res.json({
+      slot: {
+        id: row.id,
+        name: row.name,
+        seq: row.seq != null ? parseInt(row.seq, 10) : id,
+        servings: row.servings != null ? parseInt(row.servings, 10) : null,
+        kcal: row.kcal != null ? parseInt(row.kcal, 10) : null,
+      },
+    });
+  } catch (error) {
+    if (error?.code === '23505') {
+      return res.status(409).json({ error: 'A meal slot with this name already exists' });
+    }
+    console.error('Error updating meal slot:', error);
+    return res.status(500).json({ error: 'Failed to update meal slot' });
+  }
+});
+
+app.put('/api/meal-planner/meal-slots/order', async (req, res) => {
+  let client;
+  try {
+    const slotCols = await fetchMealSlotColumnSet();
+    if (!slotCols.has('seq')) {
+      return res.status(503).json({ error: 'Meal slot ordering is not supported' });
+    }
+    const orderedIds = req.body?.ordered_ids;
+    if (!Array.isArray(orderedIds) || orderedIds.length === 0) {
+      return res.status(400).json({ error: 'ordered_ids must be a non-empty array' });
+    }
+    const ids = orderedIds.map((x) => parseInt(x, 10)).filter((n) => Number.isInteger(n) && n > 0);
+    if (ids.length !== orderedIds.length) {
+      return res.status(400).json({ error: 'ordered_ids must contain positive integers only' });
+    }
+
+    client = await pool.connect();
+    await client.query('BEGIN');
+    const existing = await client.query('SELECT id FROM mealplanner.meal_slot ORDER BY seq, id');
+    const existingIds = (existing.rows || []).map((r) => r.id);
+    if (ids.length !== existingIds.length) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ error: 'ordered_ids must list every meal slot exactly once' });
+    }
+    const setExisting = new Set(existingIds);
+    for (const slotId of ids) {
+      if (!setExisting.has(slotId)) {
+        await client.query('ROLLBACK');
+        return res.status(400).json({ error: 'ordered_ids contains an unknown meal slot id' });
+      }
+    }
+
+    for (let i = 0; i < ids.length; i += 1) {
+      await client.query('UPDATE mealplanner.meal_slot SET seq = $1 WHERE id = $2', [i + 1, ids[i]]);
+    }
+    await client.query('COMMIT');
+    const hasServings = slotCols.has('servings');
+    const hasKcal = slotCols.has('kcal');
+    const list = await pool.query(
+      `SELECT id, name, seq, ${hasServings ? 'servings' : '4'}::integer AS servings, ${
+        hasKcal ? 'kcal' : 'NULL::integer'
+      } AS kcal
+       FROM mealplanner.meal_slot
+       ORDER BY seq, id`
+    );
+    return res.json({ slots: list.rows || [] });
+  } catch (error) {
+    if (client) {
+      try {
+        await client.query('ROLLBACK');
+      } catch (_) {
+        /* ignore: may not be in a transaction */
+      }
+    }
+    console.error('Error reordering meal slots:', error);
+    return res.status(500).json({ error: 'Failed to reorder meal slots' });
+  } finally {
+    if (client) client.release();
+  }
+});
+
+app.delete('/api/meal-planner/meal-slots/:id', async (req, res) => {
+  try {
+    const id = parseInt(req.params.id, 10);
+    if (Number.isNaN(id) || id < 1) {
+      return res.status(400).json({ error: 'Invalid meal slot id' });
+    }
+    const countSlots = await pool.query('SELECT COUNT(*)::int AS n FROM mealplanner.meal_slot');
+    const nSlots = countSlots.rows[0]?.n ?? 0;
+    if (nSlots <= 1) {
+      return res.status(400).json({ error: 'Cannot delete the last meal slot' });
+    }
+    const mealCount = await pool.query(
+      'SELECT COUNT(*)::int AS n FROM mealplanner.meals WHERE meal_slot_id = $1',
+      [id]
+    );
+    const nMeals = mealCount.rows[0]?.n ?? 0;
+    if (nMeals > 0) {
+      return res.status(409).json({
+        error: 'This slot has planned meals; clear or reassign them before deleting the slot',
+      });
+    }
+    const del = await pool.query('DELETE FROM mealplanner.meal_slot WHERE id = $1 RETURNING id', [id]);
+    if (del.rows.length === 0) {
+      return res.status(404).json({ error: 'Meal slot not found' });
+    }
+    return res.json({ deleted_id: id });
+  } catch (error) {
+    if (error?.code === '42P01') {
+      return res.status(503).json({ error: 'Meal planner meal slots are not available' });
+    }
+    console.error('Error deleting meal slot:', error);
+    return res.status(500).json({ error: 'Failed to delete meal slot' });
   }
 });
 

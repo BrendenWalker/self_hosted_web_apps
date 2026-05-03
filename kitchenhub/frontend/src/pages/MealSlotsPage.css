@@ -1,0 +1,99 @@
+.meal-slots-table-wrap {
+  overflow-x: auto;
+  background: #fff;
+  border-radius: 8px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  margin-bottom: 1.25rem;
+}
+
+.meal-slots-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.95rem;
+}
+
+.meal-slots-table th,
+.meal-slots-table td {
+  padding: 0.55rem 0.65rem;
+  text-align: left;
+  border-bottom: 1px solid #e8e8e8;
+  vertical-align: middle;
+}
+
+.meal-slots-table th {
+  color: #2c3e50;
+  font-weight: 600;
+  background: #f7f9fb;
+}
+
+.meal-slots-col-order {
+  width: 5.5rem;
+}
+
+.meal-slots-col-actions {
+  width: 11rem;
+}
+
+.meal-slots-order-btns {
+  display: flex;
+  gap: 0.35rem;
+}
+
+.meal-slots-icon-btn {
+  min-width: 2rem;
+  padding: 0.2rem 0.35rem;
+  font-size: 0.85rem;
+  line-height: 1;
+}
+
+.meal-slots-input {
+  width: 100%;
+  max-width: 100%;
+  padding: 0.4rem 0.5rem;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  font-size: 0.9rem;
+}
+
+.meal-slots-input-narrow {
+  max-width: 6.5rem;
+}
+
+.meal-slots-row-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.meal-slots-add {
+  background: #fff;
+  border-radius: 8px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  padding: 1rem 1.25rem;
+}
+
+.meal-slots-add-title {
+  margin: 0 0 0.75rem;
+  font-size: 1.05rem;
+  color: #2c3e50;
+}
+
+.meal-slots-add-form {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 0.75rem 1rem;
+}
+
+.meal-slots-add-label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  font-size: 0.85rem;
+  color: #555;
+  min-width: 0;
+}
+
+.meal-slots-add-label .meal-slots-input {
+  min-width: 8rem;
+}

@@ -6,6 +6,7 @@ import ShoppingListPage from './pages/ShoppingListPage';
 import StorePage from './pages/StorePage';
 import RecipesPage from './pages/RecipesPage';
 import UpcomingMealsPage from './pages/UpcomingMealsPage';
+import MealSlotsPage from './pages/MealSlotsPage';
 import RecipeDetailPage from './pages/RecipeDetailPage';
 import RecipePrintPage from './pages/RecipePrintPage';
 import IngredientsCatalogPage from './pages/IngredientsCatalogPage';
@@ -27,6 +28,7 @@ function App() {
       <Link to="/list" className="nav-link" onClick={closeNav}>Items</Link>
       <Link to="/recipes" className="nav-link" onClick={closeNav}>Recipes</Link>
       <Link to="/recipes/upcoming" className="nav-link" onClick={closeNav}>Meal planner</Link>
+      <Link to="/recipes/meal-slots" className="nav-link" onClick={closeNav}>Meal slots</Link>
       <Link to="/stores" className="nav-link" onClick={closeNav}>Stores</Link>
     </>
   );
@@ -59,6 +61,7 @@ function App() {
             <Route path="/list" element={<ShoppingListPage />} />
             <Route path="/recipes" element={<RecipesPage />} />
             <Route path="/recipes/upcoming" element={<UpcomingMealsPage />} />
+            <Route path="/recipes/meal-slots" element={<MealSlotsPage />} />
             <Route path="/recipes/ingredients" element={<IngredientsCatalogPage />} />
             <Route path="/recipes/:id/print" element={<RecipePrintPage />} />
             <Route path="/recipes/:id" element={<RecipeDetailPage />} />

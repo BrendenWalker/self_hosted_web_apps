@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { Link, NavLink } from 'react-router-dom';
+import { Link } from 'react-router-dom';
+import RecipesSectionNav from '../components/RecipesSectionNav';
 import {
   getIngredients,
   getIngredientMeasurements,
@@ -145,14 +146,7 @@ function IngredientsCatalogPage() {
         <span>Ingredients</span>
       </div>
 
-      <nav className="recipes-subnav ingredients-subnav" aria-label="Recipes section">
-        <NavLink to="/recipes" end className={({ isActive }) => isActive ? 'recipes-subnav-link active' : 'recipes-subnav-link'}>
-          Recipes
-        </NavLink>
-        <NavLink to="/recipes/ingredients" className={({ isActive }) => isActive ? 'recipes-subnav-link active' : 'recipes-subnav-link'}>
-          Ingredients
-        </NavLink>
-      </nav>
+      <RecipesSectionNav className="recipes-subnav ingredients-subnav" />
 
       {error && (
         <div className="ingredients-catalog-error" role="alert">

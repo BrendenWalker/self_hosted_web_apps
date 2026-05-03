@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuites name="jest tests" tests="54" failures="0" errors="0" time="1.188">
-  <testsuite name="KitchenHub API" errors="0" failures="0" skipped="0" timestamp="2026-05-03T22:15:41" time="1.079" tests="50">
-    <testcase classname="KitchenHub API GET /api/health returns 200 with status, timestamp, and version" name="KitchenHub API GET /api/health returns 200 with status, timestamp, and version" time="0.034">
+<testsuites name="jest tests" tests="58" failures="0" errors="0" time="1.115">
+  <testsuite name="KitchenHub API" errors="0" failures="0" skipped="0" timestamp="2026-05-03T23:50:54" time="1.008" tests="54">
+    <testcase classname="KitchenHub API GET /api/health returns 200 with status, timestamp, and version" name="KitchenHub API GET /api/health returns 200 with status, timestamp, and version" time="0.035">
     </testcase>
     <testcase classname="KitchenHub API Stores GET /api/stores returns All store first then DB stores" name="KitchenHub API Stores GET /api/stores returns All store first then DB stores" time="0.005">
     </testcase>
@@ -11,25 +11,25 @@
     </testcase>
     <testcase classname="KitchenHub API Stores GET /api/stores/:id returns store when found" name="KitchenHub API Stores GET /api/stores/:id returns store when found" time="0.003">
     </testcase>
-    <testcase classname="KitchenHub API Stores POST /api/stores creates store" name="KitchenHub API Stores POST /api/stores creates store" time="0.011">
+    <testcase classname="KitchenHub API Stores POST /api/stores creates store" name="KitchenHub API Stores POST /api/stores creates store" time="0.012">
     </testcase>
-    <testcase classname="KitchenHub API Stores PUT /api/stores/-1 returns 403 for All store" name="KitchenHub API Stores PUT /api/stores/-1 returns 403 for All store" time="0.004">
+    <testcase classname="KitchenHub API Stores PUT /api/stores/-1 returns 403 for All store" name="KitchenHub API Stores PUT /api/stores/-1 returns 403 for All store" time="0.005">
     </testcase>
     <testcase classname="KitchenHub API Stores DELETE /api/stores/-1 returns 403 for All store" name="KitchenHub API Stores DELETE /api/stores/-1 returns 403 for All store" time="0.003">
     </testcase>
-    <testcase classname="KitchenHub API Stores PUT /api/stores/:id returns 404 when store not found" name="KitchenHub API Stores PUT /api/stores/:id returns 404 when store not found" time="0.003">
+    <testcase classname="KitchenHub API Stores PUT /api/stores/:id returns 404 when store not found" name="KitchenHub API Stores PUT /api/stores/:id returns 404 when store not found" time="0.004">
     </testcase>
-    <testcase classname="KitchenHub API Stores DELETE /api/stores/:id returns 404 when store not found" name="KitchenHub API Stores DELETE /api/stores/:id returns 404 when store not found" time="0.003">
+    <testcase classname="KitchenHub API Stores DELETE /api/stores/:id returns 404 when store not found" name="KitchenHub API Stores DELETE /api/stores/:id returns 404 when store not found" time="0.002">
     </testcase>
-    <testcase classname="KitchenHub API Store zones GET /api/stores/-1/zones returns synthetic General zones" name="KitchenHub API Store zones GET /api/stores/-1/zones returns synthetic General zones" time="0.002">
+    <testcase classname="KitchenHub API Store zones GET /api/stores/-1/zones returns synthetic General zones" name="KitchenHub API Store zones GET /api/stores/-1/zones returns synthetic General zones" time="0.003">
     </testcase>
-    <testcase classname="KitchenHub API Store zones GET /api/stores/1/zones returns zones from DB" name="KitchenHub API Store zones GET /api/stores/1/zones returns zones from DB" time="0.003">
+    <testcase classname="KitchenHub API Store zones GET /api/stores/1/zones returns zones from DB" name="KitchenHub API Store zones GET /api/stores/1/zones returns zones from DB" time="0.002">
     </testcase>
     <testcase classname="KitchenHub API Store zones POST /api/stores/-1/zones returns 403 for All store" name="KitchenHub API Store zones POST /api/stores/-1/zones returns 403 for All store" time="0.002">
     </testcase>
     <testcase classname="KitchenHub API Store zones POST /api/stores/1/zones creates zone" name="KitchenHub API Store zones POST /api/stores/1/zones creates zone" time="0.002">
     </testcase>
-    <testcase classname="KitchenHub API Store zones POST /api/stores/1/zones returns 400 for invalid store id" name="KitchenHub API Store zones POST /api/stores/1/zones returns 400 for invalid store id" time="0.002">
+    <testcase classname="KitchenHub API Store zones POST /api/stores/1/zones returns 400 for invalid store id" name="KitchenHub API Store zones POST /api/stores/1/zones returns 400 for invalid store id" time="0.003">
     </testcase>
     <testcase classname="KitchenHub API Store zones POST /api/stores/1/zones/swap returns 403 for All store" name="KitchenHub API Store zones POST /api/stores/1/zones/swap returns 403 for All store" time="0.002">
     </testcase>
@@ -39,13 +39,13 @@
     </testcase>
     <testcase classname="KitchenHub API Store zones DELETE /api/stores/-1/zones/1/1 returns 403 for All store" name="KitchenHub API Store zones DELETE /api/stores/-1/zones/1/1 returns 403 for All store" time="0.002">
     </testcase>
-    <testcase classname="KitchenHub API Store zones DELETE /api/stores/1/zones/1/1 deletes zone" name="KitchenHub API Store zones DELETE /api/stores/1/zones/1/1 deletes zone" time="0.001">
+    <testcase classname="KitchenHub API Store zones DELETE /api/stores/1/zones/1/1 deletes zone" name="KitchenHub API Store zones DELETE /api/stores/1/zones/1/1 deletes zone" time="0.002">
     </testcase>
-    <testcase classname="KitchenHub API Departments GET /api/departments returns list" name="KitchenHub API Departments GET /api/departments returns list" time="0.001">
+    <testcase classname="KitchenHub API Departments GET /api/departments returns list" name="KitchenHub API Departments GET /api/departments returns list" time="0.002">
     </testcase>
     <testcase classname="KitchenHub API Departments POST /api/departments creates department" name="KitchenHub API Departments POST /api/departments creates department" time="0.002">
     </testcase>
-    <testcase classname="KitchenHub API Departments PATCH /api/departments/:id updates ingredient flag" name="KitchenHub API Departments PATCH /api/departments/:id updates ingredient flag" time="0.002">
+    <testcase classname="KitchenHub API Departments PATCH /api/departments/:id updates ingredient flag" name="KitchenHub API Departments PATCH /api/departments/:id updates ingredient flag" time="0.003">
     </testcase>
     <testcase classname="KitchenHub API Items GET /api/items returns list" name="KitchenHub API Items GET /api/items returns list" time="0.002">
     </testcase>
@@ -59,13 +59,13 @@
     </testcase>
     <testcase classname="KitchenHub API Items DELETE /api/items/:id returns 404 when not found" name="KitchenHub API Items DELETE /api/items/:id returns 404 when not found" time="0.002">
     </testcase>
-    <testcase classname="KitchenHub API Shopping list GET /api/shopping-list/-1 returns list for All store" name="KitchenHub API Shopping list GET /api/shopping-list/-1 returns list for All store" time="0.004">
+    <testcase classname="KitchenHub API Shopping list GET /api/shopping-list/-1 returns list for All store" name="KitchenHub API Shopping list GET /api/shopping-list/-1 returns list for All store" time="0.002">
     </testcase>
     <testcase classname="KitchenHub API Shopping list GET /api/shopping-list/1 returns list for store" name="KitchenHub API Shopping list GET /api/shopping-list/1 returns list for store" time="0.002">
     </testcase>
     <testcase classname="KitchenHub API Shopping list GET /api/shopping-list returns all items" name="KitchenHub API Shopping list GET /api/shopping-list returns all items" time="0.002">
     </testcase>
-    <testcase classname="KitchenHub API Shopping list POST /api/shopping-list adds item" name="KitchenHub API Shopping list POST /api/shopping-list adds item" time="0.002">
+    <testcase classname="KitchenHub API Shopping list POST /api/shopping-list adds item" name="KitchenHub API Shopping list POST /api/shopping-list adds item" time="0.003">
     </testcase>
     <testcase classname="KitchenHub API Shopping list PUT /api/shopping-list/:name returns 400 when no fields to update" name="KitchenHub API Shopping list PUT /api/shopping-list/:name returns 400 when no fields to update" time="0.002">
     </testcase>
@@ -87,22 +87,30 @@
     </testcase>
     <testcase classname="KitchenHub API Recipes — add to shopping list POST /api/recipes/:id/shopping-list returns 400 when scale is invalid" name="KitchenHub API Recipes — add to shopping list POST /api/recipes/:id/shopping-list returns 400 when scale is invalid" time="0.002">
     </testcase>
-    <testcase classname="KitchenHub API Recipes — add to shopping list POST /api/recipes/:id/shopping-list returns 404 when recipe missing" name="KitchenHub API Recipes — add to shopping list POST /api/recipes/:id/shopping-list returns 404 when recipe missing" time="0.002">
+    <testcase classname="KitchenHub API Recipes — add to shopping list POST /api/recipes/:id/shopping-list returns 404 when recipe missing" name="KitchenHub API Recipes — add to shopping list POST /api/recipes/:id/shopping-list returns 404 when recipe missing" time="0.003">
     </testcase>
-    <testcase classname="KitchenHub API Schedulable meal-planner filters GET /api/recipe-categories?schedulable=1 filters to schedulable categories" name="KitchenHub API Schedulable meal-planner filters GET /api/recipe-categories?schedulable=1 filters to schedulable categories" time="0.002">
+    <testcase classname="KitchenHub API Schedulable meal-planner filters GET /api/recipe-categories?schedulable=1 filters to schedulable categories" name="KitchenHub API Schedulable meal-planner filters GET /api/recipe-categories?schedulable=1 filters to schedulable categories" time="0.003">
     </testcase>
-    <testcase classname="KitchenHub API Schedulable meal-planner filters GET /api/recipes?schedulable=1 includes schedulable recipe filter" name="KitchenHub API Schedulable meal-planner filters GET /api/recipes?schedulable=1 includes schedulable recipe filter" time="0.002">
+    <testcase classname="KitchenHub API Schedulable meal-planner filters GET /api/recipes?schedulable=1 includes schedulable recipe filter" name="KitchenHub API Schedulable meal-planner filters GET /api/recipes?schedulable=1 includes schedulable recipe filter" time="0.004">
     </testcase>
     <testcase classname="KitchenHub API Meal planner GET /api/meal-planner returns slot kcal and meal kcal/leftover metadata" name="KitchenHub API Meal planner GET /api/meal-planner returns slot kcal and meal kcal/leftover metadata" time="0.003">
     </testcase>
     <testcase classname="KitchenHub API Meal planner PATCH /api/meal-planner/slot-kcal updates slot kcal" name="KitchenHub API Meal planner PATCH /api/meal-planner/slot-kcal updates slot kcal" time="0.002">
     </testcase>
-    <testcase classname="KitchenHub API Meal planner POST /api/meal-planner/leftovers/auto-link defaults to next lunch slot" name="KitchenHub API Meal planner POST /api/meal-planner/leftovers/auto-link defaults to next lunch slot" time="0.003">
+    <testcase classname="KitchenHub API Meal planner POST /api/meal-planner/leftovers/auto-link defaults to next lunch slot" name="KitchenHub API Meal planner POST /api/meal-planner/leftovers/auto-link defaults to next lunch slot" time="0.002">
     </testcase>
-    <testcase classname="KitchenHub API Error handling GET /api/stores returns 500 on DB error" name="KitchenHub API Error handling GET /api/stores returns 500 on DB error" time="0.017">
+    <testcase classname="KitchenHub API Meal planner GET /api/meal-planner/meal-slots returns ordered slots" name="KitchenHub API Meal planner GET /api/meal-planner/meal-slots returns ordered slots" time="0.003">
+    </testcase>
+    <testcase classname="KitchenHub API Meal planner POST /api/meal-planner/meal-slots creates a slot" name="KitchenHub API Meal planner POST /api/meal-planner/meal-slots creates a slot" time="0.002">
+    </testcase>
+    <testcase classname="KitchenHub API Meal planner PATCH /api/meal-planner/meal-slots/:id updates a slot" name="KitchenHub API Meal planner PATCH /api/meal-planner/meal-slots/:id updates a slot" time="0.002">
+    </testcase>
+    <testcase classname="KitchenHub API Meal planner PUT /api/meal-planner/meal-slots/order rewrites seq values" name="KitchenHub API Meal planner PUT /api/meal-planner/meal-slots/order rewrites seq values" time="0.002">
+    </testcase>
+    <testcase classname="KitchenHub API Error handling GET /api/stores returns 500 on DB error" name="KitchenHub API Error handling GET /api/stores returns 500 on DB error" time="0.024">
     </testcase>
   </testsuite>
-  <testsuite name="recipeIngredientLine" errors="0" failures="0" skipped="0" timestamp="2026-05-03T22:15:42" time="0.039" tests="4">
+  <testsuite name="recipeIngredientLine" errors="0" failures="0" skipped="0" timestamp="2026-05-03T23:50:55" time="0.039" tests="4">
     <testcase classname="recipeIngredientLine recipeLineGrams uses qty × to_grams for standard units" name="recipeIngredientLine recipeLineGrams uses qty × to_grams for standard units" time="0">
     </testcase>
     <testcase classname="recipeIngredientLine recipeLineGrams works without measurement_id when name and to_grams are present" name="recipeIngredientLine recipeLineGrams works without measurement_id when name and to_grams are present" time="0">
