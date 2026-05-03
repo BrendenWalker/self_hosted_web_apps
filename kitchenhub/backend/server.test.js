@@ -588,7 +588,15 @@ describe('KitchenHub API', () => {
 
       const res = await request(serverModule.app).get('/api/recipes?schedulable=1');
       expect(res.status).toBe(200);
-      expect(res.body).toEqual([{ id: 11, name: 'Yummy Dish', servings: 2, instructions: 'Mix' }]);
+      expect(res.body).toEqual([
+        {
+          id: 11,
+          name: 'Yummy Dish',
+          servings: 2,
+          instructions: 'Mix',
+          recipe_total_kcal: null,
+        },
+      ]);
     });
   });
 

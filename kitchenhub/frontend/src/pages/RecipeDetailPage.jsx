@@ -27,7 +27,8 @@ import {
 import { parseRecipeSteps } from '../utils/recipeSteps';
 import {
   formatRecipeIngredientNutritionSuffix,
-  formatRecipeTotalKcalDisplay,
+  formatRecipeKcalPerServingDisplay,
+  sumRecipeLineKcal,
 } from '../utils/recipeIngredientNutrition';
 import { RecipeMakeItOverlay } from '../components/RecipeMakeItOverlay';
 import './RecipeDetailPage.css';
@@ -90,10 +91,24 @@ function RecipeDetailPage() {
     [measurements]
   );
 
-  const recipeTotalKcalDisplay = useMemo(
-    () => formatRecipeTotalKcalDisplay(recipe?.ingredients, 1),
-    [recipe?.ingredients]
-  );
+  const recipeKcalPerServingDisplay = useMemo(() => {
+    if (!recipe) return null;
+    const rtk = recipe.recipe_total_kcal;
+    const total =
+      rtk != null && Number.isFinite(Number(rtk)) ? Number(rtk) : sumRecipeLineKcal(recipe.ingredients, 1);
+    if (total == null) return null;
+    const servingsShown = editing
+      ? Number(form.servings) || recipe.servings
+      : recipe.servings;
+    return formatRecipeKcalPerServingDisplay(total, servingsShown);
+  }, [
+    recipe,
+    recipe?.recipe_total_kcal,
+    recipe?.ingredients,
+    recipe?.servings,
+    editing,
+    form.servings,
+  ]);
 
   const makeItIngredients = useMemo(() => {
     if (!recipe?.ingredients?.length) return [];
@@ -440,6 +455,15 @@ function RecipeDetailPage() {
             <div className="recipe-detail-header">
               <h1>{recipe.name}</h1>
             <p className="recipe-meta">{recipe.category_names || 'Uncategorized'}</p>
+              <p className="recipe-servings-header-row">
+                <span>
+                  Servings:{' '}
+                  {editing ? Number(form.servings) || recipe.servings : recipe.servings}
+                </span>
+                {recipeKcalPerServingDisplay != null ? (
+                  <span className="recipe-kcal-per-serving">{recipeKcalPerServingDisplay}</span>
+                ) : null}
+              </p>
               <div className="recipe-detail-actions">
                 <div className="recipe-detail-actions-primary">
                   {editing ? (
@@ -577,8 +601,8 @@ function RecipeDetailPage() {
                         onChange={(e) => setForm((f) => ({ ...f, servings: e.target.value }))}
                       />
                     </div>
-                    {recipeTotalKcalDisplay != null ? (
-                      <span className="recipe-total-kcal">{recipeTotalKcalDisplay}</span>
+                    {recipeKcalPerServingDisplay != null ? (
+                      <span className="recipe-kcal-per-serving">{recipeKcalPerServingDisplay}</span>
                     ) : null}
                   </div>
                   <h2>Ingredients</h2>
@@ -727,8 +751,8 @@ function RecipeDetailPage() {
                 <div className="recipe-ingredients-section">
                   <p className="recipe-servings-display">
                     <span>Servings: {recipe.servings}</span>
-                    {recipeTotalKcalDisplay != null ? (
-                      <span className="recipe-total-kcal">{recipeTotalKcalDisplay}</span>
+                    {recipeKcalPerServingDisplay != null ? (
+                      <span className="recipe-kcal-per-serving">{recipeKcalPerServingDisplay}</span>
                     ) : null}
                   </p>
                   <h2>Ingredients</h2>

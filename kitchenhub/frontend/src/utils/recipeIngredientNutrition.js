@@ -27,12 +27,12 @@ export function formatRecipeIngredientNutritionSuffix(row, scale = 1) {
 }
 
 /**
- * Sum of line_kcal across ingredients (scaled), or null if nothing to sum.
+ * Sum of line_kcal across ingredients (optionally scaled for print).
  * @param {Array<{ line_kcal?: number | null }> | undefined} ingredients
  * @param {number} [scale=1]
- * @returns {string|null} e.g. "842 kcal"
+ * @returns {number|null}
  */
-export function formatRecipeTotalKcalDisplay(ingredients, scale = 1) {
+export function sumRecipeLineKcal(ingredients, scale = 1) {
   if (!ingredients?.length) return null;
   const s = typeof scale === 'number' && Number.isFinite(scale) && scale > 0 ? scale : 1;
   let sum = 0;
@@ -43,6 +43,27 @@ export function formatRecipeTotalKcalDisplay(ingredients, scale = 1) {
       any = true;
     }
   }
-  if (!any) return null;
+  return any ? sum : null;
+}
+
+/** Whole-recipe kcal label from ingredient lines (used where total is needed). */
+export function formatRecipeTotalKcalDisplay(ingredients, scale = 1) {
+  const sum = sumRecipeLineKcal(ingredients, scale);
+  if (sum == null) return null;
   return `${Math.round(sum)} kcal`;
+}
+
+/**
+ * @param {number|null|undefined} totalKcal whole recipe (unscaled) or scaled total if servings matches
+ * @param {number|null|undefined} servingsCount must be ≥ 1 (e.g. recipe.servings or scaled servings)
+ * @returns {string|null} e.g. "210 kcal/serving"
+ */
+export function formatRecipeKcalPerServingDisplay(totalKcal, servingsCount) {
+  const t = totalKcal != null ? Number(totalKcal) : NaN;
+  const srv =
+    servingsCount != null && Number.isFinite(Number(servingsCount))
+      ? Math.max(1, Number(servingsCount))
+      : NaN;
+  if (!Number.isFinite(t) || !Number.isFinite(srv) || srv < 1) return null;
+  return `${Math.round(t / srv)} kcal/serving`;
 }
