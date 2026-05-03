@@ -25,6 +25,10 @@ import {
   recipeShoppingListNoticeClassName,
 } from '../utils/recipeShoppingListNotice';
 import { parseRecipeSteps } from '../utils/recipeSteps';
+import {
+  formatRecipeIngredientNutritionSuffix,
+  formatRecipeTotalKcalDisplay,
+} from '../utils/recipeIngredientNutrition';
 import { RecipeMakeItOverlay } from '../components/RecipeMakeItOverlay';
 import './RecipeDetailPage.css';
 
@@ -86,6 +90,11 @@ function RecipeDetailPage() {
     [measurements]
   );
 
+  const recipeTotalKcalDisplay = useMemo(
+    () => formatRecipeTotalKcalDisplay(recipe?.ingredients, 1),
+    [recipe?.ingredients]
+  );
+
   const makeItIngredients = useMemo(() => {
     if (!recipe?.ingredients?.length) return [];
     return recipe.ingredients.map((row) => {
@@ -98,6 +107,7 @@ function RecipeDetailPage() {
       const measure = row.measurement_name || '';
       const part = [qty, measure].filter(Boolean).join(' ');
       line += part ? `${part} ${name}` : name;
+      line += formatRecipeIngredientNutritionSuffix(row);
       if (row.comment) line += ` — ${row.comment}`;
       return { id: row.ingredient_id, line };
     });
@@ -557,19 +567,26 @@ function RecipeDetailPage() {
                 </div>
 
                 <div className="recipe-ingredients-section">
-                  <div className="form-row recipe-servings-row">
-                    <label>Servings</label>
-                    <input
-                      type="number"
-                      min={1}
-                      value={form.servings}
-                      onChange={(e) => setForm((f) => ({ ...f, servings: e.target.value }))}
-                    />
+                  <div className="form-row recipe-servings-row recipe-servings-with-total">
+                    <div className="recipe-servings-input-wrap">
+                      <label>Servings</label>
+                      <input
+                        type="number"
+                        min={1}
+                        value={form.servings}
+                        onChange={(e) => setForm((f) => ({ ...f, servings: e.target.value }))}
+                      />
+                    </div>
+                    {recipeTotalKcalDisplay != null ? (
+                      <span className="recipe-total-kcal">{recipeTotalKcalDisplay}</span>
+                    ) : null}
                   </div>
                   <h2>Ingredients</h2>
                   {recipe.ingredients && recipe.ingredients.length > 0 ? (
                     <ul className="recipe-ingredients-list">
-                      {recipe.ingredients.map((row) => (
+                      {recipe.ingredients.map((row) => {
+                        const nutritionSuffix = formatRecipeIngredientNutritionSuffix(row);
+                        return (
                         <li key={row.ingredient_id} className="recipe-ingredient-row">
                           {editingIngredientId === row.ingredient_id ? (
                             <div className="ingredient-edit-inline">
@@ -615,6 +632,9 @@ function RecipeDetailPage() {
                               <span className="ingredient-line">
                                 {row.is_optional && <span className="ingredient-optional">Optional: </span>}
                                 {formatIngredientLine(row)}
+                                {nutritionSuffix ? (
+                                  <span className="ingredient-nutrition-meta">{nutritionSuffix}</span>
+                                ) : null}
                                 {row.comment && <span className="ingredient-comment"> — {row.comment}</span>}
                               </span>
                               <button type="button" className="btn-edit-ingredient" onClick={() => startEditIngredient(row)} title="Edit">Edit</button>
@@ -622,7 +642,8 @@ function RecipeDetailPage() {
                             </>
                           )}
                         </li>
-                      ))}
+                        );
+                      })}
                     </ul>
                   ) : (
                     <p className="recipe-no-ingredients">No ingredients yet.</p>
@@ -704,19 +725,30 @@ function RecipeDetailPage() {
             ) : (
               <>
                 <div className="recipe-ingredients-section">
-                  <p className="recipe-servings-display">Servings: {recipe.servings}</p>
+                  <p className="recipe-servings-display">
+                    <span>Servings: {recipe.servings}</span>
+                    {recipeTotalKcalDisplay != null ? (
+                      <span className="recipe-total-kcal">{recipeTotalKcalDisplay}</span>
+                    ) : null}
+                  </p>
                   <h2>Ingredients</h2>
                   {recipe.ingredients && recipe.ingredients.length > 0 ? (
                     <ul className="recipe-ingredients-list">
-                      {recipe.ingredients.map((row) => (
+                      {recipe.ingredients.map((row) => {
+                        const nutritionSuffix = formatRecipeIngredientNutritionSuffix(row);
+                        return (
                         <li key={row.ingredient_id} className="recipe-ingredient-row">
                           <span className="ingredient-line">
                             {row.is_optional && <span className="ingredient-optional">Optional: </span>}
                             {formatIngredientLine(row)}
+                            {nutritionSuffix ? (
+                              <span className="ingredient-nutrition-meta">{nutritionSuffix}</span>
+                            ) : null}
                             {row.comment && <span className="ingredient-comment"> — {row.comment}</span>}
                           </span>
                         </li>
-                      ))}
+                        );
+                      })}
                     </ul>
                   ) : (
                     <p className="recipe-no-ingredients">No ingredients yet.</p>
