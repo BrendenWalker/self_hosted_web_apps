@@ -1,6 +1,7 @@
 const express = require('express');
 const cors = require('cors');
 const { createDbPool, testConnection } = require('../../common/database/db-config');
+const { recipeLineGrams, recipeLineKcal } = require('./recipeIngredientLine');
 require('dotenv').config();
 
 const app = express();
@@ -1329,15 +1330,32 @@ app.get('/api/recipes/:id', async (req, res) => {
     const ingResult = await pool.query(
       `SELECT ri.ingredient_id, ri.qty, ri.measurement_id, ri.comment, ri.is_optional,
               i.name as ingredient_name, i.details as ingredient_details, i.shopping_measure,
-              m.name as measurement_name
+              i.kcal, i.kcal_qty, i.kcal_measurement_id, i.ingredient_unit_grams, i.shopping_measure_grams,
+              m.name as measurement_name,
+              m.to_grams as measurement_to_grams,
+              km.name as kcal_measurement_name,
+              km.to_grams as kcal_measurement_to_grams
        FROM recipe.recipe_ingredients ri
        JOIN items i ON ri.ingredient_id = i.id
        LEFT JOIN common.measurements m ON ri.measurement_id = m.id
+       LEFT JOIN common.measurements km ON i.kcal_measurement_id = km.id
        WHERE ri.recipe_id = $1
        ORDER BY i.name`,
       [req.params.id]
     );
-    recipe.ingredients = ingResult.rows;
+    recipe.ingredients = ingResult.rows.map((r) => ({
+      ingredient_id: r.ingredient_id,
+      qty: r.qty,
+      measurement_id: r.measurement_id,
+      comment: r.comment,
+      is_optional: r.is_optional,
+      ingredient_name: r.ingredient_name,
+      ingredient_details: r.ingredient_details,
+      shopping_measure: r.shopping_measure,
+      measurement_name: r.measurement_name,
+      line_grams: recipeLineGrams(r),
+      line_kcal: recipeLineKcal(r),
+    }));
     res.json(recipe);
   } catch (error) {
     console.error('Error fetching recipe:', error);

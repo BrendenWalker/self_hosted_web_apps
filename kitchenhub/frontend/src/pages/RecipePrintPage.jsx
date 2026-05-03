@@ -4,6 +4,10 @@ import { getRecipe } from '../api/api';
 import { formatRecipeQuantity } from '../utils/recipeQuantity';
 import { parseRecipeSteps } from '../utils/recipeSteps';
 import { itemDisplayName } from '../utils/shoppingQuantity';
+import {
+  formatRecipeIngredientNutritionSuffix,
+  formatRecipeTotalKcalDisplay,
+} from '../utils/recipeIngredientNutrition';
 import './RecipePrintPage.css';
 
 const RECIPE_SCALE_OPTIONS = [0.5, 1, 2, 3, 4, 5];
@@ -71,11 +75,17 @@ function RecipePrintPage() {
       const measure = row.measurement_name || '';
       const prefix = row.is_optional ? 'Optional: ' : '';
       const main = [qty, measure].filter(Boolean).join(' ');
-      let line = `${prefix}${main ? `${main} ` : ''}${name}`;
+      const nutrition = formatRecipeIngredientNutritionSuffix(row, scale);
+      let line = `${prefix}${main ? `${main} ` : ''}${name}${nutrition}`;
       if (row.comment) line += ` - ${row.comment}`;
       return { id: row.ingredient_id, line };
     });
   }, [recipe, scale]);
+
+  const printTotalKcalDisplay = useMemo(
+    () => formatRecipeTotalKcalDisplay(recipe?.ingredients, scale),
+    [recipe?.ingredients, scale]
+  );
 
   const steps = useMemo(
     () => (recipe?.instructions ? parseRecipeSteps(recipe.instructions) : []),
@@ -142,7 +152,12 @@ function RecipePrintPage() {
       <article className="recipe-print-document">
         <h1>{recipe.name}</h1>
         <p className="recipe-print-meta">
-          Servings: {formatRecipeQuantity((recipe.servings || 1) * scale)}
+          <span className="recipe-print-meta-servings-kcal">
+            <span>Servings: {formatRecipeQuantity((recipe.servings || 1) * scale)}</span>
+            {printTotalKcalDisplay != null ? (
+              <span className="recipe-print-total-kcal">{printTotalKcalDisplay}</span>
+            ) : null}
+          </span>
           {' | '}
           Categories: {recipe.category_names || 'Uncategorized'}
           {' | '}

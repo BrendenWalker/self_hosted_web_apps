@@ -240,10 +240,35 @@
   max-width: 180px;
 }
 
+.recipe-detail-form .form-row.recipe-servings-with-total {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 0.75rem 1.25rem;
+  max-width: none;
+}
+
+.recipe-detail-form .recipe-servings-input-wrap {
+  max-width: 180px;
+  flex: 0 1 auto;
+}
+
 .recipe-servings-display {
   margin: 0 0 0.5rem 0;
   color: #555;
   font-size: 0.95rem;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.75rem 1.25rem;
+}
+
+.recipe-total-kcal {
+  color: #5d6d7e;
+  font-size: 0.95rem;
+  font-weight: 600;
 }
 
 .recipe-ingredients-section h2 {
@@ -283,6 +308,12 @@
 .ingredient-comment {
   color: #666;
   font-size: 0.9rem;
+}
+
+.ingredient-nutrition-meta {
+  color: #5d6d7e;
+  font-size: 0.88rem;
+  font-weight: 500;
 }
 
 .ingredient-shopping-measure {
