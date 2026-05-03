@@ -5,6 +5,7 @@ import {
   buildRecipeShoppingListNoticeText,
   recipeShoppingListNoticeClassName,
 } from '../utils/recipeShoppingListNotice';
+import { formatRecipeKcalPerServingDisplay } from '../utils/recipeIngredientNutrition';
 import './RecipesPage.css';
 
 const RECIPE_SCALE_OPTIONS = [
@@ -149,7 +150,9 @@ function RecipesPage() {
         </div>
       ) : (
         <ul className="recipes-list">
-          {filteredRecipes.map((r) => (
+          {filteredRecipes.map((r) => {
+            const kcalPerServing = formatRecipeKcalPerServingDisplay(r.recipe_total_kcal, r.servings);
+            return (
             <li key={r.id} className="recipe-list-item">
               <div className="recipe-card-wrap">
                 <Link to={`/recipes/${r.id}`} className="recipe-card">
@@ -157,7 +160,10 @@ function RecipesPage() {
                     {r.name}
                     {r.planned_at ? <span className="recipe-planned-badge" title="On upcoming meals list">Upcoming</span> : null}
                   </span>
-                  <span className="recipe-card-meta">{r.category_names || 'Uncategorized'} · {r.servings} servings</span>
+                  <span className="recipe-card-meta">
+                    {r.category_names || 'Uncategorized'} · {r.servings} servings
+                    {kcalPerServing != null ? <> · {kcalPerServing}</> : null}
+                  </span>
                 </Link>
                 <button
                   type="button"
@@ -184,7 +190,8 @@ function RecipesPage() {
                 </label>
               </div>
             </li>
-          ))}
+            );
+          })}
         </ul>
       )}
     </div>

@@ -13,6 +13,18 @@ describe('recipeIngredientLine', () => {
     expect(recipeLineGrams(row)).toBe(30);
   });
 
+  it('recipeLineGrams works without measurement_id when name and to_grams are present', () => {
+    const row = {
+      qty: 2,
+      measurement_id: null,
+      measurement_name: 'tbsp',
+      measurement_to_grams: 15,
+      ingredient_unit_grams: null,
+      shopping_measure_grams: null,
+    };
+    expect(recipeLineGrams(row)).toBe(30);
+  });
+
   it('recipeLineKcal scales by recipe qty when nutrition uses the same measurement', () => {
     const row = {
       kcal: 89,

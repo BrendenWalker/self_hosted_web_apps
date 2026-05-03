@@ -1292,7 +1292,43 @@ app.get('/api/recipes', async (req, res) => {
     }
     query += plannedOnly ? ' ORDER BY planned_at ASC NULLS LAST, r.name' : ' ORDER BY r.name';
     const result = await pool.query(query, params);
-    res.json(result.rows);
+    const rows = result.rows;
+    const recipeIds = rows.map((row) => row.id).filter((id) => Number.isInteger(id) && id > 0);
+    if (recipeIds.length > 0) {
+      const ingResult = await pool.query(
+        `SELECT ri.recipe_id, ri.ingredient_id, ri.qty, ri.measurement_id, ri.comment, ri.is_optional,
+                i.name as ingredient_name, i.details as ingredient_details, i.shopping_measure,
+                i.kcal, i.kcal_qty, i.kcal_measurement_id, i.ingredient_unit_grams, i.shopping_measure_grams,
+                m.name as measurement_name,
+                m.to_grams as measurement_to_grams,
+                km.name as kcal_measurement_name,
+                km.to_grams as kcal_measurement_to_grams
+         FROM recipe.recipe_ingredients ri
+         JOIN items i ON ri.ingredient_id = i.id
+         LEFT JOIN common.measurements m ON ri.measurement_id = m.id
+         LEFT JOIN common.measurements km ON i.kcal_measurement_id = km.id
+         WHERE ri.recipe_id = ANY($1::int[])`,
+        [recipeIds]
+      );
+      const totalsByRecipe = new Map();
+      for (const r of ingResult.rows) {
+        const lineKcal = recipeLineKcal(r);
+        if (lineKcal == null || !Number.isFinite(lineKcal)) continue;
+        const rid = Number(r.recipe_id);
+        totalsByRecipe.set(rid, (totalsByRecipe.get(rid) || 0) + lineKcal);
+      }
+      for (const row of rows) {
+        const id = Number(row.id);
+        row.recipe_total_kcal = totalsByRecipe.has(id)
+          ? Math.round(totalsByRecipe.get(id))
+          : null;
+      }
+    } else {
+      for (const row of rows) {
+        row.recipe_total_kcal = null;
+      }
+    }
+    res.json(rows);
   } catch (error) {
     console.error('Error fetching recipes:', error);
     res.status(500).json({ error: 'Failed to fetch recipes' });
@@ -1343,19 +1379,31 @@ app.get('/api/recipes/:id', async (req, res) => {
        ORDER BY i.name`,
       [req.params.id]
     );
-    recipe.ingredients = ingResult.rows.map((r) => ({
-      ingredient_id: r.ingredient_id,
-      qty: r.qty,
-      measurement_id: r.measurement_id,
-      comment: r.comment,
-      is_optional: r.is_optional,
-      ingredient_name: r.ingredient_name,
-      ingredient_details: r.ingredient_details,
-      shopping_measure: r.shopping_measure,
-      measurement_name: r.measurement_name,
-      line_grams: recipeLineGrams(r),
-      line_kcal: recipeLineKcal(r),
-    }));
+    let recipeTotalKcal = 0;
+    let recipeTotalKcalLines = 0;
+    recipe.ingredients = ingResult.rows.map((r) => {
+      const lineGrams = recipeLineGrams(r);
+      const lineKcal = recipeLineKcal(r);
+      if (lineKcal != null && Number.isFinite(lineKcal)) {
+        recipeTotalKcal += lineKcal;
+        recipeTotalKcalLines += 1;
+      }
+      return {
+        ingredient_id: r.ingredient_id,
+        qty: r.qty,
+        measurement_id: r.measurement_id,
+        comment: r.comment,
+        is_optional: r.is_optional,
+        ingredient_name: r.ingredient_name,
+        ingredient_details: r.ingredient_details,
+        shopping_measure: r.shopping_measure,
+        measurement_name: r.measurement_name,
+        line_grams: lineGrams,
+        line_kcal: lineKcal,
+      };
+    });
+    recipe.recipe_total_kcal =
+      recipeTotalKcalLines > 0 ? Math.round(recipeTotalKcal) : null;
     res.json(recipe);
   } catch (error) {
     console.error('Error fetching recipe:', error);
