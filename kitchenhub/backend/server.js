@@ -1510,6 +1510,7 @@ app.get('/api/meal-planner', async (req, res) => {
       const hasMealServings = mealCols.has('servings');
       const hasLeftoverFrom = mealCols.has('leftover_from_meal_id');
       const hasLeftoverServings = mealCols.has('leftover_servings');
+      const hasShopSync = mealCols.has('ingredients_added_to_shopping_at');
       const mealsResult = await pool.query(
         `SELECT ${
           hasMealId ? 'm.id' : 'NULL'
@@ -1519,7 +1520,10 @@ app.get('/api/meal-planner', async (req, res) => {
                 r.id AS recipe_id, r.name AS recipe_name, r.servings AS recipe_servings,
                 ${hasMealServings ? 'm.servings' : 'NULL'}::integer AS meal_servings,
                 ${hasLeftoverFrom ? 'm.leftover_from_meal_id' : 'NULL'}::integer AS leftover_from_meal_id,
-                ${hasLeftoverServings ? 'm.leftover_servings' : 'NULL'}::numeric AS leftover_servings
+                ${hasLeftoverServings ? 'm.leftover_servings' : 'NULL'}::numeric AS leftover_servings,
+                ${
+                  hasShopSync ? 'm.ingredients_added_to_shopping_at' : 'NULL::timestamptz'
+                } AS ingredients_added_to_shopping_at
          FROM mealplanner.meals m
          JOIN recipe.recipe r ON r.id = m.recipe_id
          WHERE m.meal_date::date BETWEEN $1::date AND $2::date
@@ -1570,6 +1574,7 @@ app.get('/api/meal-planner', async (req, res) => {
           leftover_from_meal_id: row.leftover_from_meal_id ?? null,
           leftover_servings:
             row.leftover_servings != null ? parseFloat(row.leftover_servings) : null,
+          ingredients_added_to_shopping_at: row.ingredients_added_to_shopping_at ?? null,
         });
       }
     }
@@ -1776,13 +1781,15 @@ app.patch('/api/meal-planner/servings', async (req, res) => {
     }
 
     const mealDateText = formatDateOnly(mealDate);
+    const hasShopSync = mealCols.has('ingredients_added_to_shopping_at');
+    const shopClear = hasShopSync ? ', ingredients_added_to_shopping_at = NULL' : '';
     const updateSql = mealCols.has('modified')
       ? `UPDATE mealplanner.meals
-         SET servings = $3, modified = CURRENT_TIMESTAMP
+         SET servings = $3, modified = CURRENT_TIMESTAMP${shopClear}
          WHERE meal_date::date = $1::date AND meal_slot_id = $2
          RETURNING recipe_id, servings`
       : `UPDATE mealplanner.meals
-         SET servings = $3
+         SET servings = $3${shopClear}
          WHERE meal_date::date = $1::date AND meal_slot_id = $2
          RETURNING recipe_id, servings`;
     const result = await pool.query(updateSql, [mealDateText, slotId, servings]);
@@ -1952,6 +1959,90 @@ app.post('/api/meal-planner/leftovers/auto-link', async (req, res) => {
   }
 });
 
+/** Add non-optional recipe lines to shopping list (items.qty in grams). */
+async function addRecipeIngredientsToShoppingListTx(client, recipeId, scale) {
+  const lines = await client.query(
+    `SELECT ri.ingredient_id, ri.qty, ri.is_optional, ri.measurement_id,
+            im.name AS measurement_name, im.to_grams,
+            i.name AS ingredient_name,
+            i.ingredient_unit_grams, i.shopping_measure_grams
+     FROM recipe.recipe_ingredients ri
+     LEFT JOIN common.measurements im ON ri.measurement_id = im.id
+     JOIN items i ON ri.ingredient_id = i.id
+     WHERE ri.recipe_id = $1`,
+    [recipeId]
+  );
+  const added = [];
+  const skipped = [];
+  const skip = (row, reason, detail = {}) => {
+    skipped.push({
+      ingredient_id: row.ingredient_id,
+      ingredient_name: row.ingredient_name,
+      reason,
+      ...detail,
+    });
+  };
+  for (const row of lines.rows) {
+    if (row.is_optional) {
+      skip(row, 'optional');
+      continue;
+    }
+    const qtyBase = row.qty != null ? Number(row.qty) : 0;
+    const qty = qtyBase * scale;
+    if (qty <= 0) {
+      skip(row, 'no_qty', { qty: row.qty, scale });
+      continue;
+    }
+    if (!row.measurement_id) {
+      skip(row, 'no_measurement', { measurement_id: row.measurement_id });
+      continue;
+    }
+    const unitName = (row.measurement_name || '').trim().toLowerCase();
+    let grams;
+    if (unitName === 'each') {
+      const g = row.ingredient_unit_grams != null ? Number(row.ingredient_unit_grams) : NaN;
+      if (Number.isNaN(g) || g <= 0) {
+        skip(row, 'no_ingredient_unit_grams', { ingredient_unit_grams: row.ingredient_unit_grams });
+        continue;
+      }
+      grams = qty * g;
+    } else if (unitName === 'shopping unit') {
+      const g = row.shopping_measure_grams != null ? Number(row.shopping_measure_grams) : NaN;
+      if (Number.isNaN(g) || g <= 0) {
+        skip(row, 'no_shopping_measure_grams', { shopping_measure_grams: row.shopping_measure_grams });
+        continue;
+      }
+      grams = qty * g;
+    } else {
+      const toGrams = row.to_grams != null ? Number(row.to_grams) : NaN;
+      if (Number.isNaN(toGrams) || toGrams <= 0) {
+        skip(row, 'no_to_grams', {
+          measurement_name: row.measurement_name,
+          to_grams: row.to_grams,
+        });
+        continue;
+      }
+      grams = qty * toGrams;
+    }
+    const upd = await client.query(
+      `UPDATE items SET qty = COALESCE(qty, 0) + $1 WHERE id = $2 RETURNING id, name, qty`,
+      [grams, row.ingredient_id]
+    );
+    if (upd.rows.length === 0) {
+      skip(row, 'item_not_found');
+      continue;
+    }
+    added.push({
+      item_id: row.ingredient_id,
+      name: upd.rows[0].name,
+      scale,
+      grams_added: grams,
+      qty_after: upd.rows[0].qty,
+    });
+  }
+  return { added, skipped };
+}
+
 // Add recipe ingredients to shopping list: resolve grams per line (Each, Shopping Unit, or to_grams)
 app.post('/api/recipes/:id/shopping-list', async (req, res) => {
   const recipeId = parseInt(req.params.id, 10);
@@ -1970,85 +2061,7 @@ app.post('/api/recipes/:id/shopping-list', async (req, res) => {
       await client.query('ROLLBACK');
       return res.status(404).json({ error: 'Recipe not found' });
     }
-    const lines = await client.query(
-      `SELECT ri.ingredient_id, ri.qty, ri.is_optional, ri.measurement_id,
-              im.name AS measurement_name, im.to_grams,
-              i.name AS ingredient_name,
-              i.ingredient_unit_grams, i.shopping_measure_grams
-       FROM recipe.recipe_ingredients ri
-       LEFT JOIN common.measurements im ON ri.measurement_id = im.id
-       JOIN items i ON ri.ingredient_id = i.id
-       WHERE ri.recipe_id = $1`,
-      [recipeId]
-    );
-    const added = [];
-    const skipped = [];
-    const skip = (row, reason, detail = {}) => {
-      skipped.push({
-        ingredient_id: row.ingredient_id,
-        ingredient_name: row.ingredient_name,
-        reason,
-        ...detail,
-      });
-    };
-    for (const row of lines.rows) {
-      if (row.is_optional) {
-        skip(row, 'optional');
-        continue;
-      }
-      const qtyBase = row.qty != null ? Number(row.qty) : 0;
-      const qty = qtyBase * scale;
-      if (qty <= 0) {
-        skip(row, 'no_qty', { qty: row.qty, scale });
-        continue;
-      }
-      if (!row.measurement_id) {
-        skip(row, 'no_measurement', { measurement_id: row.measurement_id });
-        continue;
-      }
-      const unitName = (row.measurement_name || '').trim().toLowerCase();
-      let grams;
-      if (unitName === 'each') {
-        const g = row.ingredient_unit_grams != null ? Number(row.ingredient_unit_grams) : NaN;
-        if (Number.isNaN(g) || g <= 0) {
-          skip(row, 'no_ingredient_unit_grams', { ingredient_unit_grams: row.ingredient_unit_grams });
-          continue;
-        }
-        grams = qty * g;
-      } else if (unitName === 'shopping unit') {
-        const g = row.shopping_measure_grams != null ? Number(row.shopping_measure_grams) : NaN;
-        if (Number.isNaN(g) || g <= 0) {
-          skip(row, 'no_shopping_measure_grams', { shopping_measure_grams: row.shopping_measure_grams });
-          continue;
-        }
-        grams = qty * g;
-      } else {
-        const toGrams = row.to_grams != null ? Number(row.to_grams) : NaN;
-        if (Number.isNaN(toGrams) || toGrams <= 0) {
-          skip(row, 'no_to_grams', {
-            measurement_name: row.measurement_name,
-            to_grams: row.to_grams,
-          });
-          continue;
-        }
-        grams = qty * toGrams;
-      }
-      const upd = await client.query(
-        `UPDATE items SET qty = COALESCE(qty, 0) + $1 WHERE id = $2 RETURNING id, name, qty`,
-        [grams, row.ingredient_id]
-      );
-      if (upd.rows.length === 0) {
-        skip(row, 'item_not_found');
-        continue;
-      }
-      added.push({
-        item_id: row.ingredient_id,
-        name: upd.rows[0].name,
-        scale,
-        grams_added: grams,
-        qty_after: upd.rows[0].qty,
-      });
-    }
+    const { added, skipped } = await addRecipeIngredientsToShoppingListTx(client, recipeId, scale);
     await client.query(
       `INSERT INTO mealplanner.meals (meal_date, meal_slot_id, recipe_id)
        VALUES (now(), 4, $1)`,
@@ -2060,6 +2073,107 @@ app.post('/api/recipes/:id/shopping-list', async (req, res) => {
     await client.query('ROLLBACK');
     console.error('Error adding recipe to shopping list:', error);
     res.status(500).json({ error: 'Failed to add recipe to shopping list', message: error.message });
+  } finally {
+    client.release();
+  }
+});
+
+app.post('/api/meal-planner/add-to-shopping-list', async (req, res) => {
+  const startDate = req.body?.start ? parseDateOnly(req.body.start) : null;
+  if (!startDate) {
+    return res.status(400).json({ error: 'start must be YYYY-MM-DD (week start)' });
+  }
+  const userScale = normalizeRecipeScale(req.body?.scale);
+  if (userScale == null) {
+    return res.status(400).json({ error: 'scale must be one of: 0.5, 1, 2, 3, 4, 5' });
+  }
+  const weekStart = formatDateOnly(startDate);
+  const endDt = new Date(startDate);
+  endDt.setUTCDate(endDt.getUTCDate() + 6);
+  const weekEnd = formatDateOnly(endDt);
+
+  const mealColsResult = await pool.query(
+    `SELECT column_name
+     FROM information_schema.columns
+     WHERE table_schema = 'mealplanner' AND table_name = 'meals'`
+  );
+  const mealCols = new Set((mealColsResult.rows || []).map((r) => r.column_name));
+  const hasMealId = mealCols.has('id');
+  const hasMealServings = mealCols.has('servings');
+  const hasShopSync = mealCols.has('ingredients_added_to_shopping_at');
+  const unsyncedFilter = hasShopSync ? 'AND m.ingredients_added_to_shopping_at IS NULL' : '';
+
+  const mealsSql = `SELECT ${
+    hasMealId ? 'm.id' : 'NULL::integer'
+  } AS meal_id,
+          (m.meal_date::date)::text AS meal_day,
+          COALESCE(m.meal_slot_id, 4)::integer AS meal_slot_id,
+          m.recipe_id,
+          ${hasMealServings ? 'm.servings' : 'NULL::integer'} AS meal_servings_col,
+          r.servings AS recipe_servings
+     FROM mealplanner.meals m
+     JOIN recipe.recipe r ON r.id = m.recipe_id
+     WHERE m.meal_date::date BETWEEN $1::date AND $2::date
+     ${unsyncedFilter}
+     ORDER BY m.meal_date, m.meal_slot_id`;
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const mealsResult = await client.query(mealsSql, [weekStart, weekEnd]);
+    const mealsProcessed = [];
+    let allAdded = [];
+    let allSkipped = [];
+    for (const meal of mealsResult.rows) {
+      const recipeServings = Math.max(1, Number(meal.recipe_servings) || 1);
+      const mealServings =
+        meal.meal_servings_col != null && Number(meal.meal_servings_col) > 0
+          ? Number(meal.meal_servings_col)
+          : recipeServings;
+      const lineScale = (mealServings / recipeServings) * userScale;
+      const { added, skipped } = await addRecipeIngredientsToShoppingListTx(
+        client,
+        meal.recipe_id,
+        lineScale
+      );
+      allAdded = allAdded.concat(added);
+      allSkipped = allSkipped.concat(skipped);
+      if (hasShopSync && added.length > 0) {
+        if (meal.meal_id != null) {
+          await client.query(
+            `UPDATE mealplanner.meals SET ingredients_added_to_shopping_at = now() WHERE id = $1`,
+            [meal.meal_id]
+          );
+        } else {
+          await client.query(
+            `UPDATE mealplanner.meals SET ingredients_added_to_shopping_at = now()
+             WHERE meal_date::date = $1::date AND meal_slot_id = $2`,
+            [meal.meal_day, meal.meal_slot_id]
+          );
+        }
+      }
+      mealsProcessed.push({
+        meal_id: meal.meal_id,
+        meal_date: meal.meal_day,
+        meal_slot_id: meal.meal_slot_id,
+        recipe_id: meal.recipe_id,
+        line_scale: lineScale,
+        added_count: added.length,
+        skipped_count: skipped.length,
+      });
+    }
+    await client.query('COMMIT');
+    res.status(201).json({
+      start_date: weekStart,
+      end_date: weekEnd,
+      scale: userScale,
+      meals: mealsProcessed,
+      added: allAdded,
+      skipped: allSkipped,
+    });
+  } catch (error) {
+    await client.query('ROLLBACK');
+    console.error('Error adding meal planner to shopping list:', error);
+    res.status(500).json({ error: 'Failed to add meal planner to shopping list', message: error.message });
   } finally {
     client.release();
   }

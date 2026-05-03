@@ -1,8 +1,17 @@
 import React from 'react';
-import { vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { vi, beforeAll, afterAll } from 'vitest';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import UpcomingMealsPage from './UpcomingMealsPage';
+
+beforeAll(() => {
+  vi.useFakeTimers({ toFake: ['Date'] });
+  vi.setSystemTime(new Date('2026-05-03T12:00:00Z'));
+});
+
+afterAll(() => {
+  vi.useRealTimers();
+});
 
 vi.mock('../api/api', () => ({
   getRecipes: vi.fn().mockResolvedValue({
@@ -26,6 +35,7 @@ vi.mock('../api/api', () => ({
                 name: 'Yummy Dish',
                 servings: 2,
                 kcal_per_serving: 650,
+                ingredients_added_to_shopping_at: '2026-04-27T12:00:00.000Z',
                 leftover_from_meal_id: 20,
                 leftover_source: {
                   meal_id: 20,
@@ -46,6 +56,9 @@ vi.mock('../api/api', () => ({
   updateMealPlannerServings: vi.fn().mockResolvedValue({ data: {} }),
   updateMealPlannerSlotKcal: vi.fn().mockResolvedValue({ data: {} }),
   autoLinkMealPlannerLeftovers: vi.fn().mockResolvedValue({ data: { linked: [] } }),
+  addMealPlannerWeekToShoppingList: vi.fn().mockResolvedValue({
+    data: { added: 0, skipped: 0, meals: [] },
+  }),
 }));
 
 describe('UpcomingMealsPage', () => {
@@ -61,8 +74,25 @@ describe('UpcomingMealsPage', () => {
     expect(screen.getByText('650')).toBeInTheDocument();
     expect(screen.getByText(/Leftover from/i)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Auto-link leftovers/i })).toBeInTheDocument();
+    expect(screen.getByText('On list')).toBeInTheDocument();
 
     const overZone = container.querySelector('.meal-planner-dropzone-over');
     expect(overZone).toBeTruthy();
+  });
+
+  it('add week to shopping list calls API with week start', async () => {
+    const api = await import('../api/api');
+    render(
+      <MemoryRouter>
+        <UpcomingMealsPage />
+      </MemoryRouter>
+    );
+
+    await screen.findByText(/Total: 650 kcal\/serving/);
+    fireEvent.click(screen.getByRole('button', { name: /Add week to shopping list/i }));
+
+    await waitFor(() => {
+      expect(api.addMealPlannerWeekToShoppingList).toHaveBeenCalledWith('2026-04-27', 1);
+    });
   });
 });
