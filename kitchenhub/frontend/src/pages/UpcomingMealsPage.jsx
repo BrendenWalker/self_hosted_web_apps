@@ -28,6 +28,51 @@ function formatDateOnly(date) {
   return date.toISOString().slice(0, 10);
 }
 
+/** Local calendar “today” as YYYY-MM-DD (same basis as week navigation). */
+function plannerTodayStr() {
+  const n = new Date();
+  return formatDateOnly(new Date(Date.UTC(n.getFullYear(), n.getMonth(), n.getDate())));
+}
+
+function weekEndDateStr(weekStartStr) {
+  const start = parseDateOnly(weekStartStr);
+  if (!start) return null;
+  const end = new Date(start);
+  end.setUTCDate(end.getUTCDate() + 6);
+  return formatDateOnly(end);
+}
+
+function computeEligibleShopRange(weekStartStr) {
+  const start = parseDateOnly(weekStartStr);
+  if (!start) {
+    return { eligibleStart: null, eligibleEnd: null, coversFullWeek: false };
+  }
+  const todayStr = plannerTodayStr();
+  const weekEndStr = weekEndDateStr(weekStartStr);
+  let eligibleStart = null;
+  let eligibleEnd = null;
+  for (let i = 0; i < 7; i += 1) {
+    const d = new Date(start);
+    d.setUTCDate(d.getUTCDate() + i);
+    const ds = formatDateOnly(d);
+    if (ds > todayStr) {
+      if (!eligibleStart) eligibleStart = ds;
+      eligibleEnd = ds;
+    }
+  }
+  const coversFullWeek =
+    Boolean(eligibleStart && weekEndStr) &&
+    eligibleStart === formatDateOnly(start) &&
+    eligibleEnd === weekEndStr;
+  return { eligibleStart, eligibleEnd, coversFullWeek };
+}
+
+function formatMonthDaySlash(dateStr) {
+  const p = parseDateOnly(dateStr);
+  if (!p) return dateStr;
+  return p.toLocaleDateString(undefined, { month: 'numeric', day: 'numeric' });
+}
+
 function getWeekStart(date = new Date()) {
   const utc = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
   const day = utc.getUTCDay();
@@ -144,6 +189,32 @@ function UpcomingMealsPage() {
     return totals;
   }, [plannerDays]);
 
+  const addWeekShopButton = useMemo(() => {
+    const { eligibleStart, eligibleEnd, coversFullWeek } = computeEligibleShopRange(weekStart);
+    if (!eligibleStart || !eligibleEnd) {
+      return {
+        label: 'No future days in this week',
+        disabled: true,
+        title:
+          'Only days after today are added. Past days, today, and meals already on your shopping list are skipped.',
+      };
+    }
+    if (coversFullWeek) {
+      return {
+        label: 'Add week to shopping list',
+        disabled: false,
+        title:
+          'Adds planned meals for each day of this week that are not already on your shopping list (past and today are skipped).',
+      };
+    }
+    return {
+      label: `Add ${formatMonthDaySlash(eligibleStart)} - ${formatMonthDaySlash(eligibleEnd)} to shopping list`,
+      disabled: false,
+      title:
+        'Only future days in this week are included. Past, today, and meals already synced to the list are skipped.',
+    };
+  }, [weekStart]);
+
   const moveWeek = (days) => {
     const start = parseDateOnly(weekStart) || getWeekStart();
     start.setUTCDate(start.getUTCDate() + days);
@@ -230,16 +301,22 @@ function UpcomingMealsPage() {
     setShopNotice(null);
     setAddingWeekShop(true);
     try {
-      const res = await addMealPlannerWeekToShoppingList(weekStart, shopScale);
+      const res = await addMealPlannerWeekToShoppingList(weekStart, shopScale, plannerTodayStr());
       const data = res.data || {};
       const meals = data.meals || [];
       const withAdds = meals.filter((m) => m.added_count > 0).length;
       const skippedMeals = meals.length - withAdds;
-      setShopNotice(
-        `Shopping list: ${withAdds} meal${withAdds === 1 ? '' : 's'} updated` +
-          (skippedMeals ? ` (${skippedMeals} already added or had nothing to add)` : '') +
-          `.`
-      );
+      if (meals.length === 0) {
+        setShopNotice(
+          'Shopping list: nothing to add — no planned meals on future days in this week, or none left to sync.'
+        );
+      } else {
+        setShopNotice(
+          `Shopping list: ${withAdds} meal${withAdds === 1 ? '' : 's'} updated` +
+            (skippedMeals ? ` (${skippedMeals} skipped: already on list or nothing to add)` : '') +
+            '. Past and today are never added.'
+        );
+      }
       const plannerRes = await getMealPlanner(weekStart);
       setPlannerDays(plannerRes.data?.days || []);
     } catch (err) {
@@ -266,29 +343,35 @@ function UpcomingMealsPage() {
               <div className="meal-planner-week-label">{dayHeaderLabel(weekStart)} week</div>
               <button type="button" className="btn btn-secondary" onClick={() => moveWeek(7)}>Next week</button>
             </div>
-            <div className="meal-planner-bulk-shop">
-              <label className="meal-planner-bulk-shop-scale">
-                <span>List scale</span>
-                <select
-                  value={String(shopScale)}
-                  onChange={(e) => setShopScale(Number(e.target.value))}
-                  disabled={addingWeekShop || saving}
+            <div className="meal-planner-bulk-shop-wrap">
+              <div className="meal-planner-bulk-shop">
+                <label className="meal-planner-bulk-shop-scale">
+                  <span>List scale</span>
+                  <select
+                    value={String(shopScale)}
+                    onChange={(e) => setShopScale(Number(e.target.value))}
+                    disabled={addingWeekShop || saving}
+                  >
+                    {MEAL_PLAN_SHOP_SCALE_OPTIONS.map((v) => (
+                      <option key={v} value={String(v)}>
+                        {v === 1 ? '1×' : `${v}×`}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <button
+                  type="button"
+                  className="btn btn-primary"
+                  onClick={() => handleAddWeekToShoppingList()}
+                  disabled={addingWeekShop || saving || addWeekShopButton.disabled}
+                  title={addWeekShopButton.title}
                 >
-                  {MEAL_PLAN_SHOP_SCALE_OPTIONS.map((v) => (
-                    <option key={v} value={String(v)}>
-                      {v === 1 ? '1×' : `${v}×`}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <button
-                type="button"
-                className="btn btn-primary"
-                onClick={() => handleAddWeekToShoppingList()}
-                disabled={addingWeekShop || saving}
-              >
-                {addingWeekShop ? 'Adding…' : 'Add week to shopping list'}
-              </button>
+                  {addingWeekShop ? 'Adding…' : addWeekShopButton.label}
+                </button>
+              </div>
+              <p className="meal-planner-bulk-shop-hint">
+                Only days after today are added. Meals already on your shopping list stay skipped.
+              </p>
             </div>
           </div>
         </div>

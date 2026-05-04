@@ -72,6 +72,34 @@ function startOfWeekMondayUtc(date = new Date()) {
   return d;
 }
 
+/** Local-calendar YYYY-MM-DD when client does not send `today` (aligns with meal planner week strings). */
+function plannerTodayDefault() {
+  const n = new Date();
+  return formatDateOnly(new Date(Date.UTC(n.getFullYear(), n.getMonth(), n.getDate())));
+}
+
+/** First/last dates in the week strictly after `todayStr` (ISO); coversFullWeek if all seven days qualify. */
+function computeEligibleFutureRangeInWeek(startDate, todayStr) {
+  const weekStart = formatDateOnly(startDate);
+  const endD = new Date(startDate);
+  endD.setUTCDate(endD.getUTCDate() + 6);
+  const weekEnd = formatDateOnly(endD);
+  let eligibleStart = null;
+  let eligibleEnd = null;
+  for (let i = 0; i < 7; i += 1) {
+    const d = new Date(startDate);
+    d.setUTCDate(d.getUTCDate() + i);
+    const ds = formatDateOnly(d);
+    if (ds > todayStr) {
+      if (!eligibleStart) eligibleStart = ds;
+      eligibleEnd = ds;
+    }
+  }
+  const coversFullWeek =
+    Boolean(eligibleStart) && eligibleStart === weekStart && eligibleEnd === weekEnd;
+  return { eligibleStart, eligibleEnd, coversFullWeek, weekStart, weekEnd };
+}
+
 async function fetchMealSlotColumnSet(db = pool) {
   const slotColsResult = await db.query(
     `SELECT column_name
@@ -2406,10 +2434,26 @@ app.post('/api/meal-planner/add-to-shopping-list', async (req, res) => {
   if (userScale == null) {
     return res.status(400).json({ error: 'scale must be one of: 0.5, 1, 2, 3, 4, 5' });
   }
+  let todayStr = null;
+  if (typeof req.body?.today === 'string' && req.body.today.trim()) {
+    const parsedToday = parseDateOnly(req.body.today.trim());
+    if (parsedToday) {
+      todayStr = formatDateOnly(parsedToday);
+    }
+  }
+  if (!todayStr) {
+    todayStr = plannerTodayDefault();
+  }
+
   const weekStart = formatDateOnly(startDate);
   const endDt = new Date(startDate);
   endDt.setUTCDate(endDt.getUTCDate() + 6);
   const weekEnd = formatDateOnly(endDt);
+
+  const { eligibleStart, eligibleEnd, coversFullWeek } = computeEligibleFutureRangeInWeek(
+    startDate,
+    todayStr
+  );
 
   const mealColsResult = await pool.query(
     `SELECT column_name
@@ -2433,12 +2477,13 @@ app.post('/api/meal-planner/add-to-shopping-list', async (req, res) => {
      FROM mealplanner.meals m
      JOIN recipe.recipe r ON r.id = m.recipe_id
      WHERE m.meal_date::date BETWEEN $1::date AND $2::date
+     AND m.meal_date::date > $3::date
      ${unsyncedFilter}
      ORDER BY m.meal_date, m.meal_slot_id`;
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
-    const mealsResult = await client.query(mealsSql, [weekStart, weekEnd]);
+    const mealsResult = await client.query(mealsSql, [weekStart, weekEnd, todayStr]);
     const mealsProcessed = [];
     let allAdded = [];
     let allSkipped = [];
@@ -2484,6 +2529,10 @@ app.post('/api/meal-planner/add-to-shopping-list', async (req, res) => {
     res.status(201).json({
       start_date: weekStart,
       end_date: weekEnd,
+      today_date: todayStr,
+      eligible_start_date: eligibleStart,
+      eligible_end_date: eligibleEnd,
+      eligible_covers_full_week: coversFullWeek,
       scale: userScale,
       meals: mealsProcessed,
       added: allAdded,
