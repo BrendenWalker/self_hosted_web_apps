@@ -252,7 +252,7 @@ CI runs these tests on pull requests when `kitchenhub/**` changes.
 
 ## Database migrations
 
-Apply SQL files under `kitchenhub/database/migrations/` in order on existing databases (for example `013-measurements-rename-and-items-pack.sql` renames `common.ingredient_measurements` to `common.measurements` and adds pack-related columns on `items`; `015-mealplanner-recipe-queue-and-drop-planned-at.sql` migrates recipe queue timestamps into `mealplanner.meals.meal_date`). Fresh installs from `kitchenhub/database/schema.sql` already include those changes.
+Apply SQL files under `kitchenhub/database/migrations/` in order on existing databases (for example `013-measurements-rename-and-items-pack.sql` renames `common.ingredient_measurements` to `common.measurements` and adds pack-related columns on `items`; `015-mealplanner-recipe-queue-and-drop-planned-at.sql` migrates recipe queue timestamps into `mealplanner.meals.meal_date`; `020-recipe-ingredients-restrict-item-delete.sql` prevents deleting an `items` row that is still referenced from `recipe.recipe_ingredients`). Fresh installs from `kitchenhub/database/schema.sql` already include those changes.
 
 ## Notes
 

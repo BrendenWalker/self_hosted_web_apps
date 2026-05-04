@@ -120,7 +120,7 @@ CREATE INDEX IF NOT EXISTS idx_ingredients_measurement ON recipe.ingredients(mea
 
 CREATE TABLE IF NOT EXISTS recipe.recipe_ingredients (
     recipe_id INTEGER NOT NULL REFERENCES recipe.recipe(id) ON DELETE CASCADE,
-    ingredient_id INTEGER NOT NULL REFERENCES recipe.ingredients(id) ON DELETE CASCADE,
+    ingredient_id INTEGER NOT NULL REFERENCES items(id) ON DELETE RESTRICT,
     qty NUMERIC(10, 2),
     measurement_id INTEGER REFERENCES recipe.ingredient_measurement(id) ON DELETE SET NULL,
     comment VARCHAR(255),
