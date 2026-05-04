@@ -805,6 +805,9 @@ app.delete('/api/items/:id', async (req, res) => {
     res.json({ message: 'Item deleted successfully' });
   } catch (error) {
     console.error('Error deleting item:', error);
+    if (error.code === '23503') {
+      return res.status(400).json({ error: 'Cannot delete: item is used in one or more recipes' });
+    }
     res.status(500).json({ error: 'Failed to delete item' });
   }
 });
