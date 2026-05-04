@@ -6,7 +6,8 @@ import UpcomingMealsPage from './UpcomingMealsPage';
 
 beforeAll(() => {
   vi.useFakeTimers({ toFake: ['Date'] });
-  vi.setSystemTime(new Date('2026-05-03T12:00:00Z'));
+  // Wednesday 2026-04-29: week starting 2026-04-27 still has future days (after “today”).
+  vi.setSystemTime(new Date('2026-04-29T12:00:00Z'));
 });
 
 afterAll(() => {
@@ -89,10 +90,14 @@ describe('UpcomingMealsPage', () => {
     );
 
     await screen.findByText(/Total: 650 kcal\/serving/);
-    fireEvent.click(screen.getByRole('button', { name: /Add week to shopping list/i }));
+    fireEvent.click(screen.getByRole('button', { name: /to shopping list$/i }));
 
     await waitFor(() => {
-      expect(api.addMealPlannerWeekToShoppingList).toHaveBeenCalledWith('2026-04-27', 1);
+      expect(api.addMealPlannerWeekToShoppingList).toHaveBeenCalled();
+      const [startArg, scaleArg, todayArg] = api.addMealPlannerWeekToShoppingList.mock.calls[0];
+      expect(startArg).toBe('2026-04-27');
+      expect(scaleArg).toBe(1);
+      expect(todayArg).toMatch(/^\d{4}-\d{2}-\d{2}$/);
     });
   });
 });

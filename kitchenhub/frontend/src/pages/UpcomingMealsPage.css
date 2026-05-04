@@ -18,12 +18,28 @@
   gap: 0.55rem;
 }
 
+.meal-planner-bulk-shop-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.35rem;
+  max-width: 22rem;
+}
+
 .meal-planner-bulk-shop {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   justify-content: flex-end;
   gap: 0.5rem 0.75rem;
+}
+
+.meal-planner-bulk-shop-hint {
+  margin: 0;
+  font-size: 0.78rem;
+  color: #5a6a72;
+  line-height: 1.35;
+  text-align: right;
 }
 
 .meal-planner-bulk-shop-scale {
