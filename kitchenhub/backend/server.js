@@ -2463,8 +2463,10 @@ app.post('/api/meal-planner/add-to-shopping-list', async (req, res) => {
   const mealCols = new Set((mealColsResult.rows || []).map((r) => r.column_name));
   const hasMealId = mealCols.has('id');
   const hasMealServings = mealCols.has('servings');
+  const hasLeftoverFrom = mealCols.has('leftover_from_meal_id');
   const hasShopSync = mealCols.has('ingredients_added_to_shopping_at');
   const unsyncedFilter = hasShopSync ? 'AND m.ingredients_added_to_shopping_at IS NULL' : '';
+  const nonLeftoverFilter = hasLeftoverFrom ? 'AND m.leftover_from_meal_id IS NULL' : '';
 
   const mealsSql = `SELECT ${
     hasMealId ? 'm.id' : 'NULL::integer'
@@ -2478,6 +2480,7 @@ app.post('/api/meal-planner/add-to-shopping-list', async (req, res) => {
      JOIN recipe.recipe r ON r.id = m.recipe_id
      WHERE m.meal_date::date BETWEEN $1::date AND $2::date
      AND m.meal_date::date > $3::date
+     ${nonLeftoverFilter}
      ${unsyncedFilter}
      ORDER BY m.meal_date, m.meal_slot_id`;
   const client = await pool.connect();

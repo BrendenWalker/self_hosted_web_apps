@@ -27,6 +27,7 @@ function ShoppingListPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [itemFilter, setItemFilter] = useState('');
+  const [departmentFilter, setDepartmentFilter] = useState('');
   const [showItemForm, setShowItemForm] = useState(false);
   const [editingItem, setEditingItem] = useState(null);
   const [measurements, setMeasurements] = useState([]);
@@ -367,10 +368,16 @@ function ShoppingListPage() {
     }
   };
 
-  // Filter items by name only (department/category is for grouping, not search)
+  const parsedDepartmentFilter =
+    departmentFilter === '' ? null : Number.parseInt(departmentFilter, 10);
+
+  // Filter items by name and department.
   const filteredItems = items.filter((item) => {
     const searchText = itemFilter.toLowerCase();
-    return item.name.toLowerCase().includes(searchText);
+    const matchesName = item.name.toLowerCase().includes(searchText);
+    const matchesDepartment =
+      parsedDepartmentFilter == null || item.department === parsedDepartmentFilter;
+    return matchesName && matchesDepartment;
   });
 
   // Group items by department for better organization
@@ -575,6 +582,19 @@ function ShoppingListPage() {
               className="filter-input"
               autoFocus
             />
+            <select
+              value={departmentFilter}
+              onChange={(e) => setDepartmentFilter(e.target.value)}
+              className="filter-input"
+              aria-label="Filter items by department"
+            >
+              <option value="">All departments</option>
+              {departments.map((dept) => (
+                <option key={dept.id} value={dept.id}>
+                  {dept.name}
+                </option>
+              ))}
+            </select>
             <div className="filter-info">
               {filteredItems.length} item{filteredItems.length !== 1 ? 's' : ''} found
             </div>
@@ -586,7 +606,7 @@ function ShoppingListPage() {
             <div className="items-list-container">
               {filteredItems.length === 0 ? (
                 <div className="empty-message">
-                  {itemFilter ? 'No items match your search' : 'No items found'}
+                  {itemFilter || departmentFilter ? 'No items match your filters' : 'No items found'}
                 </div>
               ) : (
                 sortedDepartments.map(deptName => (
