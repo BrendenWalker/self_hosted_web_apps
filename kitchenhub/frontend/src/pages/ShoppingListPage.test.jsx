@@ -1,6 +1,6 @@
 import React from 'react';
 import { vi } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import * as api from '../api/api';
 import ShoppingListPage from './ShoppingListPage';
@@ -44,5 +44,39 @@ describe('ShoppingListPage', () => {
     await waitFor(() => {
       expect(screen.getByText('Milk')).toBeInTheDocument();
     });
+  });
+
+  it('filters item list by department', async () => {
+    vi.mocked(api.getItems).mockResolvedValue({
+      data: [
+        { id: 1, name: 'Milk', department: 1, department_name: 'Dairy' },
+        { id: 2, name: 'Bread', department: 2, department_name: 'Bakery' },
+      ],
+    });
+    vi.mocked(api.getDepartments).mockResolvedValue({
+      data: [
+        { id: 1, name: 'Dairy' },
+        { id: 2, name: 'Bakery' },
+      ],
+    });
+
+    render(
+      <MemoryRouter>
+        <ShoppingListPage />
+      </MemoryRouter>
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText('Milk')).toBeInTheDocument();
+      expect(screen.getByText('Bread')).toBeInTheDocument();
+    });
+
+    fireEvent.change(screen.getByLabelText(/filter items by department/i), {
+      target: { value: '1' },
+    });
+
+    expect(screen.getByText('Milk')).toBeInTheDocument();
+    expect(screen.queryByText('Bread')).not.toBeInTheDocument();
+    expect(screen.getByText('1 item found')).toBeInTheDocument();
   });
 });
