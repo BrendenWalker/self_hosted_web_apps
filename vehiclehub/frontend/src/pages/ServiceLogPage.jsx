@@ -1,11 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { getAllServiceLog, deleteServiceLogEntry, getServiceTypes } from '../api/api';
+import { getAllServiceLog, deleteServiceLogEntry, getServiceTypes, getVehicles } from '../api/api';
 import './ServiceLogPage.css';
 
 function ServiceLogPage() {
   const [serviceLog, setServiceLog] = useState([]);
   const [serviceTypes, setServiceTypes] = useState([]);
+  const [vehicles, setVehicles] = useState([]);
+  const [filterVehicleId, setFilterVehicleId] = useState('');
   const [filterServiceTypeId, setFilterServiceTypeId] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -17,12 +19,14 @@ function ServiceLogPage() {
   const loadData = async () => {
     setLoading(true);
     try {
-      const [logRes, typesRes] = await Promise.all([
+      const [logRes, typesRes, vehiclesRes] = await Promise.all([
         getAllServiceLog(),
-        getServiceTypes()
+        getServiceTypes(),
+        getVehicles()
       ]);
       setServiceLog(logRes.data || []);
       setServiceTypes(typesRes.data || []);
+      setVehicles(vehiclesRes.data || []);
       setError(null);
     } catch (err) {
       setError('Failed to load service log');
@@ -32,9 +36,17 @@ function ServiceLogPage() {
     }
   };
 
-  const filteredLog = [...(filterServiceTypeId
-    ? serviceLog.filter(entry => String(entry.serviceid) === String(filterServiceTypeId))
-    : serviceLog)].sort((a, b) => new Date(b.servicedate) - new Date(a.servicedate));
+  const filteredLog = [...serviceLog]
+    .filter(entry => {
+      if (filterVehicleId && String(entry.vehicleid) !== String(filterVehicleId)) {
+        return false;
+      }
+      if (filterServiceTypeId && String(entry.serviceid) !== String(filterServiceTypeId)) {
+        return false;
+      }
+      return true;
+    })
+    .sort((a, b) => new Date(b.servicedate) - new Date(a.servicedate));
 
   const handleDelete = async (entryId) => {
     if (!window.confirm('Are you sure you want to delete this service log entry?')) {
@@ -70,22 +82,37 @@ function ServiceLogPage() {
       {!loading && serviceLog.length > 0 && (
         <>
           <div className="service-log-filters">
-            <label htmlFor="filter-service-type">Filter by service type</label>
-            <select
-              id="filter-service-type"
-              value={filterServiceTypeId}
-              onChange={(e) => setFilterServiceTypeId(e.target.value)}
-            >
-              <option value="">All service types</option>
-              {serviceTypes.map(st => (
-                <option key={st.id} value={st.id}>{st.name}</option>
-              ))}
-            </select>
+            <div className="service-log-filter-field">
+              <label htmlFor="filter-vehicle">Vehicle</label>
+              <select
+                id="filter-vehicle"
+                value={filterVehicleId}
+                onChange={(e) => setFilterVehicleId(e.target.value)}
+              >
+                <option value="">All vehicles</option>
+                {vehicles.map(v => (
+                  <option key={v.id} value={v.id}>{v.name}</option>
+                ))}
+              </select>
+            </div>
+            <div className="service-log-filter-field">
+              <label htmlFor="filter-service-type">Service type</label>
+              <select
+                id="filter-service-type"
+                value={filterServiceTypeId}
+                onChange={(e) => setFilterServiceTypeId(e.target.value)}
+              >
+                <option value="">All service types</option>
+                {serviceTypes.map(st => (
+                  <option key={st.id} value={st.id}>{st.name}</option>
+                ))}
+              </select>
+            </div>
           </div>
 
           <div className="service-log-grid-wrapper">
             {filteredLog.length === 0 ? (
-              <div className="empty-filter-message">No entries match the selected service type.</div>
+              <div className="empty-filter-message">No entries match the selected filters.</div>
             ) : (
               <table className="service-log-grid">
                 <thead>
