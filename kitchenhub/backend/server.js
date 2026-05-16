@@ -1281,9 +1281,21 @@ app.delete('/api/ingredients/:id', async (req, res) => {
 
 // ==================== RECIPES ====================
 
+function parseRecipeCategoryFilterIds(query) {
+  const raw = query.category_ids ?? query.category_id;
+  if (raw == null || raw === '') return [];
+  const parts = Array.isArray(raw) ? raw : [raw];
+  const ids = parts
+    .flatMap((value) => String(value).split(','))
+    .map((value) => parseInt(String(value).trim(), 10))
+    .filter((id) => Number.isInteger(id) && id > 0);
+  return [...new Set(ids)];
+}
+
 app.get('/api/recipes', async (req, res) => {
   try {
-    const { category_id, planned, schedulable } = req.query;
+    const { planned, schedulable } = req.query;
+    const categoryIds = parseRecipeCategoryFilterIds(req.query);
     const plannedOnly =
       planned === '1' ||
       planned === 'true' ||
@@ -1307,8 +1319,8 @@ app.get('/api/recipes', async (req, res) => {
     `;
     const params = [];
     const where = [];
-    if (category_id != null && category_id !== '') {
-      params.push(category_id);
+    for (const categoryId of categoryIds) {
+      params.push(categoryId);
       where.push(
         `EXISTS (
            SELECT 1

@@ -11,6 +11,7 @@ import recipePdfData from './recipe-pdf-ingredients-data.mjs';
 import recipeOdtData from './recipe-odt-ingredients-data.mjs';
 import { normalizeIngredient } from './item-normalize.mjs';
 import { departmentSqlExpr } from './department-sql.mjs';
+import { escSql, trunc80, trunc255, mergeRecipeLines } from './sql-utils.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const TEXT_DIR = path.resolve(__dirname, '../Recipe/Text');
@@ -52,69 +53,6 @@ function listRecipeTextFiles() {
         .sort((a, b) => a.localeCompare(b))
     : [];
   return [...root, ...pdf, ...odt].sort((a, b) => a.localeCompare(b));
-}
-
-function escSql(s) {
-  if (s === null || s === undefined) return '';
-  // PostgreSQL rejects U+0000 in strings; drivers may surface this as "insufficient data left in message".
-  return String(s).replace(/\0/g, '').replace(/'/g, "''");
-}
-
-function trunc80(s) {
-  const t = String(s).trim();
-  return t.length <= 80 ? t : t.slice(0, 80);
-}
-
-function trunc255(s) {
-  const t = String(s).trim();
-  return t.length <= 255 ? t : t.slice(0, 255);
-}
-
-/**
- * @param {Array<{qty:number,meas:string,name:string,comment:string|null}>} rows
- */
-function mergeRecipeLines(rows) {
-  const byName = new Map();
-  for (const r of rows) {
-    if (!byName.has(r.name)) byName.set(r.name, []);
-    byName.get(r.name).push(r);
-  }
-  const out = [];
-  for (const [, list] of byName) {
-    if (list.length === 1) {
-      out.push(list[0]);
-      continue;
-    }
-    const byMeas = new Map();
-    for (const r of list) {
-      if (!byMeas.has(r.meas)) byMeas.set(r.meas, []);
-      byMeas.get(r.meas).push(r);
-    }
-    if (byMeas.size === 1) {
-      const meas = [...byMeas.keys()][0];
-      const sum = list.reduce((a, b) => a + Number(b.qty), 0);
-      const comments = list.map((x) => x.comment).filter(Boolean).join('; ');
-      out.push({
-        qty: Number(sum.toFixed(4)),
-        meas,
-        name: list[0].name,
-        comment: comments || null,
-      });
-    } else {
-      const first = list[0];
-      const parts = list.map(
-        (r) =>
-          `${r.qty} ${r.meas}${r.comment ? ` (${r.comment})` : ''}`
-      );
-      out.push({
-        qty: Number(first.qty),
-        meas: first.meas,
-        name: first.name,
-        comment: parts.join(' + '),
-      });
-    }
-  }
-  return out;
 }
 
 const files = listRecipeTextFiles();
