@@ -17,6 +17,10 @@ build/
 # Generated USDA bootstrap SQL (run database/scripts/bootstrap-usda-commodities.mjs)
 database/sql/bootstrap-usda-items.sql
 
+# Interactive recipe ingest inbox (see RecipeImportTooling/recipes-inbox/)
+RecipeImportTooling/recipes-inbox/*.txt
+RecipeImportTooling/recipes-inbox/parsed-*.json
+
 # IDE
 .vscode/
 .idea/

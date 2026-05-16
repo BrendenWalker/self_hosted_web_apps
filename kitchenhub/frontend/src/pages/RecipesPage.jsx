@@ -23,7 +23,7 @@ function RecipesPage() {
   const [categories, setCategories] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [categoryId, setCategoryId] = useState('');
+  const [selectedCategoryIds, setSelectedCategoryIds] = useState([]);
   const [recipeFilter, setRecipeFilter] = useState('');
   const [addingShopRecipeId, setAddingShopRecipeId] = useState(null);
   const [shopNotice, setShopNotice] = useState(null); // { text, className }
@@ -31,7 +31,7 @@ function RecipesPage() {
 
   useEffect(() => {
     loadRecipes();
-  }, [categoryId]);
+  }, [selectedCategoryIds]);
 
   useEffect(() => {
     loadCategories();
@@ -50,8 +50,9 @@ function RecipesPage() {
     setLoading(true);
     setError(null);
     try {
-      const id = categoryId === '' ? undefined : categoryId;
-      const res = await getRecipes(id);
+      const res = await getRecipes(
+        selectedCategoryIds.length > 0 ? selectedCategoryIds : undefined
+      );
       setRecipes(res.data);
     } catch (err) {
       const msg = err.response?.data?.error || err.message || 'Failed to load recipes';
@@ -81,6 +82,14 @@ function RecipesPage() {
     }
   };
 
+  const toggleCategoryFilter = (categoryId) => {
+    setSelectedCategoryIds((ids) =>
+      ids.includes(categoryId)
+        ? ids.filter((id) => id !== categoryId)
+        : [...ids, categoryId]
+    );
+  };
+
   const searchText = recipeFilter.trim().toLowerCase();
   const filteredRecipes = searchText
     ? recipes.filter((r) => {
@@ -94,20 +103,23 @@ function RecipesPage() {
       <header className="recipes-header">
         <h1>Recipes</h1>
         <RecipesSectionNav />
-        <p className="recipes-subtitle">Browse recipes by category. Open a recipe to see ingredients and instructions.</p>
+        <p className="recipes-subtitle">Browse recipes by category. Select multiple to show only recipes in every chosen category.</p>
         <div className="recipes-toolbar">
-          <label htmlFor="recipe-category-filter" className="filter-label">Category</label>
-          <select
-            id="recipe-category-filter"
-            value={categoryId}
-            onChange={(e) => setCategoryId(e.target.value)}
-            className="filter-select"
-          >
-            <option value="">All categories</option>
-            {categories.map((c) => (
-              <option key={c.id} value={c.id}>{c.name}</option>
-            ))}
-          </select>
+          <fieldset className="recipes-category-filter">
+            <legend className="filter-label">Categories</legend>
+            <div className="recipes-category-checkboxes">
+              {categories.map((c) => (
+                <label key={c.id} className="recipes-category-checkbox">
+                  <input
+                    type="checkbox"
+                    checked={selectedCategoryIds.includes(c.id)}
+                    onChange={() => toggleCategoryFilter(c.id)}
+                  />
+                  {c.name}
+                </label>
+              ))}
+            </div>
+          </fieldset>
           <input
             type="text"
             placeholder="Filter by recipe name..."

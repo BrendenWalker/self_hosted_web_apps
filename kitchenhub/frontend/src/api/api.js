@@ -87,10 +87,22 @@ export const updateIngredient = (id, data) => api.put(`/ingredients/${id}`, data
 export const deleteIngredient = (id) => api.delete(`/ingredients/${id}`);
 
 // Recipes
-/** @param {number|string|undefined} categoryId @param {{ planned?: boolean, schedulable?: boolean }} [opts] */
-export const getRecipes = (categoryId, opts) => {
+/** @param {number|string|Array<number|string>|undefined} categoryIds @param {{ planned?: boolean, schedulable?: boolean }} [opts] */
+export const getRecipes = (categoryIds, opts) => {
   const params = {};
-  if (categoryId != null && categoryId !== '') params.category_id = categoryId;
+  const ids = Array.isArray(categoryIds)
+    ? categoryIds
+    : categoryIds != null && categoryIds !== ''
+      ? [categoryIds]
+      : [];
+  const normalized = [
+    ...new Set(
+      ids
+        .map((id) => parseInt(String(id), 10))
+        .filter((id) => Number.isInteger(id) && id > 0)
+    ),
+  ];
+  if (normalized.length > 0) params.category_ids = normalized.join(',');
   if (opts?.planned) params.planned = '1';
   if (opts?.schedulable) params.schedulable = '1';
   const hasParams = Object.keys(params).length > 0;

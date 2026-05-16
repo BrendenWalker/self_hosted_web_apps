@@ -577,6 +577,24 @@ describe('KitchenHub API', () => {
       expect(res.body).toEqual([{ id: 10, name: 'Dinner', schedulable: true }]);
     });
 
+    it('GET /api/recipes?category_ids=1,2 applies AND filter per category', async () => {
+      let recipeListSql = '';
+      mockPool.query.mockImplementation((sql, params) => {
+        const s = (sql || '').trim();
+        if (s.includes('FROM recipe.recipe r') && s.includes('recipe_category_members')) {
+          recipeListSql = s;
+          return Promise.resolve({ rows: [{ id: 1, name: 'Combo Dish', servings: 2, instructions: 'Cook' }] });
+        }
+        return Promise.resolve(defaultQueryHandler(sql, params));
+      });
+
+      const res = await request(serverModule.app).get('/api/recipes?category_ids=1,2');
+      expect(res.status).toBe(200);
+      expect(recipeListSql).toContain('m.category_id = $1');
+      expect(recipeListSql).toContain('m.category_id = $3');
+      expect(res.body[0].name).toBe('Combo Dish');
+    });
+
     it('GET /api/recipes?schedulable=1 includes schedulable recipe filter', async () => {
       mockPool.query.mockImplementation((sql, params) => {
         const s = (sql || '').trim();

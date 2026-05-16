@@ -244,3 +244,25 @@ The exact `.mjs` files are optional; the **rules in §6.2** are the contract for
 3. **Comments** — Put preparation and comma-suffix text in **`recipe.recipe_ingredients.comment`** when it is line-specific.
 4. **Existing DB** — Prefer matching **`items.name`** exactly to existing rows to avoid duplicate pantry entries and leverage existing departments.
 5. **Validation** — After import, spot-check `recipe.recipe_ingredients` for `NULL` `measurement_id` (missing unit name) or failed joins (wrong `item_name`).
+
+## 8. Interactive single-recipe ingest (Cursor skill)
+
+For pasted text or one-off files (not the `Recipe/Text/` batch pipeline), use the **kitchenhub-recipe-ingest** Cursor skill (`.cursor/skills/kitchenhub-recipe-ingest/SKILL.md`).
+
+1. Agent parses text → `recipes-inbox/parsed-<slug>.json`.
+2. Validate against the live database (hard gate — no recipe SQL until all items and measurements exist):
+
+```bash
+node kitchenhub/RecipeImportTooling/scripts/validate-recipe-import.mjs path/to/parsed.json --json
+node kitchenhub/RecipeImportTooling/scripts/validate-recipe-import.mjs --list-categories
+```
+
+3. On validation failure, the agent **asks** the user per missing item: map to an existing `items.name`, create a new item (user runs optional draft SQL), or omit the line. The agent must **not** insert catalog rows or auto-map without confirmation.
+4. After validation passes (`ok: true`), user picks `recipe.recipe_category` names; agent emits SQL:
+
+```bash
+node kitchenhub/RecipeImportTooling/scripts/emit-recipe-sql.mjs path/to/parsed.json \
+  --categories "Weeknight" --new-categories "Asian"
+```
+
+Output: `RecipeImportTooling/sql/import-single-<slug>.sql` (recipe + lines + category members only — no auto-insert of items).
