@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuites name="jest tests" tests="55" failures="0" errors="0" time="0.812">
-  <testsuite name="KitchenHub API" errors="0" failures="0" skipped="54" timestamp="2026-05-08T14:28:05" time="0.753" tests="55">
+<testsuites name="jest tests" tests="57" failures="0" errors="0" time="0.997">
+  <testsuite name="KitchenHub API" errors="0" failures="0" skipped="56" timestamp="2026-05-16T22:10:34" time="0.93" tests="57">
     <testcase classname="KitchenHub API GET /api/health returns 200 with status, timestamp, and version" name="KitchenHub API GET /api/health returns 200 with status, timestamp, and version" time="0">
       <skipped/>
     </testcase>
@@ -136,6 +136,9 @@
     <testcase classname="KitchenHub API Schedulable meal-planner filters GET /api/recipe-categories?schedulable=1 filters to schedulable categories" name="KitchenHub API Schedulable meal-planner filters GET /api/recipe-categories?schedulable=1 filters to schedulable categories" time="0">
       <skipped/>
     </testcase>
+    <testcase classname="KitchenHub API Schedulable meal-planner filters GET /api/recipes?category_ids=1,2 applies AND filter per category" name="KitchenHub API Schedulable meal-planner filters GET /api/recipes?category_ids=1,2 applies AND filter per category" time="0">
+      <skipped/>
+    </testcase>
     <testcase classname="KitchenHub API Schedulable meal-planner filters GET /api/recipes?schedulable=1 includes schedulable recipe filter" name="KitchenHub API Schedulable meal-planner filters GET /api/recipes?schedulable=1 includes schedulable recipe filter" time="0">
       <skipped/>
     </testcase>
@@ -144,6 +147,8 @@
     </testcase>
     <testcase classname="KitchenHub API Meal planner PATCH /api/meal-planner/slot-kcal updates slot kcal" name="KitchenHub API Meal planner PATCH /api/meal-planner/slot-kcal updates slot kcal" time="0">
       <skipped/>
+    </testcase>
+    <testcase classname="KitchenHub API Meal planner PUT /api/meal-planner/assign uses recipe default servings, not meal slot servings" name="KitchenHub API Meal planner PUT /api/meal-planner/assign uses recipe default servings, not meal slot servings" time="0.07">
     </testcase>
     <testcase classname="KitchenHub API Meal planner POST /api/meal-planner/leftovers/auto-link defaults to next lunch slot" name="KitchenHub API Meal planner POST /api/meal-planner/leftovers/auto-link defaults to next lunch slot" time="0">
       <skipped/>
@@ -160,7 +165,8 @@
     <testcase classname="KitchenHub API Meal planner PUT /api/meal-planner/meal-slots/order rewrites seq values" name="KitchenHub API Meal planner PUT /api/meal-planner/meal-slots/order rewrites seq values" time="0">
       <skipped/>
     </testcase>
-    <testcase classname="KitchenHub API Meal planner POST /api/meal-planner/add-to-shopping-list excludes leftover meals" name="KitchenHub API Meal planner POST /api/meal-planner/add-to-shopping-list excludes leftover meals" time="0.05">
+    <testcase classname="KitchenHub API Meal planner POST /api/meal-planner/add-to-shopping-list excludes leftover meals" name="KitchenHub API Meal planner POST /api/meal-planner/add-to-shopping-list excludes leftover meals" time="0">
+      <skipped/>
     </testcase>
     <testcase classname="KitchenHub API Error handling GET /api/stores returns 500 on DB error" name="KitchenHub API Error handling GET /api/stores returns 500 on DB error" time="0">
       <skipped/>

@@ -2048,18 +2048,23 @@ app.put('/api/meal-planner/assign', async (req, res) => {
       return res.status(404).json({ error: 'Recipe not found' });
     }
 
-    const slotServingsResult = await client.query(
-      `SELECT servings
-       FROM mealplanner.meal_slot
-       WHERE id = $1`,
-      [slotId]
-    );
-    const defaultMealServings =
-      slotServingsResult.rows?.[0]?.servings != null
-        ? parseInt(slotServingsResult.rows[0].servings, 10)
-        : null;
+    const recipeRow = recipeCheck.rows[0];
+    let assignServings = Math.max(1, parseInt(recipeRow.servings, 10) || 1);
 
     if (sourceMealDate && Number.isInteger(sourceSlotId) && sourceSlotId > 0) {
+      if (hasMealServings) {
+        const sourceMealResult = await client.query(
+          `SELECT servings
+           FROM mealplanner.meals
+           WHERE meal_date::date = $1::date AND meal_slot_id = $2
+           LIMIT 1`,
+          [formatDateOnly(sourceMealDate), sourceSlotId]
+        );
+        const sourceServings = parseInt(sourceMealResult.rows?.[0]?.servings, 10);
+        if (Number.isInteger(sourceServings) && sourceServings >= 1) {
+          assignServings = sourceServings;
+        }
+      }
       await client.query(
         `DELETE FROM mealplanner.meals
          WHERE meal_date::date = $1::date AND meal_slot_id = $2 AND recipe_id = $3`,
@@ -2072,7 +2077,7 @@ app.put('/api/meal-planner/assign', async (req, res) => {
     const params = [mealDateText, slotId, recipeId];
     if (hasMealServings) {
       insertColumns.push('servings');
-      params.push(defaultMealServings ?? recipeCheck.rows[0].servings ?? 1);
+      params.push(assignServings);
       insertValues.push(`$${params.length}`);
     }
     if (hasLeftoverFrom) {
@@ -2100,7 +2105,7 @@ app.put('/api/meal-planner/assign', async (req, res) => {
       meal: {
         meal_id: hasMealId ? (insertMealResult.rows?.[0]?.id ?? null) : null,
         ...recipeCheck.rows[0],
-        servings: defaultMealServings ?? recipeCheck.rows[0].servings ?? 1,
+        servings: assignServings,
         leftover_from_meal_id: leftoverFromMealId,
         leftover_servings: leftoverServings,
       },

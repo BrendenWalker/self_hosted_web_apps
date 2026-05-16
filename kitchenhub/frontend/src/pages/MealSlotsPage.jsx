@@ -170,7 +170,7 @@ function MealSlotsPage() {
         <RecipesSectionNav />
         <p className="recipes-subtitle">
           Define the meals that appear on each day in the meal planner (for example breakfast, lunch, dinner).
-          Default servings apply when you assign a recipe; target kcal is optional for planner hints.
+          Default servings are used for leftover auto-link sizing; target kcal is optional for planner hints.
         </p>
       </header>
 
