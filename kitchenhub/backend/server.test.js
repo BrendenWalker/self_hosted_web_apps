@@ -722,6 +722,37 @@ describe('KitchenHub API', () => {
       expect(res.body).toMatchObject({ meal_slot_id: 2, kcal: 600 });
     });
 
+    it('PUT /api/meal-planner/assign uses recipe default servings, not meal slot servings', async () => {
+      let insertedServings;
+      const clientQuery = jest.fn().mockImplementation((sql, params) => {
+        const s = (sql || '').trim();
+        if (s === 'BEGIN' || s === 'COMMIT' || s === 'ROLLBACK') return Promise.resolve({ rows: [] });
+        if (s.includes("table_schema = 'mealplanner' AND table_name = 'meals'")) {
+          return Promise.resolve({ rows: [{ column_name: 'id' }, { column_name: 'servings' }] });
+        }
+        if (s.includes('SELECT id, name, servings FROM recipe.recipe WHERE id = $1')) {
+          return Promise.resolve({ rows: [{ id: 11, name: 'Yummy Dish', servings: 6 }] });
+        }
+        if (s.includes('INSERT INTO mealplanner.meals')) {
+          insertedServings = params?.[3];
+          return Promise.resolve({ rows: [{ id: 99 }] });
+        }
+        return Promise.resolve(defaultQueryHandler(sql, params));
+      });
+      mockPool.connect.mockResolvedValue({ query: clientQuery, release: jest.fn() });
+
+      const res = await request(serverModule.app)
+        .put('/api/meal-planner/assign')
+        .send({ meal_date: '2026-04-27', meal_slot_id: 4, recipe_id: 11 });
+      expect(res.status).toBe(200);
+      expect(insertedServings).toBe(6);
+      expect(res.body.meal.servings).toBe(6);
+      expect(clientQuery).not.toHaveBeenCalledWith(
+        expect.stringContaining('FROM mealplanner.meal_slot'),
+        expect.anything()
+      );
+    });
+
     it('POST /api/meal-planner/leftovers/auto-link defaults to next lunch slot', async () => {
       const clientQuery = jest.fn().mockImplementation((sql, params) => {
         const s = (sql || '').trim();
