@@ -196,7 +196,7 @@ function UpcomingMealsPage() {
         label: 'No future days in this week',
         disabled: true,
         title:
-          'Only days after today are added. Past days, today, and meals already on your shopping list are skipped.',
+          'Only days after today are added. Past days and today are skipped.',
       };
     }
     if (coversFullWeek) {
@@ -204,7 +204,7 @@ function UpcomingMealsPage() {
         label: 'Add week to shopping list',
         disabled: false,
         title:
-          'Adds planned meals for each day of this week that are not already on your shopping list (past and today are skipped).',
+          'Adds ingredients for future planned meals not yet synced (past and today are skipped). Items already on the list are incremented.',
       };
     }
     return {
@@ -313,7 +313,7 @@ function UpcomingMealsPage() {
       } else {
         setShopNotice(
           `Shopping list: ${withAdds} meal${withAdds === 1 ? '' : 's'} updated` +
-            (skippedMeals ? ` (${skippedMeals} skipped: already on list or nothing to add)` : '') +
+            (skippedMeals ? ` (${skippedMeals} skipped: already synced or nothing to add)` : '') +
             '. Past and today are never added.'
         );
       }
@@ -370,7 +370,7 @@ function UpcomingMealsPage() {
                 </button>
               </div>
               <p className="meal-planner-bulk-shop-hint">
-                Only days after today are added. Meals already on your shopping list stay skipped.
+                Only days after today are added. Meals already synced (On list badge) are skipped; other items on the list get more quantity.
               </p>
             </div>
           </div>

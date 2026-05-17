@@ -1,4 +1,4 @@
-const { recipeLineGrams, recipeLineKcal } = require('./recipeIngredientLine');
+const { recipeLineGrams, recipeLineGramsScaled, recipeLineKcal } = require('./recipeIngredientLine');
 
 describe('recipeIngredientLine', () => {
   it('recipeLineGrams uses qty × to_grams for standard units', () => {
@@ -11,6 +11,18 @@ describe('recipeIngredientLine', () => {
       shopping_measure_grams: null,
     };
     expect(recipeLineGrams(row)).toBe(30);
+  });
+
+  it('recipeLineGramsScaled applies scale to qty before resolving grams', () => {
+    const row = {
+      qty: 2,
+      measurement_id: 1,
+      measurement_name: 'tbsp',
+      measurement_to_grams: 15,
+      ingredient_unit_grams: null,
+      shopping_measure_grams: null,
+    };
+    expect(recipeLineGramsScaled(row, 3)).toBe(90);
   });
 
   it('recipeLineGrams works without measurement_id when name and to_grams are present', () => {

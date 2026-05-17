@@ -49,9 +49,9 @@ const ALIASES = new Map([
   ['pinches', 'pinch'],
   ['dash', 'dash'],
   ['dashes', 'dash'],
-  ['each', 'each'],
-  ['whole', 'each'],
-  ['item', 'each'],
+  ['each', 'Each'],
+  ['whole', 'Each'],
+  ['item', 'Each'],
   ['clove', 'cloves'],
   ['cloves', 'cloves'],
   ['can', 'can'],
@@ -72,6 +72,7 @@ const ALIASES = new Map([
 
 /** Title-case common canonical names when alias misses. */
 const TITLE_CASE = new Set([
+  'Each',
   'Teaspoon',
   'Tablespoon',
   'Cup',

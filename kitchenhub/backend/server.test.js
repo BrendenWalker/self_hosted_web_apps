@@ -913,6 +913,84 @@ describe('KitchenHub API', () => {
       expect(res.body.slots).toHaveLength(2);
     });
 
+    it('POST /api/meal-planner/add-to-shopping-list increments items already on the shopping list', async () => {
+      let itemQty = 500;
+      const clientQuery = jest.fn().mockImplementation((sql, params) => {
+        const s = (sql || '').trim();
+        if (s === 'BEGIN' || s === 'COMMIT' || s === 'ROLLBACK') return Promise.resolve({ rows: [] });
+        if (s.includes("table_schema = 'mealplanner' AND table_name = 'meals'")) {
+          return Promise.resolve({
+            rows: [
+              { column_name: 'id' },
+              { column_name: 'servings' },
+              { column_name: 'leftover_from_meal_id' },
+              { column_name: 'ingredients_added_to_shopping_at' },
+            ],
+          });
+        }
+        if (
+          s.includes('FROM mealplanner.meals m') &&
+          s.includes('JOIN recipe.recipe r') &&
+          s.includes('m.ingredients_added_to_shopping_at IS NULL')
+        ) {
+          return Promise.resolve({
+            rows: [
+              {
+                meal_id: 9,
+                meal_day: '2026-05-12',
+                meal_slot_id: 2,
+                recipe_id: 11,
+                meal_servings_col: 2,
+                recipe_servings: 2,
+              },
+            ],
+          });
+        }
+        if (s.includes('FROM recipe.recipe_ingredients ri') && s.includes('i.qty AS item_qty_before')) {
+          return Promise.resolve({
+            rows: [
+              {
+                ingredient_id: 1,
+                qty: '2',
+                is_optional: false,
+                measurement_id: 1,
+                measurement_name: 'Teaspoon',
+                to_grams: '5',
+                ingredient_name: 'Test Item',
+                item_qty_before: itemQty,
+                ingredient_unit_grams: null,
+                shopping_measure_grams: null,
+              },
+            ],
+          });
+        }
+        if (s.includes('UPDATE items SET qty = COALESCE(qty, 0) + $1')) {
+          itemQty += params[0];
+          return Promise.resolve({ rows: [{ id: 1, name: 'Test Item', qty: itemQty }] });
+        }
+        if (s.includes('UPDATE mealplanner.meals SET ingredients_added_to_shopping_at = now() WHERE id = $1')) {
+          return Promise.resolve({ rows: [] });
+        }
+        return Promise.resolve(defaultQueryHandler(sql, params));
+      });
+      mockPool.query.mockImplementation(clientQuery);
+      mockPool.connect.mockResolvedValue({ query: clientQuery, release: jest.fn() });
+
+      const res = await request(serverModule.app)
+        .post('/api/meal-planner/add-to-shopping-list')
+        .send({ start: '2026-05-11', scale: 1, today: '2026-05-10' });
+
+      expect(res.status).toBe(201);
+      expect(itemQty).toBe(510);
+      expect(res.body.added).toHaveLength(1);
+      expect(res.body.added[0]).toMatchObject({
+        grams_added: 10,
+        qty_before: 500,
+        qty_after: 510,
+        was_on_shopping_list: true,
+      });
+    });
+
     it('POST /api/meal-planner/add-to-shopping-list excludes leftover meals', async () => {
       const clientQuery = jest.fn().mockImplementation((sql, params) => {
         const s = (sql || '').trim();

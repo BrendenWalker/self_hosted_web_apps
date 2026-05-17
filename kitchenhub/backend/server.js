@@ -1,7 +1,7 @@
 const express = require('express');
 const cors = require('cors');
 const { createDbPool, testConnection } = require('../../common/database/db-config');
-const { recipeLineGrams, recipeLineKcal } = require('./recipeIngredientLine');
+const { recipeLineGrams, recipeLineGramsScaled, recipeLineKcal } = require('./recipeIngredientLine');
 require('dotenv').config();
 
 const app = express();
@@ -2323,12 +2323,13 @@ app.post('/api/meal-planner/leftovers/auto-link', async (req, res) => {
   }
 });
 
-/** Add non-optional recipe lines to shopping list (items.qty in grams). */
+/** Add non-optional recipe lines to shopping list (items.qty in grams). Always increments. */
 async function addRecipeIngredientsToShoppingListTx(client, recipeId, scale) {
   const lines = await client.query(
     `SELECT ri.ingredient_id, ri.qty, ri.is_optional, ri.measurement_id,
             im.name AS measurement_name, im.to_grams,
             i.name AS ingredient_name,
+            i.qty AS item_qty_before,
             i.ingredient_unit_grams, i.shopping_measure_grams
      FROM recipe.recipe_ingredients ri
      LEFT JOIN common.measurements im ON ri.measurement_id = im.id
@@ -2351,43 +2352,18 @@ async function addRecipeIngredientsToShoppingListTx(client, recipeId, scale) {
       skip(row, 'optional');
       continue;
     }
-    const qtyBase = row.qty != null ? Number(row.qty) : 0;
-    const qty = qtyBase * scale;
-    if (qty <= 0) {
-      skip(row, 'no_qty', { qty: row.qty, scale });
+    const grams = recipeLineGramsScaled(row, scale);
+    if (grams == null || grams <= 0) {
+      skip(row, 'unresolved_grams', {
+        qty: row.qty,
+        scale,
+        measurement_id: row.measurement_id,
+        measurement_name: row.measurement_name,
+      });
       continue;
     }
-    if (!row.measurement_id) {
-      skip(row, 'no_measurement', { measurement_id: row.measurement_id });
-      continue;
-    }
-    const unitName = (row.measurement_name || '').trim().toLowerCase();
-    let grams;
-    if (unitName === 'each') {
-      const g = row.ingredient_unit_grams != null ? Number(row.ingredient_unit_grams) : NaN;
-      if (Number.isNaN(g) || g <= 0) {
-        skip(row, 'no_ingredient_unit_grams', { ingredient_unit_grams: row.ingredient_unit_grams });
-        continue;
-      }
-      grams = qty * g;
-    } else if (unitName === 'shopping unit') {
-      const g = row.shopping_measure_grams != null ? Number(row.shopping_measure_grams) : NaN;
-      if (Number.isNaN(g) || g <= 0) {
-        skip(row, 'no_shopping_measure_grams', { shopping_measure_grams: row.shopping_measure_grams });
-        continue;
-      }
-      grams = qty * g;
-    } else {
-      const toGrams = row.to_grams != null ? Number(row.to_grams) : NaN;
-      if (Number.isNaN(toGrams) || toGrams <= 0) {
-        skip(row, 'no_to_grams', {
-          measurement_name: row.measurement_name,
-          to_grams: row.to_grams,
-        });
-        continue;
-      }
-      grams = qty * toGrams;
-    }
+    const qtyBefore =
+      row.item_qty_before != null ? Number(row.item_qty_before) : 0;
     const upd = await client.query(
       `UPDATE items SET qty = COALESCE(qty, 0) + $1 WHERE id = $2 RETURNING id, name, qty`,
       [grams, row.ingredient_id]
@@ -2401,7 +2377,9 @@ async function addRecipeIngredientsToShoppingListTx(client, recipeId, scale) {
       name: upd.rows[0].name,
       scale,
       grams_added: grams,
+      qty_before: qtyBefore,
       qty_after: upd.rows[0].qty,
+      was_on_shopping_list: qtyBefore > 0,
     });
   }
   return { added, skipped };

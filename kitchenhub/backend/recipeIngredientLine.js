@@ -33,6 +33,14 @@ function recipeLineGrams(row) {
   return qty * perUnit;
 }
 
+/** Recipe line grams after applying a meal/recipe scale factor to qty. */
+function recipeLineGramsScaled(row, scale = 1) {
+  const qtyBase = row.qty != null ? Number(row.qty) : 0;
+  const scaled = qtyBase * (Number(scale) || 1);
+  if (scaled <= 0) return null;
+  return recipeLineGrams({ ...row, qty: scaled });
+}
+
 /**
  * Grams that correspond to the catalog kcal reference (kcal_qty × kcal measurement).
  */
@@ -79,4 +87,4 @@ function recipeLineKcal(row) {
   return Math.round(Number(row.kcal) * (line / ref));
 }
 
-module.exports = { recipeLineGrams, kcalReferenceGrams, recipeLineKcal };
+module.exports = { recipeLineGrams, recipeLineGramsScaled, kcalReferenceGrams, recipeLineKcal };
