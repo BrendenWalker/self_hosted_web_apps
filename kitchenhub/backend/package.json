@@ -12,14 +12,14 @@
     "test:ci": "jest --runInBand --ci --coverage --reporters=default --reporters=jest-junit"
   },
   "dependencies": {
-    "express": "^4.18.2",
+    "express": "^4.22.2",
     "pg": "^8.11.3",
     "cors": "^2.8.5",
     "dotenv": "^16.3.1"
   },
   "devDependencies": {
     "jest": "^29.7.0",
-    "jest-junit": "^16.0.0",
+    "jest-junit": "^17.0.0",
     "nodemon": "^3.0.1",
     "supertest": "^6.3.3"
   },
