@@ -1,5 +1,5 @@
 # Pin to version tag for reproducible builds (avoid floating tag drift)
-FROM node:18.20.0-alpine3.19
+FROM node:20.19.4-alpine3.21
 
 ARG VERSION=dev
 ENV VERSION=$VERSION

@@ -12,7 +12,7 @@ description: Docker and containerization patterns
 - **Version injection**: Accept `ARG VERSION=dev` and set `ENV VERSION=$VERSION` so the app can read it at runtime (e.g. in `/api/health`). CI passes the Docker tag version or `pr-{number}` as build-arg.
 
 ```dockerfile
-FROM node:18-alpine
+FROM node:20-alpine
 
 # Version injected at build (e.g. from CI tag or pr-N)
 ARG VERSION=dev
@@ -43,7 +43,7 @@ CMD ["node", "server.js"]
 
 ```dockerfile
 # Build stage
-FROM node:18-alpine as build
+FROM node:20-alpine as build
 
 # Version injected at build; Vite inlines VITE_* at build time
 ARG VERSION=dev

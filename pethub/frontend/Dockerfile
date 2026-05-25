@@ -1,4 +1,4 @@
-FROM node:18.20.0-alpine3.19 AS build
+FROM node:20.19.4-alpine3.21 AS build
 
 ARG VERSION=dev
 ENV VITE_VERSION=$VERSION
