@@ -1,5 +1,5 @@
 # Pin to version tag for reproducible builds (avoid floating tag drift)
-FROM node:18.20.0-alpine3.19 AS build
+FROM node:20.19.4-alpine3.21 AS build
 
 # Version injected at build (e.g. from CI tag or pr-N); Vite inlines VITE_* at build time
 ARG VERSION=dev
