@@ -103,12 +103,12 @@ jobs:
           fetch-depth: 0  # Fetch full history for version checking
 
       - name: Validate PR has version information
+        env:
+          PR_BODY: ${{ github.event.pull_request.body }}
+          PR_TITLE: ${{ github.event.pull_request.title }}
         run: |
-          PR_BODY="${{ github.event.pull_request.body }}"
-          PR_TITLE="${{ github.event.pull_request.title }}"
-          
           # Check if PR title or body mentions version
-          if echo "$PR_TITLE $PR_BODY" | grep -qiE '(version|[0-9]+\.[0-9]+\.[0-9]+|semver|release)'; then
+          if echo "$PR_TITLE $PR_BODY" | grep -qiE '(version|[0-9]+\.[0-9]+\.[0-9]+|semver|release|deps|bump)'; then
             echo "✓ PR contains version information"
             exit 0
           fi
