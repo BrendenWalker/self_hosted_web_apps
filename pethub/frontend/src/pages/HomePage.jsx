@@ -468,58 +468,27 @@ function WizardBody({ wizard, setWizard, petId, saving, onSave }) {
     return (
       <div className="stack">
         <h3>Toilet</h3>
-        <div>
-          <div>Type</div>
-          <div className="row gap">
-            <label className="row gap">
-              <input
-                type="radio"
-                name="toilet-type"
-                checked={subType === 'pee'}
-                onChange={() => {
-                  setSubType('pee');
-                  setRating(7);
-                }}
-              />
-              <span>Pee</span>
-            </label>
-            <label className="row gap">
-              <input
-                type="radio"
-                name="toilet-type"
-                checked={subType === 'poop'}
-                onChange={() => {
-                  setSubType('poop');
-                  setRating(4);
-                }}
-              />
-              <span>Poop</span>
-            </label>
-          </div>
-        </div>
-        <div>
-          <div>Location</div>
-          <div className="row gap">
-            <label className="row gap">
-              <input
-                type="radio"
-                name="toilet-location"
-                checked={location === 'inside'}
-                onChange={() => setLocation('inside')}
-              />
-              <span>Inside</span>
-            </label>
-            <label className="row gap">
-              <input
-                type="radio"
-                name="toilet-location"
-                checked={location === 'outside'}
-                onChange={() => setLocation('outside')}
-              />
-              <span>Outside</span>
-            </label>
-          </div>
-        </div>
+        <ChoiceButtons
+          label="Type"
+          value={subType}
+          onChange={(v) => {
+            setSubType(v);
+            setRating(v === 'pee' ? 7 : 4);
+          }}
+          options={[
+            { value: 'pee', label: 'Pee', icon: '💦' },
+            { value: 'poop', label: 'Poop', icon: '💩' },
+          ]}
+        />
+        <ChoiceButtons
+          label="Location"
+          value={location}
+          onChange={setLocation}
+          options={[
+            { value: 'inside', label: 'Inside', icon: '🏠' },
+            { value: 'outside', label: 'Outside', icon: '🌳' },
+          ]}
+        />
         <label>
           {subType === 'pee' ? 'Pee amount (1–7)' : 'Poop score (1–7)'}
           <div className="row gap" style={{ alignItems: 'center', flexWrap: 'wrap' }}>
@@ -660,4 +629,28 @@ function WizardBody({ wizard, setWizard, petId, saving, onSave }) {
   }
 
   return null;
+}
+
+function ChoiceButtons({ label, value, onChange, options }) {
+  return (
+    <div>
+      <div>{label}</div>
+      <div className="choice-row" role="group" aria-label={label}>
+        {options.map((opt) => (
+          <button
+            key={opt.value}
+            type="button"
+            className={`choice-btn${value === opt.value ? ' selected' : ''}`}
+            aria-pressed={value === opt.value}
+            onClick={() => onChange(opt.value)}
+          >
+            <span className="choice-btn-icon" aria-hidden>
+              {opt.icon}
+            </span>
+            <span>{opt.label}</span>
+          </button>
+        ))}
+      </div>
+    </div>
+  );
 }
