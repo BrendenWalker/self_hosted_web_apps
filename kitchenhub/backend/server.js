@@ -1091,7 +1091,7 @@ app.get('/api/ingredients', async (req, res) => {
        LEFT JOIN common.department d ON i.department = d.id
        LEFT JOIN common.measurements m ON i.kcal_measurement_id = m.id
        WHERE (NOT $1::boolean OR d.ingredient IS TRUE)
-       ORDER BY i.name, i.details`,
+       ORDER BY d.name, i.name, i.details`,
       [forRecipe]
     );
     res.json(result.rows);
@@ -1425,10 +1425,11 @@ app.get('/api/recipes/:id', async (req, res) => {
               km.to_grams as kcal_measurement_to_grams
        FROM recipe.recipe_ingredients ri
        JOIN items i ON ri.ingredient_id = i.id
+       LEFT JOIN common.department d ON i.department = d.id
        LEFT JOIN common.measurements m ON ri.measurement_id = m.id
        LEFT JOIN common.measurements km ON i.kcal_measurement_id = km.id
        WHERE ri.recipe_id = $1
-       ORDER BY i.name`,
+       ORDER BY d.name, i.name, i.details`,
       [req.params.id]
     );
     let recipeTotalKcal = 0;
