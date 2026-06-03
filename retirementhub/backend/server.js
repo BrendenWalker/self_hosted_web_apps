@@ -21,6 +21,108 @@ const pool = createDbPool({
 
 testConnection(pool);
 
+/** Whole-number id only (rejects dollar amounts like 3230.69 in URL/body). */
+function parsePositiveIntParam(raw) {
+  const s = raw != null ? String(raw).trim() : '';
+  if (!/^\d+$/.test(s)) return null;
+  const n = parseInt(s, 10);
+  return Number.isInteger(n) && n > 0 ? n : null;
+}
+
+function describeValue(value) {
+  if (value === null) return { value: null, type: 'null' };
+  if (value === undefined) return { value: undefined, type: 'undefined' };
+  return { value, type: typeof value, string: String(value) };
+}
+
+function balanceRequestDebug(req, extra) {
+  const body = req.body && typeof req.body === 'object' ? req.body : {};
+  return {
+    method: req.method,
+    path: req.originalUrl || req.url,
+    params: req.params,
+    body,
+    bodyFields: Object.fromEntries(
+      Object.keys(body).map((key) => [key, describeValue(body[key])])
+    ),
+    ...extra,
+  };
+}
+
+function postgresErrorDebug(error) {
+  if (!error) return null;
+  return {
+    code: error.code,
+    message: error.message,
+    detail: error.detail,
+    column: error.column,
+    table: error.table,
+    schema: error.schema,
+    constraint: error.constraint,
+    where: error.where,
+  };
+}
+
+function balanceApiError(res, req, operation, context, error, statusCode) {
+  const postgres = postgresErrorDebug(error);
+  let message =
+    (error && error.message) ||
+    context.fallback ||
+    'Account balance request failed';
+  if (error && error.code === '22P02') {
+    const col = postgres?.column ? ` (column: ${postgres.column})` : '';
+    message = `PostgreSQL rejected a value for an integer field${col}: ${error.message}`;
+  }
+  const payload = {
+    error: message,
+    operation,
+    debug: balanceRequestDebug(req, context),
+    postgres,
+  };
+  console.error(`[account-balance] ${operation}`, JSON.stringify(payload, null, 2));
+  res.status(statusCode || (error && error.code === '22P02' ? 400 : 500)).json(payload);
+}
+
+function balanceValidationError(res, req, operation, message, context) {
+  const payload = {
+    error: message,
+    operation,
+    debug: balanceRequestDebug(req, context),
+  };
+  console.warn(`[account-balance] ${operation} validation`, JSON.stringify(payload, null, 2));
+  res.status(400).json(payload);
+}
+
+function dbErrorResponse(res, error, fallback) {
+  if (error && error.code === '22P02') {
+    return res.status(400).json({
+      error: `PostgreSQL rejected a value for an integer field: ${error.message}`,
+      postgres: postgresErrorDebug(error),
+    });
+  }
+  return res.status(500).json({ error: (error && error.message) || fallback });
+}
+
+let accountBalanceColumnTypes = null;
+async function loadAccountBalanceColumnTypes() {
+  try {
+    const result = await pool.query(
+      `SELECT column_name, data_type
+       FROM information_schema.columns
+       WHERE table_schema = 'public'
+         AND table_name = 'account_balance'
+         AND column_name IN ('balance', 'account_id')`
+    );
+    accountBalanceColumnTypes = {};
+    result.rows.forEach((r) => {
+      accountBalanceColumnTypes[r.column_name] = r.data_type;
+    });
+  } catch (e) {
+    console.warn('Could not read account_balance column types:', e.message);
+  }
+}
+loadAccountBalanceColumnTypes();
+
 // ==================== HOUSEHOLD ====================
 
 app.get('/api/household', async (req, res) => {
@@ -264,7 +366,11 @@ app.get('/api/accounts', async (req, res) => {
 
 app.get('/api/accounts/:id', async (req, res) => {
   try {
-    const result = await pool.query('SELECT * FROM account WHERE id = $1', [req.params.id]);
+    const accountId = parsePositiveIntParam(req.params.id);
+    if (!accountId) {
+      return res.status(400).json({ error: 'Invalid account id' });
+    }
+    const result = await pool.query('SELECT * FROM account WHERE id = $1', [accountId]);
     if (result.rows.length === 0) {
       return res.status(404).json({ error: 'Account not found' });
     }
@@ -322,7 +428,10 @@ app.post('/api/accounts', async (req, res) => {
 app.put('/api/accounts/:id', async (req, res) => {
   try {
     const { name, account_type, owner_type, sort_order, expected_depreciation_pct, rmd_owner_type } = req.body;
-    const id = parseInt(req.params.id, 10);
+    const id = parsePositiveIntParam(req.params.id);
+    if (!id) {
+      return res.status(400).json({ error: 'Invalid account id' });
+    }
     const trimmedName = name != null ? String(name).trim() : null;
     const existing = await pool.query(
       'SELECT account_type, expected_depreciation_pct, rmd_owner_type, owner_type FROM account WHERE id = $1',
@@ -387,7 +496,11 @@ app.put('/api/accounts/:id', async (req, res) => {
 
 app.delete('/api/accounts/:id', async (req, res) => {
   try {
-    const result = await pool.query('DELETE FROM account WHERE id = $1 RETURNING *', [req.params.id]);
+    const accountId = parsePositiveIntParam(req.params.id);
+    if (!accountId) {
+      return res.status(400).json({ error: 'Invalid account id' });
+    }
+    const result = await pool.query('DELETE FROM account WHERE id = $1 RETURNING *', [accountId]);
     if (result.rows.length === 0) {
       return res.status(404).json({ error: 'Account not found' });
     }
@@ -404,7 +517,9 @@ app.delete('/api/accounts/:id', async (req, res) => {
 app.get('/api/account-balances', async (req, res) => {
   try {
     const result = await pool.query(
-      `SELECT DISTINCT ON (ab.account_id) ab.*, a.name AS account_name, a.account_type, a.owner_type,
+      `SELECT DISTINCT ON (ab.account_id)
+              ab.id AS balance_id, ab.account_id, ab.as_of, ab.balance, ab.modified,
+              a.name AS account_name, a.account_type, a.owner_type,
               a.expected_depreciation_pct, a.rmd_owner_type
        FROM account_balance ab
        JOIN account a ON ab.account_id = a.id
@@ -421,76 +536,134 @@ app.get('/api/account-balances', async (req, res) => {
 });
 
 app.get('/api/accounts/:id/balances', async (req, res) => {
+  const operation = 'get_account_balance_history';
   try {
+    const accountId = parsePositiveIntParam(req.params.id);
+    if (!accountId) {
+      return balanceValidationError(res, req, operation, 'Invalid account id', {
+        url_id_raw: describeValue(req.params.id),
+        url_id_parsed: accountId,
+      });
+    }
+    console.info('[account-balance] history sql params', { accountId: describeValue(accountId) });
     const result = await pool.query(
-      `SELECT ab.* FROM account_balance ab WHERE ab.account_id = $1 ORDER BY ab.as_of DESC, ab.id DESC`,
-      [req.params.id]
+      `SELECT ab.id AS balance_id, ab.account_id, ab.as_of, ab.balance, ab.modified
+       FROM account_balance ab WHERE ab.account_id = $1 ORDER BY ab.as_of DESC, ab.id DESC`,
+      [accountId]
     );
     res.json(result.rows);
   } catch (error) {
-    console.error('Error fetching account balances:', error);
-    res.status(500).json({ error: error.message || 'Failed to fetch account balances' });
+    balanceApiError(res, req, operation, {
+      fallback: 'Failed to fetch account balances',
+      url_id_parsed: parsePositiveIntParam(req.params.id),
+    }, error);
   }
 });
+
+async function upsertAccountBalanceRow(accountId, as_of, balance) {
+  const asOfDate = as_of && String(as_of).trim() ? String(as_of).trim() : new Date().toISOString().slice(0, 10);
+  const balanceValue = balance != null ? parseFloat(balance) : 0;
+  const sqlParams = [accountId, asOfDate, balanceValue];
+  console.info('[account-balance] upsert sql params', {
+    accountId: describeValue(accountId),
+    asOfDate: describeValue(asOfDate),
+    balanceValue: describeValue(balanceValue),
+    dbBalanceColumnType: accountBalanceColumnTypes?.balance,
+    dbAccountIdColumnType: accountBalanceColumnTypes?.account_id,
+  });
+  const result = await pool.query(
+    `INSERT INTO account_balance (account_id, as_of, balance)
+     VALUES ($1, $2, $3)
+     ON CONFLICT (account_id, as_of) DO UPDATE SET balance = EXCLUDED.balance, modified = CURRENT_TIMESTAMP
+     RETURNING id AS balance_id, account_id, as_of, balance, modified`,
+    sqlParams
+  );
+  return result.rows[0];
+}
 
 app.post('/api/account-balances', async (req, res) => {
+  const operation = 'post_account_balance';
   try {
-    const { account_id, as_of, balance } = req.body;
-    const accountId = account_id != null ? parseInt(account_id, 10) : null;
-    if (!accountId || !Number.isInteger(accountId)) {
-      return res.status(400).json({ error: 'account_id is required' });
+    const { account_id, as_of, balance } = req.body || {};
+    const accountId = parsePositiveIntParam(account_id);
+    if (!accountId) {
+      return balanceValidationError(
+        res,
+        req,
+        operation,
+        'Valid account_id is required (whole number, not the balance amount)',
+        {
+          account_id_raw: describeValue(account_id),
+          account_id_parsed: accountId,
+          as_of_raw: describeValue(as_of),
+          balance_raw: describeValue(balance),
+        }
+      );
     }
-    const asOfDate = as_of && String(as_of).trim() ? String(as_of).trim() : new Date().toISOString().slice(0, 10);
-    const result = await pool.query(
-      `INSERT INTO account_balance (account_id, as_of, balance)
-       VALUES ($1, $2, COALESCE($3, 0))
-       ON CONFLICT (account_id, as_of) DO UPDATE SET balance = EXCLUDED.balance, modified = CURRENT_TIMESTAMP
-       RETURNING *`,
-      [accountId, asOfDate, balance != null ? parseFloat(balance) : 0]
-    );
-    res.status(201).json(result.rows[0]);
+    const row = await upsertAccountBalanceRow(accountId, as_of, balance);
+    res.status(201).json(row);
   } catch (error) {
-    console.error('Error creating account balance:', error);
-    res.status(500).json({ error: error.message || 'Failed to create account balance' });
+    balanceApiError(res, req, operation, {
+      fallback: 'Failed to create account balance',
+      account_id_raw: describeValue(req.body?.account_id),
+      account_id_parsed: parsePositiveIntParam(req.body?.account_id),
+      as_of_raw: describeValue(req.body?.as_of),
+      balance_raw: describeValue(req.body?.balance),
+    }, error);
   }
 });
 
+/** Deprecated: upsert only via POST with account_id in body (URL :id is ignored). */
 app.put('/api/account-balances/:id', async (req, res) => {
+  const operation = 'put_account_balance';
   try {
-    const { as_of, balance } = req.body;
-    const result = await pool.query(
-      `UPDATE account_balance SET
-        as_of = COALESCE($1, as_of),
-        balance = COALESCE($2, balance),
-        modified = CURRENT_TIMESTAMP
-       WHERE id = $3
-       RETURNING *`,
-      [
-        as_of && String(as_of).trim() ? String(as_of).trim() : null,
-        balance != null ? parseFloat(balance) : null,
-        parseInt(req.params.id, 10),
-      ]
-    );
-    if (result.rows.length === 0) {
-      return res.status(404).json({ error: 'Account balance not found' });
+    const accountId = parsePositiveIntParam(req.body?.account_id);
+    if (!accountId) {
+      return balanceValidationError(
+        res,
+        req,
+        operation,
+        'PUT is deprecated. Use POST /api/account-balances with { account_id, as_of, balance }.',
+        {
+          url_id_raw: describeValue(req.params.id),
+          url_id_parsed: parsePositiveIntParam(req.params.id),
+          account_id_raw: describeValue(req.body?.account_id),
+          account_id_parsed: accountId,
+        }
+      );
     }
-    res.json(result.rows[0]);
+    const row = await upsertAccountBalanceRow(accountId, req.body.as_of, req.body.balance);
+    return res.json(row);
   } catch (error) {
-    console.error('Error updating account balance:', error);
-    res.status(500).json({ error: error.message || 'Failed to update account balance' });
+    balanceApiError(res, req, operation, {
+      fallback: 'Failed to update account balance',
+      url_id_raw: describeValue(req.params.id),
+      account_id_parsed: parsePositiveIntParam(req.body?.account_id),
+    }, error);
   }
 });
 
 app.delete('/api/account-balances/:id', async (req, res) => {
+  const operation = 'delete_account_balance';
   try {
-    const result = await pool.query('DELETE FROM account_balance WHERE id = $1 RETURNING *', [req.params.id]);
+    const balanceRowId = parsePositiveIntParam(req.params.id);
+    if (!balanceRowId) {
+      return balanceValidationError(res, req, operation, 'Invalid balance id', {
+        url_id_raw: describeValue(req.params.id),
+        url_id_parsed: balanceRowId,
+      });
+    }
+    console.info('[account-balance] delete sql params', { balanceRowId: describeValue(balanceRowId) });
+    const result = await pool.query('DELETE FROM account_balance WHERE id = $1 RETURNING *', [balanceRowId]);
     if (result.rows.length === 0) {
-      return res.status(404).json({ error: 'Account balance not found' });
+      return res.status(404).json({ error: 'Account balance not found', operation, debug: balanceRequestDebug(req, { balanceRowId }) });
     }
     res.json({ message: 'Account balance deleted' });
   } catch (error) {
-    console.error('Error deleting account balance:', error);
-    res.status(500).json({ error: error.message || 'Failed to delete account balance' });
+    balanceApiError(res, req, operation, {
+      fallback: 'Failed to delete account balance',
+      balance_row_id_parsed: parsePositiveIntParam(req.params.id),
+    }, error);
   }
 });
 
@@ -1221,619 +1394,335 @@ app.get('/api/retirement-tax-guide', async (req, res) => {
   }
 });
 
-// ==================== PROJECTIONS (Stage 4 — net worth & income/expenses by year) ====================
+// ==================== SCENARIOS ====================
 
-/** Parse calendar year from a date: accepts Date object or YYYY-MM-DD string (node-pg can return either). */
-function yearFromDate(value) {
-  if (value == null) return null;
-  if (typeof value.getFullYear === 'function') return value.getFullYear();
-  const s = String(value).trim();
-  const fourDigit = s.match(/^(\d{4})/);
-  if (fourDigit) return parseInt(fourDigit[1], 10);
-  const d = new Date(s);
-  if (!Number.isNaN(d.getTime())) return d.getFullYear();
-  return null;
-}
+const { runProjection } = require('./services/projectionRunner');
 
-function ageAtEoy(birthYear, year) {
-  if (birthYear == null || !Number.isInteger(birthYear)) return null;
-  return year - birthYear;
-}
-
-/** IRS Uniform Lifetime Table (2022 revision, Pub. 590-B). Age = age at end of distribution year. */
-const UNIFORM_LIFETIME_DIVISOR = {
-  72: 26.6, 73: 25.5, 74: 24.6, 75: 23.6, 76: 22.7, 77: 21.8, 78: 20.9, 79: 20.0,
-  80: 19.1, 81: 18.2, 82: 17.4, 83: 16.5, 84: 15.7, 85: 14.8, 86: 14.0, 87: 13.2,
-  88: 12.4, 89: 11.7, 90: 11.1, 91: 10.5, 92: 9.9, 93: 9.4, 94: 8.9, 95: 8.4,
-  96: 7.9, 97: 7.4, 98: 7.0, 99: 6.6, 100: 6.2, 101: 5.8, 102: 5.4, 103: 5.1,
-  104: 4.8, 105: 4.5, 106: 4.2, 107: 4.0, 108: 3.7, 109: 3.5, 110: 3.3, 111: 3.1,
-  112: 2.9, 113: 2.8, 114: 2.6, 115: 2.5, 116: 2.3, 117: 2.2, 118: 2.1, 119: 1.9, 120: 1.8,
-};
-
-function uniformLifetimeDivisor(age) {
-  if (age == null || !Number.isInteger(age)) return null;
-  if (age < 72) return null;
-  if (age > 120) return UNIFORM_LIFETIME_DIVISOR[120];
-  return UNIFORM_LIFETIME_DIVISOR[age] ?? null;
-}
-
-/** First calendar year RMD is required (SECURE / SECURE 2.0), by year of birth. */
-function rmdStartAgeFromBirthYear(birthYear) {
-  if (birthYear == null || !Number.isInteger(birthYear)) return null;
-  if (birthYear <= 1950) return 72;
-  if (birthYear <= 1959) return 73;
-  return 75;
-}
-
-/**
- * Estimate taxable portion of annual Social Security benefits (IRS Pub. 915–style combined-income tiers).
- * otherIncome = wages + bonus + taxable RMD + other ordinary income (excludes SS benefits).
- */
-function estimateTaxableSocialSecurityAnnual(otherIncome, ssAnnual, filingStatus) {
-  if (ssAnnual <= 0) return 0;
-  const halfSs = ssAnnual * 0.5;
-  const combined = otherIncome + halfSs;
-  const fs = filingStatus || 'married_filing_jointly';
-  const mfj = fs === 'married_filing_jointly';
-  const t0 = mfj ? 32000 : 25000;
-  const t1 = mfj ? 44000 : 34000;
-  const bridge = mfj ? 6000 : 4500;
-  if (combined <= t0) return 0;
-  if (combined <= t1) {
-    return Math.round(Math.min(0.5 * ssAnnual, 0.5 * (combined - t0)) * 100) / 100;
-  }
-  const cap = 0.85 * ssAnnual;
-  const alt = 0.85 * (combined - t1) + bridge;
-  return Math.round(Math.min(cap, alt) * 100) / 100;
-}
-
-/** Base year for IRS parameters (indexed ~2%/yr forward in projections). */
-const TAX_PARAM_BASE_YEAR = 2025;
-
-function taxParameterInflationFactor(year) {
-  return Math.pow(1.02, Math.max(0, year - TAX_PARAM_BASE_YEAR));
-}
-
-/** Inflate 2025 dollar amounts. */
-function inflateTaxDollars(amount, year) {
-  const f = taxParameterInflationFactor(year);
-  return Math.round(amount * f * 100) / 100;
-}
-
-/**
- * 2025 federal ordinary-income brackets (taxable income). Thresholds are lower bounds of each band;
- * rates[i] applies to income from thresholds[i] to thresholds[i+1].
- */
-const FEDERAL_ORDINARY_BRACKETS_2025 = {
-  married_filing_jointly: {
-    thresholds: [0, 23850, 96950, 206700, 394600, 501050, 751600, Infinity],
-    rates: [0.1, 0.12, 0.22, 0.24, 0.32, 0.35, 0.37],
-  },
-  single: {
-    thresholds: [0, 11925, 48475, 103350, 197300, 250525, 626350, Infinity],
-    rates: [0.1, 0.12, 0.22, 0.24, 0.32, 0.35, 0.37],
-  },
-  head_of_household: {
-    thresholds: [0, 17000, 64850, 103350, 197300, 256100, 626350, Infinity],
-    rates: [0.1, 0.12, 0.22, 0.24, 0.32, 0.35, 0.37],
-  },
-};
-
-function federalOrdinaryTaxWithBreakdown(taxableIncome, filingStatus, year) {
-  const fs = filingStatus || 'married_filing_jointly';
-  const key = fs === 'head_of_household' ? 'head_of_household' : fs === 'married_filing_jointly' ? 'married_filing_jointly' : 'single';
-  const cfg = FEDERAL_ORDINARY_BRACKETS_2025[key];
-  const f = taxParameterInflationFactor(year);
-  const thresholds = cfg.thresholds.map((t) => (t === Infinity ? Infinity : Math.round(t * f * 100) / 100));
-  const rates = cfg.rates;
-  let remaining = Math.max(0, taxableIncome);
-  let total = 0;
-  const brackets = [];
-  for (let i = 0; i < rates.length; i++) {
-    const low = thresholds[i];
-    const high = thresholds[i + 1];
-    const bandMax = high === Infinity ? remaining : high - low;
-    const take = Math.min(remaining, bandMax);
-    if (take > 0) {
-      const taxAmt = take * rates[i];
-      total += taxAmt;
-      brackets.push({
-        rate_pct: Math.round(rates[i] * 1000) / 10,
-        income_in_band: Math.round(take * 100) / 100,
-        tax: Math.round(taxAmt * 100) / 100,
-      });
-      remaining -= take;
-    }
-    if (remaining <= 0) break;
-  }
-  return { total: Math.round(total * 100) / 100, brackets };
-}
-
-function standardDeductionEstimate(filingStatus, year, age1, age2) {
-  const fs = filingStatus || 'married_filing_jointly';
-  const base2025 = {
-    married_filing_jointly: 31500,
-    single: 15750,
-    head_of_household: 23625,
-    married_filing_separately: 15750,
-  };
-  let b = base2025[fs] ?? base2025.married_filing_jointly;
-  b = inflateTaxDollars(b, year);
-  const addMfj = inflateTaxDollars(1550, year);
-  const addSingle = inflateTaxDollars(1950, year);
-  if (fs === 'married_filing_jointly') {
-    const e1 = age1 != null && age1 >= 65 ? addMfj : 0;
-    const e2 = age2 != null && age2 >= 65 ? addMfj : 0;
-    return Math.round((b + e1 + e2) * 100) / 100;
-  }
-  const age = fs === 'married_filing_separately' ? age1 : age1;
-  const elderly = age != null && age >= 65;
-  return Math.round((b + (elderly ? addSingle : 0)) * 100) / 100;
-}
-
-// SSA-style factors for FRA 67: 62 ≈ 70%, 67 = 100%, 70 ≈ 124%. Returns factor for a given age.
-function ssFactorForAge(age) {
-  if (age == null || !Number.isInteger(age)) return null;
-  const a = Math.min(70, Math.max(62, age));
-  if (a <= 67) return 0.70 + (a - 62) * (0.30 / 5);
-  return 1.0 + (a - 67) * (0.24 / 3);
-}
-
-// SSA-style factors for FRA 67: 62 ≈ 70%, 67 = 100%, 70 ≈ 124%. Returns monthly benefit at retirement age or null.
-function ssMonthlyAtRetirementAge(atFraMonthly, birthYear, retirementYear) {
-  if (atFraMonthly == null || !Number.isFinite(atFraMonthly) || atFraMonthly <= 0) return null;
-  const by = birthYear != null ? parseInt(birthYear, 10) : null;
-  const ry = retirementYear != null ? parseInt(retirementYear, 10) : null;
-  if (by == null || ry == null || !Number.isInteger(by) || !Number.isInteger(ry)) return null;
-  let age = ry - by;
-  if (age < 62) age = 62;
-  if (age > 70) age = 70;
-  const factor = ssFactorForAge(age);
-  return factor != null ? Math.round(atFraMonthly * factor * 100) / 100 : null;
-}
-
-function buildPartyLimitsForYear(birthYear, base, year) {
-  const age = ageAtEoy(birthYear, year);
-  const iraCatchUp = age != null && age >= 50 ? (base.ira_catch_up || 0) : 0;
-  const k401CatchUp = age != null && age >= 50 ? (base['401k_catch_up'] || 0) : 0;
+function parseScenarioAssumptionBody(body) {
+  const a = body?.assumptions || body;
   return {
-    '401k_elective_limit': (base['401k_elective'] || 0) + k401CatchUp,
+    retirement_age_p1: a.retirement_age_p1 != null ? parseInt(a.retirement_age_p1, 10) : null,
+    retirement_age_p2: a.retirement_age_p2 != null ? parseInt(a.retirement_age_p2, 10) : null,
+    social_security_claim_age_p1:
+      a.social_security_claim_age_p1 != null ? parseInt(a.social_security_claim_age_p1, 10) : null,
+    social_security_claim_age_p2:
+      a.social_security_claim_age_p2 != null ? parseInt(a.social_security_claim_age_p2, 10) : null,
+    annual_spending_target:
+      a.annual_spending_target != null && a.annual_spending_target !== ''
+        ? parseFloat(a.annual_spending_target)
+        : null,
+    inflation_rate: a.inflation_rate != null && a.inflation_rate !== '' ? parseFloat(a.inflation_rate) : null,
+    portfolio_return_rate:
+      a.portfolio_return_rate != null && a.portfolio_return_rate !== '' ? parseFloat(a.portfolio_return_rate) : null,
+    withdrawal_strategy: a.withdrawal_strategy || 'conservative',
+    withdrawal_order_custom: a.withdrawal_order_custom || null,
+    roth_conversion_strategy: a.roth_conversion_strategy || 'none',
+    notes: a.notes != null ? String(a.notes) : null,
   };
 }
+
+app.get('/api/scenarios', async (req, res) => {
+  try {
+    const result = await pool.query(
+      `SELECT s.id, s.name, s.description, s.is_default, s.created_at, s.updated_at,
+              sa.retirement_age_p1, sa.retirement_age_p2,
+              sa.social_security_claim_age_p1, sa.social_security_claim_age_p2,
+              sa.annual_spending_target, sa.inflation_rate, sa.portfolio_return_rate,
+              sa.withdrawal_strategy, sa.roth_conversion_strategy, sa.notes
+       FROM scenario s
+       LEFT JOIN scenario_assumption sa ON sa.scenario_id = s.id
+       ORDER BY s.is_default DESC, s.id`
+    );
+    res.json(result.rows);
+  } catch (error) {
+    console.error('Error listing scenarios:', error);
+    if (error.code === '42P01') {
+      return res.status(503).json({ error: 'Scenario tables missing. Run migration 012_scenario_framework.sql.' });
+    }
+    res.status(500).json({ error: error.message || 'Failed to list scenarios' });
+  }
+});
+
+app.post('/api/scenarios', async (req, res) => {
+  const client = await pool.connect();
+  try {
+    const { name, description, is_default, assumptions, roth_plan } = req.body;
+    if (!name || !String(name).trim()) {
+      return res.status(400).json({ error: 'name is required' });
+    }
+    await client.query('BEGIN');
+    const hh = await client.query('SELECT id FROM household ORDER BY id LIMIT 1');
+    const householdId = hh.rows[0]?.id || 1;
+    if (is_default) {
+      await client.query('UPDATE scenario SET is_default = FALSE WHERE household_id = $1', [householdId]);
+    }
+    const ins = await client.query(
+      `INSERT INTO scenario (household_id, name, description, is_default)
+       VALUES ($1, $2, $3, $4) RETURNING *`,
+      [householdId, String(name).trim(), description || null, !!is_default]
+    );
+    const scenarioId = ins.rows[0].id;
+    const a = parseScenarioAssumptionBody({ assumptions: assumptions || req.body });
+    await client.query(
+      `INSERT INTO scenario_assumption (
+        scenario_id, retirement_age_p1, retirement_age_p2,
+        social_security_claim_age_p1, social_security_claim_age_p2,
+        annual_spending_target, inflation_rate, portfolio_return_rate,
+        withdrawal_strategy, withdrawal_order_custom, roth_conversion_strategy, notes
+      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)`,
+      [
+        scenarioId,
+        a.retirement_age_p1,
+        a.retirement_age_p2,
+        a.social_security_claim_age_p1,
+        a.social_security_claim_age_p2,
+        a.annual_spending_target,
+        a.inflation_rate,
+        a.portfolio_return_rate,
+        a.withdrawal_strategy,
+        a.withdrawal_order_custom ? JSON.stringify(a.withdrawal_order_custom) : null,
+        a.roth_conversion_strategy,
+        a.notes,
+      ]
+    );
+    const rp = roth_plan || {};
+    await client.query(
+      `INSERT INTO roth_conversion_plan (scenario_id, strategy_type, annual_fixed_amount, target_tax_bracket, max_taxable_income, max_irmaa_income)
+       VALUES ($1, $2, $3, $4, $5, $6)`,
+      [
+        scenarioId,
+        rp.strategy_type || a.roth_conversion_strategy || 'none',
+        rp.annual_fixed_amount ?? null,
+        rp.target_tax_bracket ?? null,
+        rp.max_taxable_income ?? null,
+        rp.max_irmaa_income ?? null,
+      ]
+    );
+    await client.query('COMMIT');
+    res.status(201).json({ ...ins.rows[0], assumptions: a });
+  } catch (error) {
+    await client.query('ROLLBACK');
+    console.error('Error creating scenario:', error);
+    if (error.code === '42P01') {
+      return res.status(503).json({ error: 'Scenario tables missing. Run migrations.' });
+    }
+    res.status(500).json({ error: error.message || 'Failed to create scenario' });
+  } finally {
+    client.release();
+  }
+});
+
+app.put('/api/scenarios/:id', async (req, res) => {
+  try {
+    const id = parseInt(req.params.id, 10);
+    const { name, description, is_default } = req.body;
+    const hh = await pool.query('SELECT id FROM household ORDER BY id LIMIT 1');
+    const householdId = hh.rows[0]?.id || 1;
+    if (is_default) {
+      await pool.query('UPDATE scenario SET is_default = FALSE WHERE household_id = $1', [householdId]);
+    }
+    const result = await pool.query(
+      `UPDATE scenario SET
+        name = COALESCE($2, name),
+        description = COALESCE($3, description),
+        is_default = COALESCE($4, is_default),
+        updated_at = CURRENT_TIMESTAMP
+       WHERE id = $1 RETURNING *`,
+      [id, name != null ? String(name).trim() : null, description, is_default]
+    );
+    if (!result.rows.length) return res.status(404).json({ error: 'Scenario not found' });
+    res.json(result.rows[0]);
+  } catch (error) {
+    console.error('Error updating scenario:', error);
+    res.status(500).json({ error: error.message || 'Failed to update scenario' });
+  }
+});
+
+app.put('/api/scenarios/:id/assumptions', async (req, res) => {
+  const client = await pool.connect();
+  try {
+    const id = parseInt(req.params.id, 10);
+    const a = parseScenarioAssumptionBody(req.body);
+    const rp = req.body.roth_plan;
+    await client.query('BEGIN');
+    await client.query(
+      `INSERT INTO scenario_assumption (
+        scenario_id, retirement_age_p1, retirement_age_p2,
+        social_security_claim_age_p1, social_security_claim_age_p2,
+        annual_spending_target, inflation_rate, portfolio_return_rate,
+        withdrawal_strategy, withdrawal_order_custom, roth_conversion_strategy, notes
+      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
+      ON CONFLICT (scenario_id) DO UPDATE SET
+        retirement_age_p1 = EXCLUDED.retirement_age_p1,
+        retirement_age_p2 = EXCLUDED.retirement_age_p2,
+        social_security_claim_age_p1 = EXCLUDED.social_security_claim_age_p1,
+        social_security_claim_age_p2 = EXCLUDED.social_security_claim_age_p2,
+        annual_spending_target = EXCLUDED.annual_spending_target,
+        inflation_rate = EXCLUDED.inflation_rate,
+        portfolio_return_rate = EXCLUDED.portfolio_return_rate,
+        withdrawal_strategy = EXCLUDED.withdrawal_strategy,
+        withdrawal_order_custom = EXCLUDED.withdrawal_order_custom,
+        roth_conversion_strategy = EXCLUDED.roth_conversion_strategy,
+        notes = EXCLUDED.notes`,
+      [
+        id,
+        a.retirement_age_p1,
+        a.retirement_age_p2,
+        a.social_security_claim_age_p1,
+        a.social_security_claim_age_p2,
+        a.annual_spending_target,
+        a.inflation_rate,
+        a.portfolio_return_rate,
+        a.withdrawal_strategy,
+        a.withdrawal_order_custom ? JSON.stringify(a.withdrawal_order_custom) : null,
+        a.roth_conversion_strategy,
+        a.notes,
+      ]
+    );
+    if (rp || a.roth_conversion_strategy) {
+      await client.query(
+        `INSERT INTO roth_conversion_plan (scenario_id, strategy_type, annual_fixed_amount, target_tax_bracket, max_taxable_income, max_irmaa_income)
+         VALUES ($1, $2, $3, $4, $5, $6)
+         ON CONFLICT (scenario_id) DO UPDATE SET
+           strategy_type = EXCLUDED.strategy_type,
+           annual_fixed_amount = EXCLUDED.annual_fixed_amount,
+           target_tax_bracket = EXCLUDED.target_tax_bracket,
+           max_taxable_income = EXCLUDED.max_taxable_income,
+           max_irmaa_income = EXCLUDED.max_irmaa_income,
+           modified = CURRENT_TIMESTAMP`,
+        [
+          id,
+          rp?.strategy_type || a.roth_conversion_strategy || 'none',
+          rp?.annual_fixed_amount ?? null,
+          rp?.target_tax_bracket ?? null,
+          rp?.max_taxable_income ?? null,
+          rp?.max_irmaa_income ?? null,
+        ]
+      );
+    }
+    await client.query('UPDATE scenario SET updated_at = CURRENT_TIMESTAMP WHERE id = $1', [id]);
+    await client.query('COMMIT');
+    res.json({ scenario_id: id, assumptions: a });
+  } catch (error) {
+    await client.query('ROLLBACK');
+    console.error('Error updating scenario assumptions:', error);
+    res.status(500).json({ error: error.message || 'Failed to update assumptions' });
+  } finally {
+    client.release();
+  }
+});
+
+app.delete('/api/scenarios/:id', async (req, res) => {
+  try {
+    const id = parseInt(req.params.id, 10);
+    const check = await pool.query('SELECT is_default FROM scenario WHERE id = $1', [id]);
+    if (!check.rows.length) return res.status(404).json({ error: 'Scenario not found' });
+    const count = await pool.query('SELECT COUNT(*)::int AS c FROM scenario');
+    if (check.rows[0].is_default && count.rows[0].c <= 1) {
+      return res.status(400).json({ error: 'Cannot delete the only scenario' });
+    }
+    await pool.query('DELETE FROM scenario WHERE id = $1', [id]);
+    res.status(204).send();
+  } catch (error) {
+    console.error('Error deleting scenario:', error);
+    res.status(500).json({ error: error.message || 'Failed to delete scenario' });
+  }
+});
+
+app.get('/api/scenarios/compare', async (req, res) => {
+  try {
+    const ids = (req.query.ids || '')
+      .split(',')
+      .map((x) => parseInt(x.trim(), 10))
+      .filter((n) => Number.isFinite(n));
+    if (!ids.length) {
+      return res.status(400).json({ error: 'ids query required (comma-separated scenario ids)' });
+    }
+    const rows = [];
+    for (const id of ids) {
+      const data = await runProjection(pool, { scenario_id: id });
+      const last = data.by_year[data.by_year.length - 1];
+      rows.push({
+        scenario_id: id,
+        scenario_name: data.scenario?.name,
+        p1_retirement_year: data.projection_meta?.p1_retirement_year,
+        p2_retirement_year: data.projection_meta?.p2_retirement_year,
+        p1_ss_claim_age: data.projection_meta?.p1_ss_claim_age,
+        p2_ss_claim_age: data.projection_meta?.p2_ss_claim_age,
+        roth_strategy: data.projection_meta?.roth_conversion_strategy,
+        lifetime_total_tax: data.projection_meta?.planning_scores?.lifetime_total_tax,
+        ending_net_worth: last?.net_worth,
+        year_reaches_target: data.year_reaches_target,
+      });
+    }
+    res.json({ scenarios: rows });
+  } catch (error) {
+    console.error('Error comparing scenarios:', error);
+    res.status(500).json({ error: error.message || 'Failed to compare scenarios' });
+  }
+});
+
+// ==================== ACCOUNT TAX PROFILE ====================
+
+app.get('/api/accounts/:id/tax-profile', async (req, res) => {
+  try {
+    const id = parsePositiveIntParam(req.params.id);
+    if (!id) {
+      return res.status(400).json({ error: 'Invalid account id' });
+    }
+    const result = await pool.query('SELECT * FROM account_tax_profile WHERE account_id = $1', [id]);
+    if (!result.rows.length) return res.json(null);
+    res.json(result.rows[0]);
+  } catch (error) {
+    if (error.code === '42P01') return res.json(null);
+    res.status(500).json({ error: error.message || 'Failed to fetch tax profile' });
+  }
+});
+
+app.put('/api/accounts/:id/tax-profile', async (req, res) => {
+  try {
+    const id = parsePositiveIntParam(req.params.id);
+    if (!id) {
+      return res.status(400).json({ error: 'Invalid account id' });
+    }
+    const { cost_basis, unrealized_gain_percent, dividend_yield, qualified_dividend_percent } = req.body;
+    const result = await pool.query(
+      `INSERT INTO account_tax_profile (account_id, cost_basis, unrealized_gain_percent, dividend_yield, qualified_dividend_percent)
+       VALUES ($1, $2, $3, $4, $5)
+       ON CONFLICT (account_id) DO UPDATE SET
+         cost_basis = EXCLUDED.cost_basis,
+         unrealized_gain_percent = EXCLUDED.unrealized_gain_percent,
+         dividend_yield = EXCLUDED.dividend_yield,
+         qualified_dividend_percent = EXCLUDED.qualified_dividend_percent,
+         modified = CURRENT_TIMESTAMP
+       RETURNING *`,
+      [
+        id,
+        cost_basis != null && cost_basis !== '' ? parseFloat(cost_basis) : null,
+        unrealized_gain_percent != null && unrealized_gain_percent !== ''
+          ? parseFloat(unrealized_gain_percent)
+          : null,
+        dividend_yield != null && dividend_yield !== '' ? parseFloat(dividend_yield) : null,
+        qualified_dividend_percent != null && qualified_dividend_percent !== ''
+          ? parseFloat(qualified_dividend_percent)
+          : 100,
+      ]
+    );
+    res.json(result.rows[0]);
+  } catch (error) {
+    if (error.code === '42P01') {
+      return res.status(503).json({ error: 'Run migration 013_account_tax_profile.sql' });
+    }
+    res.status(500).json({ error: error.message || 'Failed to save tax profile' });
+  }
+});
+
+// ==================== PROJECTIONS (Stage 4 — net worth & income/expenses by year) ====================
 
 app.get('/api/projections', async (req, res) => {
   try {
-    const allowZeroRates = !!process.env.DEBUG;
-    const minGrowth = allowZeroRates ? 0 : 0.01;
-    const minIndexPct = allowZeroRates ? 0 : 0.01;
-
-    const now = new Date();
-    const startYear = now.getFullYear();
-
-    const [householdRes, incomeRes, balancesRes, summaryRes] = await Promise.all([
-      pool.query(
-        `SELECT p1_display_name, p2_display_name, p1_birth_year, p2_birth_year,
-                p1_retirement_date, p2_retirement_date, p1_ss_at_fra, p2_ss_at_fra, filing_status,
-                required_monthly_income_retirement,
-                projection_horizon_years, projection_growth_pct,
-                projection_expense_growth_pct, projection_ssi_growth_pct
-         FROM household ORDER BY id LIMIT 1`
-      ),
-      pool.query('SELECT * FROM income ORDER BY as_of DESC, id DESC LIMIT 1'),
-      pool.query(
-        `SELECT DISTINCT ON (ab.account_id) ab.balance, a.account_type, a.expected_depreciation_pct, a.owner_type,
-                a.rmd_owner_type
-         FROM account_balance ab
-         JOIN account a ON ab.account_id = a.id
-         ORDER BY ab.account_id, ab.as_of DESC, ab.id DESC`
-      ),
-      pool.query(
-        `SELECT el.current_monthly, el.retirement_monthly, ec.category_type
-         FROM (SELECT DISTINCT ON (expense_category_id) expense_category_id, current_monthly, retirement_monthly
-               FROM expense_line ORDER BY expense_category_id, as_of DESC, id DESC) el
-         JOIN expense_category ec ON el.expense_category_id = ec.id`
-      ),
-    ]);
-
-    const household = householdRes.rows[0] || null;
-    const income = incomeRes.rows[0] || null;
-
-    const tryParseFloat = (v) => {
-      if (v == null || v === '') return null;
-      const p = parseFloat(String(v).trim());
-      return Number.isFinite(p) ? p : null;
-    };
-    const tryParseInt = (v) => {
-      if (v == null || v === '') return null;
-      const n = parseInt(String(v).trim(), 10);
-      return Number.isFinite(n) ? n : null;
-    };
-    const yearsQ = tryParseInt(req.query.years);
-    const yearsDb = tryParseInt(household?.projection_horizon_years);
-    let horizonYears = Number.isFinite(yearsQ) ? yearsQ : yearsDb;
-    if (!Number.isFinite(horizonYears)) horizonYears = 30;
-    horizonYears = Math.min(50, Math.max(5, horizonYears));
-
-    const growthQ = tryParseFloat(req.query.growth_pct);
-    let growthPct = Number.isFinite(growthQ) && growthQ >= minGrowth && growthQ <= 20 ? growthQ : null;
-    if (growthPct == null) {
-      const gDb = tryParseFloat(household?.projection_growth_pct);
-      growthPct =
-        Number.isFinite(gDb) && gDb >= minGrowth && gDb <= 20 ? gDb : 5;
-    }
-
-    const expenseGQ =
-      tryParseFloat(req.query.expense_growth_pct) ?? tryParseFloat(req.query.expense_cola_pct);
-    let expenseGrowthPct =
-      Number.isFinite(expenseGQ) && expenseGQ >= minIndexPct && expenseGQ <= 10 ? expenseGQ : null;
-    if (expenseGrowthPct == null) {
-      const eDb = tryParseFloat(household?.projection_expense_growth_pct);
-      expenseGrowthPct =
-        Number.isFinite(eDb) && eDb >= minIndexPct && eDb <= 10 ? eDb : 2.5;
-    }
-
-    const ssiGQ = tryParseFloat(req.query.ssi_growth_pct);
-    let ssiGrowthPct = Number.isFinite(ssiGQ) && ssiGQ >= minIndexPct && ssiGQ <= 10 ? ssiGQ : null;
-    if (ssiGrowthPct == null) {
-      const sDb = tryParseFloat(household?.projection_ssi_growth_pct);
-      ssiGrowthPct = Number.isFinite(sDb) && sDb >= minIndexPct && sDb <= 10 ? sDb : 2.5;
-    }
-
-    const expenseGrowthFactor = 1 + expenseGrowthPct / 100;
-    const ssiGrowthFactor = 1 + ssiGrowthPct / 100;
-
-    const filingStatus = household?.filing_status || 'married_filing_jointly';
-    const p1BirthYear = household?.p1_birth_year != null ? parseInt(household.p1_birth_year, 10) : null;
-    const p2BirthYear = household?.p2_birth_year != null ? parseInt(household.p2_birth_year, 10) : null;
-
-    const p1RetirementYear = yearFromDate(household?.p1_retirement_date);
-    const p2RetirementYear = yearFromDate(household?.p2_retirement_date);
-    const retirementYear = (p1RetirementYear != null || p2RetirementYear != null)
-      ? Math.max(p1RetirementYear ?? 0, p2RetirementYear ?? 0)
-      : null;
-
-    const p1AtFraRaw = household?.p1_ss_at_fra != null && household.p1_ss_at_fra !== '' ? parseFloat(household.p1_ss_at_fra) : null;
-    const p2AtFraRaw = household?.p2_ss_at_fra != null && household.p2_ss_at_fra !== '' ? parseFloat(household.p2_ss_at_fra) : null;
-    const p1SsFromAtFra = Number.isFinite(p1AtFraRaw) ? ssMonthlyAtRetirementAge(p1AtFraRaw, p1BirthYear, p1RetirementYear) : null;
-    const p2SsFromAtFra = Number.isFinite(p2AtFraRaw) ? ssMonthlyAtRetirementAge(p2AtFraRaw, p2BirthYear, p2RetirementYear) : null;
-
-    const p1SsMonthly = p1SsFromAtFra != null ? p1SsFromAtFra : 0;
-    const grossP2 = income ? parseFloat(income.gross_salary_p2) || 0 : 0;
-    const p2HasNoEarnings = grossP2 === 0 || income?.gross_salary_p2 == null || income.gross_salary_p2 === '';
-    const p2AgeAtRetirement = p2BirthYear != null && p2RetirementYear != null ? Math.min(70, Math.max(62, p2RetirementYear - p2BirthYear)) : null;
-    const p2UsesSpousal = p2HasNoEarnings && p2SsFromAtFra == null && Number.isFinite(p1AtFraRaw) && p1AtFraRaw > 0 && p2AgeAtRetirement != null;
-    const p2SsMonthly = p2UsesSpousal
-      ? Math.round(0.5 * p1AtFraRaw * ssFactorForAge(p2AgeAtRetirement) * 100) / 100
-      : (p2SsFromAtFra != null ? p2SsFromAtFra : 0);
-    const p1SsAnnual = p1SsMonthly * 12;
-    const p2SsAnnual = p2SsMonthly * 12;
-
-    let currentAnnual = 0;
-    let retirementAnnual = 0;
-    const p2HealthUntilMedicareMonthly = [];
-    for (const row of summaryRes.rows) {
-      const catType = row.category_type || 'regular';
-      if (catType === 'p2_health_until_medicare') {
-        const retVal = row.retirement_monthly != null ? parseFloat(row.retirement_monthly) : null;
-        if (retVal != null && retVal > 0) {
-          p2HealthUntilMedicareMonthly.push(retVal);
-        }
-        continue;
-      }
-      currentAnnual += (parseFloat(row.current_monthly) || 0) * 12;
-      const retVal = row.retirement_monthly != null ? parseFloat(row.retirement_monthly) : null;
-      if (retVal !== 0) {
-        const r = retVal != null ? retVal : parseFloat(row.current_monthly) || 0;
-        retirementAnnual += r * 12;
-      }
-    }
-    const mortgageResult = await pool.query('SELECT monthly_payment FROM mortgage LIMIT 1');
-    const mortgageMonthly = mortgageResult.rows.length ? parseFloat(mortgageResult.rows[0].monthly_payment) || 0 : 0;
-    currentAnnual += mortgageMonthly * 12;
-    retirementAnnual += mortgageMonthly * 12;
-
-    const rmiRaw = household?.required_monthly_income_retirement;
-    const rmiMonthlyParsed =
-      rmiRaw != null && rmiRaw !== '' && Number.isFinite(parseFloat(rmiRaw)) ? parseFloat(rmiRaw) : null;
-    const rmiMonthly =
-      rmiMonthlyParsed != null && rmiMonthlyParsed > 0 ? Math.round(rmiMonthlyParsed * 100) / 100 : null;
-    const useRequiredMonthlyIncome = rmiMonthly != null;
-
-    const target25xRetirement = useRequiredMonthlyIncome
-      ? Math.round(rmiMonthly * 12 * 25 * 100) / 100
-      : Math.round(retirementAnnual * 25 * 100) / 100;
-
-    function depPctToFactor(pct) {
-      const p = pct != null && pct !== '' ? parseFloat(pct) : 0;
-      const n = Number.isFinite(p) && p > 0 ? Math.min(100, p) : 0;
-      return 1 - n / 100;
-    }
-
-    let tradP1 = 0;
-    let tradP2 = 0;
-    let otherInvest = 0;
-    const assetParts = [];
-    for (const row of balancesRes.rows) {
-      const bal = parseFloat(row.balance) || 0;
-      if (row.account_type === 'asset') {
-        const depPct = row.expected_depreciation_pct != null ? parseFloat(row.expected_depreciation_pct) : 0;
-        assetParts.push({
-          balance: bal,
-          depFactor: depPctToFactor(Number.isFinite(depPct) ? depPct : 0),
-        });
-      } else if (RMD_ACCOUNT_TYPES.has(row.account_type)) {
-        const ot =
-          row.rmd_owner_type != null && String(row.rmd_owner_type).trim() !== ''
-            ? String(row.rmd_owner_type).trim()
-            : (row.owner_type || 'joint');
-        if (ot === 'p1') tradP1 += bal;
-        else if (ot === 'p2') tradP2 += bal;
-        else {
-          tradP1 += bal * 0.5;
-          tradP2 += bal * 0.5;
-        }
-      } else {
-        otherInvest += bal;
-      }
-    }
-    let startingNetWorth = tradP1 + tradP2 + otherInvest + assetParts.reduce((s, a) => s + a.balance, 0);
-    startingNetWorth = Math.round(startingNetWorth * 100) / 100;
-
-    const grossP1 = income ? parseFloat(income.gross_salary) || 0 : 0;
-    const grossP2Num = income ? parseFloat(income.gross_salary_p2) || 0 : 0;
-    // Expenses switch to retirement amounts when the primary income provider retires (so if one party has 0 income, switch when the earner retires).
-    const primaryEarnerRetirementYear = (grossP1 > 0 && grossP2Num === 0) ? p1RetirementYear
-      : (grossP2Num > 0 && grossP1 === 0) ? p2RetirementYear
-      : (grossP1 >= grossP2Num ? p1RetirementYear : p2RetirementYear);
-    const expenseRetirementYear = primaryEarnerRetirementYear ?? p1RetirementYear ?? p2RetirementYear;
-    const MEDICARE_AGE = 65;
-    const p2MedicareYear = p2BirthYear != null ? p2BirthYear + MEDICARE_AGE : null;
-
-    const raisePct = income && income.expected_raise_pct != null ? parseFloat(income.expected_raise_pct) / 100 : 0;
-    const bonusQuarterly = income ? parseFloat(income.bonus_quarterly) || 0 : 0;
-    const fourOOneKPctP1 = income && income.four_o_one_k_pct != null ? parseFloat(income.four_o_one_k_pct) / 100 : 0;
-    const fourOOneKPctP2 = income && income.four_o_one_k_pct_p2 != null ? parseFloat(income.four_o_one_k_pct_p2) / 100 : 0;
-    const matchPctP1 = income && income.four_o_one_k_match_pct != null ? parseFloat(income.four_o_one_k_match_pct) / 100 : 0;
-    const matchPctP2 = income && income.four_o_one_k_match_pct_p2 != null ? parseFloat(income.four_o_one_k_match_pct_p2) / 100 : 0;
-
-    const endYear = startYear + horizonYears;
-    const byYear = [];
-    const growthFactor = 1 + growthPct / 100;
-
-    for (let y = startYear; y <= endYear; y++) {
-      const p1Retired = p1RetirementYear != null && y >= p1RetirementYear;
-      const p2Retired = p2RetirementYear != null && y >= p2RetirementYear;
-      const isRetired = retirementYear != null && y >= retirementYear;
-      const yearsFromStart = y - startYear;
-      const raiseFactor = 1 + (yearsFromStart > 0 ? Math.pow(1 + raisePct, yearsFromStart) - 1 : 0);
-
-      let salaryP1 = grossP1 * (y === startYear ? 1 : raiseFactor);
-      let salaryP2 = grossP2Num * (y === startYear ? 1 : raiseFactor);
-      const wageIncome = (p1Retired ? 0 : salaryP1) + (p2Retired ? 0 : salaryP2);
-      const bonusAnnual = (expenseRetirementYear != null && y >= expenseRetirementYear) ? 0 : bonusQuarterly * 4;
-      const ssColaYearsP1 = p1Retired && p1RetirementYear != null ? Math.max(0, y - p1RetirementYear) : 0;
-      const ssColaYearsP2 = p2Retired && p2RetirementYear != null ? Math.max(0, y - p2RetirementYear) : 0;
-      const annualSsP1 = p1Retired ? p1SsAnnual * Math.pow(ssiGrowthFactor, ssColaYearsP1) : 0;
-      const annualSsP2 = p2Retired ? p2SsAnnual * Math.pow(ssiGrowthFactor, ssColaYearsP2) : 0;
-      const totalSs = annualSsP1 + annualSsP2;
-
-      const age1 = ageAtEoy(p1BirthYear, y);
-      const age2 = ageAtEoy(p2BirthYear, y);
-      const rmdStart1 = rmdStartAgeFromBirthYear(p1BirthYear);
-      const rmdStart2 = rmdStartAgeFromBirthYear(p2BirthYear);
-
-      let rmd1 = 0;
-      let rmd2 = 0;
-      if (age1 != null && rmdStart1 != null && age1 >= rmdStart1 && tradP1 > 0) {
-        const div = uniformLifetimeDivisor(age1);
-        if (div != null && div > 0) rmd1 = Math.min(tradP1, tradP1 / div);
-      }
-      if (age2 != null && rmdStart2 != null && age2 >= rmdStart2 && tradP2 > 0) {
-        const div = uniformLifetimeDivisor(age2);
-        if (div != null && div > 0) rmd2 = Math.min(tradP2, tradP2 / div);
-      }
-      tradP1 = Math.max(0, tradP1 - rmd1);
-      tradP2 = Math.max(0, tradP2 - rmd2);
-      const rmdTotal = Math.round((rmd1 + rmd2) * 100) / 100;
-
-      const expensesUseRetirement = expenseRetirementYear != null && y >= expenseRetirementYear;
-      const inP2HealthBridge =
-        p1RetirementYear != null && p2MedicareYear != null && y >= p1RetirementYear && y < p2MedicareYear;
-
-      let expensesAmount;
-      let actualWithdrawalFromSavings = 0;
-      let retirementFundingShortfall = 0;
-
-      if (useRequiredMonthlyIncome && expensesUseRetirement && expenseRetirementYear != null) {
-        const expenseGrowthYears = y - expenseRetirementYear;
-        const baseNeed = rmiMonthly * 12 * Math.pow(expenseGrowthFactor, Math.max(0, expenseGrowthYears));
-        expensesAmount = Math.round(baseNeed * 100) / 100;
-        if (inP2HealthBridge && p2HealthUntilMedicareMonthly.length > 0) {
-          const bridgeColaYears = y - p1RetirementYear;
-          let bridgeAnnual = 0;
-          for (const monthly of p2HealthUntilMedicareMonthly) {
-            bridgeAnnual += monthly * 12 * Math.pow(expenseGrowthFactor, Math.max(0, bridgeColaYears));
-          }
-          expensesAmount = Math.round((expensesAmount + bridgeAnnual) * 100) / 100;
-        }
-        const withdrawalFromSavings = Math.max(
-          0,
-          expensesAmount - totalSs - rmdTotal - wageIncome - bonusAnnual
-        );
-        actualWithdrawalFromSavings = Math.min(withdrawalFromSavings, otherInvest);
-        actualWithdrawalFromSavings = Math.round(actualWithdrawalFromSavings * 100) / 100;
-        retirementFundingShortfall = Math.round((withdrawalFromSavings - actualWithdrawalFromSavings) * 100) / 100;
-        otherInvest = Math.max(0, otherInvest - actualWithdrawalFromSavings);
-      } else {
-        const expenseBase = expensesUseRetirement ? retirementAnnual : currentAnnual;
-        const expenseGrowthYears =
-          expensesUseRetirement && expenseRetirementYear != null ? y - expenseRetirementYear : y - startYear;
-        expensesAmount = Math.round(expenseBase * Math.pow(expenseGrowthFactor, Math.max(0, expenseGrowthYears)) * 100) / 100;
-        if (inP2HealthBridge && p2HealthUntilMedicareMonthly.length > 0) {
-          const bridgeColaYears = y - p1RetirementYear;
-          let bridgeAnnual = 0;
-          for (const monthly of p2HealthUntilMedicareMonthly) {
-            bridgeAnnual += monthly * 12 * Math.pow(expenseGrowthFactor, Math.max(0, bridgeColaYears));
-          }
-          expensesAmount = Math.round((expensesAmount + bridgeAnnual) * 100) / 100;
-        }
-      }
-
-      const otherForSsTax = wageIncome + bonusAnnual + rmdTotal + actualWithdrawalFromSavings;
-      const taxableSsEstimate = estimateTaxableSocialSecurityAnnual(otherForSsTax, totalSs, filingStatus);
-      const taxableIncomeEstimate =
-        Math.round(
-          (wageIncome + bonusAnnual + rmdTotal + taxableSsEstimate + actualWithdrawalFromSavings) * 100
-        ) / 100;
-      const taxableSsPlusRmd =
-        Math.round((taxableSsEstimate + rmdTotal + actualWithdrawalFromSavings) * 100) / 100;
-      const standardDeduction = standardDeductionEstimate(filingStatus, y, age1, age2);
-      const taxableIncomeAfterDeduction =
-        Math.max(0, Math.round((taxableIncomeEstimate - standardDeduction) * 100) / 100);
-      const taxableSsRmdMinusStdDed =
-        Math.max(0, Math.round((taxableSsPlusRmd - standardDeduction) * 100) / 100);
-      const fedTaxResult = federalOrdinaryTaxWithBreakdown(taxableIncomeAfterDeduction, filingStatus, y);
-      const federalEffectiveRate =
-        taxableIncomeAfterDeduction > 0
-          ? Math.round((fedTaxResult.total / taxableIncomeAfterDeduction) * 10000) / 100
-          : 0;
-
-      const incomeAmount =
-        Math.round((wageIncome + bonusAnnual + totalSs + rmdTotal + actualWithdrawalFromSavings) * 100) / 100;
-      const savingsAmount = Math.round((incomeAmount - expensesAmount) * 100) / 100;
-
-      let contributions401k = 0;
-      if (!isRetired) {
-        const base = SAVINGS_LIMITS_BY_YEAR[y] || SAVINGS_LIMITS_BY_YEAR[2026] || SAVINGS_LIMITS_BY_YEAR[2025];
-        const limP1 = buildPartyLimitsForYear(p1BirthYear, base, y);
-        const limP2 = buildPartyLimitsForYear(p2BirthYear, base, y);
-        const plannedP1 = Math.min(salaryP1 * fourOOneKPctP1 + salaryP1 * matchPctP1, limP1['401k_elective_limit'] || 1e9);
-        const plannedP2 = Math.min(salaryP2 * fourOOneKPctP2 + salaryP2 * matchPctP2, limP2['401k_elective_limit'] || 1e9);
-        contributions401k = (plannedP1 || 0) + (plannedP2 || 0);
-      }
-
-      let invTotal = tradP1 + tradP2 + otherInvest;
-      invTotal = invTotal * growthFactor + savingsAmount;
-      const tradAfterRmd = tradP1 + tradP2;
-      const denom = tradAfterRmd + otherInvest;
-      if (invTotal <= 0) {
-        tradP1 = 0;
-        tradP2 = 0;
-        otherInvest = 0;
-      } else if (denom <= 0) {
-        tradP1 = 0;
-        tradP2 = 0;
-        otherInvest = invTotal;
-      } else {
-        const ratioTrad = tradAfterRmd / denom;
-        const newTrad = invTotal * ratioTrad;
-        const p1Share = tradAfterRmd > 0 ? tradP1 / tradAfterRmd : 0.5;
-        tradP1 = newTrad * p1Share;
-        tradP2 = newTrad * (1 - p1Share);
-        otherInvest = invTotal * (1 - ratioTrad);
-      }
-
-      for (const ap of assetParts) {
-        ap.balance *= ap.depFactor;
-      }
-      const hardAssetBalance = Math.round(assetParts.reduce((s, a) => s + a.balance, 0) * 100) / 100;
-      const financialBalance = Math.round((tradP1 + tradP2 + otherInvest) * 100) / 100;
-      const netWorth = Math.round((financialBalance + hardAssetBalance) * 100) / 100;
-
-      const wageP1 = p1Retired ? 0 : salaryP1;
-      const wageP2 = p2Retired ? 0 : salaryP2;
-
-      byYear.push({
-        year: y,
-        net_worth: netWorth,
-        financial_balance: financialBalance,
-        hard_asset_balance: hardAssetBalance,
-        income: incomeAmount,
-        expenses: expensesAmount,
-        savings: savingsAmount,
-        income_wages: Math.round(wageIncome * 100) / 100,
-        income_wage_p1: Math.round(wageP1 * 100) / 100,
-        income_wage_p2: Math.round(wageP2 * 100) / 100,
-        income_bonus: Math.round(bonusAnnual * 100) / 100,
-        income_ss_total: Math.round(totalSs * 100) / 100,
-        taxable_ss_estimate: taxableSsEstimate,
-        taxable_income_estimate: taxableIncomeEstimate,
-        taxable_income_before_deduction: taxableIncomeEstimate,
-        taxable_ss_plus_rmd: taxableSsPlusRmd,
-        standard_deduction_estimate: standardDeduction,
-        taxable_income_after_standard_deduction: taxableIncomeAfterDeduction,
-        taxable_ss_rmd_minus_std_ded: taxableSsRmdMinusStdDed,
-        federal_tax_ordinary_estimate: fedTaxResult.total,
-        federal_tax_brackets: fedTaxResult.brackets,
-        federal_effective_rate_pct: federalEffectiveRate,
-        rmd: rmdTotal,
-        rmd_p1: Math.round(rmd1 * 100) / 100,
-        rmd_p2: Math.round(rmd2 * 100) / 100,
-        contributions_401k: Math.round(contributions401k * 100) / 100,
-        is_retired: isRetired,
-        p1_retired: p1Retired,
-        p2_retired: p2Retired,
-        income_ss_p1: Math.round(annualSsP1 * 100) / 100,
-        income_ss_p2: Math.round(annualSsP2 * 100) / 100,
-        p1_age_eoy: age1 != null ? age1 : null,
-        p2_age_eoy: age2 != null ? age2 : null,
-        income_from_savings_draw: actualWithdrawalFromSavings,
-        retirement_funding_shortfall: retirementFundingShortfall,
-      });
-    }
-
-    let year_reaches_target = null;
-    for (const row of byYear) {
-      if (row.net_worth >= target25xRetirement) {
-        year_reaches_target = row.year;
-        break;
-      }
-    }
-
-    res.json({
-      start_year: startYear,
-      end_year: endYear,
-      projection_horizon_years: horizonYears,
-      growth_pct: growthPct,
-      expense_growth_pct: expenseGrowthPct,
-      ssi_growth_pct: ssiGrowthPct,
-      target_25x_retirement: target25xRetirement,
-      retirement_year: retirementYear,
-      starting_net_worth: startingNetWorth,
-      current_annual: Math.round(currentAnnual * 100) / 100,
-      retirement_annual: Math.round(retirementAnnual * 100) / 100,
-      required_monthly_income_retirement: rmiMonthly,
-      by_year: byYear,
-      year_reaches_target: year_reaches_target,
-      household: household
-        ? {
-            p1_display_name: household.p1_display_name || 'P1',
-            p2_display_name: household.p2_display_name || 'P2',
-            filing_status: household.filing_status || 'married_filing_jointly',
-            required_monthly_income_retirement: rmiMonthly,
-          }
-        : null,
-      projection_meta: {
-        p1_retirement_year: p1RetirementYear,
-        p2_retirement_year: p2RetirementYear,
-        p1_ss_monthly_used: p1SsMonthly,
-        p2_ss_monthly_used: p2SsMonthly,
-        p2_uses_spousal: p2UsesSpousal,
-        expense_retirement_year: expenseRetirementYear,
-        p1_rmd_start_age: rmdStartAgeFromBirthYear(p1BirthYear),
-        p2_rmd_start_age: rmdStartAgeFromBirthYear(p2BirthYear),
-        rmd_note:
-          'RMD from traditional IRA and traditional 401(k) balances using IRS Uniform Lifetime Table (2022+). RMD owner (per account) assigns balance to P1, P2, or joint (50/50); if unset, general owner applies. First RMD age by birth year (72/73/75).',
-        taxable_income_note:
-          'Ordinary income before deduction = wages + bonus + RMD + estimated taxable Social Security (Pub. 915). Taxable income after standard deduction subtracts inflated 2025-style standard deduction (plus age 65+ add-ons). Federal tax uses ordinary brackets (2025-style, indexed ~2%/year). SS+RMD − std ded is informational only (full return uses one deduction). Not tax advice.',
-        tax_model_note:
-          'Excludes NIIT, AMT, state/local tax, credits, and payroll taxes. Brackets and standard deduction are approximations.',
-        use_required_monthly_income: useRequiredMonthlyIncome,
-        required_monthly_income_note: useRequiredMonthlyIncome
-          ? 'Retirement spending uses Required monthly income (expense growth from first year expenses use retirement amounts). Cash flow: Social Security and RMDs first, then wages/bonus, then withdrawals from non-RMD savings (taxable, Roth, etc.). P2 pre-Medicare bridge adds on top. Federal tax treats savings draws as ordinary income (approximation).'
-          : null,
-      },
-    });
+    const data = await runProjection(pool, req.query);
+    res.json(data);
   } catch (error) {
     console.error('Error computing projections:', error);
     if (error.code === '42P01') {
@@ -1842,7 +1731,6 @@ app.get('/api/projections', async (req, res) => {
     res.status(500).json({ error: error.message || 'Failed to compute projections' });
   }
 });
-
 // ==================== HEALTH ====================
 
 app.get('/api/health', (req, res) => {
@@ -1850,6 +1738,8 @@ app.get('/api/health', (req, res) => {
     status: isReady ? 'ready' : 'not ready',
     timestamp: new Date().toISOString(),
     version: process.env.VERSION || 'dev',
+    balance_api: 5,
+    account_balance_columns: accountBalanceColumnTypes,
   };
   if (isReady) {
     res.status(200).json(payload);

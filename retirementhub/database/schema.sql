@@ -107,6 +107,56 @@ CREATE TABLE IF NOT EXISTS account_balance (
 CREATE INDEX IF NOT EXISTS idx_account_balance_account ON account_balance(account_id);
 CREATE INDEX IF NOT EXISTS idx_account_balance_as_of ON account_balance(account_id, as_of DESC);
 
+-- ==================== SCENARIOS (advanced planning) ====================
+CREATE TABLE IF NOT EXISTS scenario (
+    id SERIAL PRIMARY KEY,
+    household_id INTEGER NOT NULL DEFAULT 1 REFERENCES household(id) ON DELETE CASCADE,
+    name VARCHAR(120) NOT NULL,
+    description TEXT,
+    is_default BOOLEAN NOT NULL DEFAULT FALSE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_scenario_one_default_per_household
+    ON scenario (household_id) WHERE is_default = TRUE;
+
+CREATE TABLE IF NOT EXISTS scenario_assumption (
+    scenario_id INTEGER PRIMARY KEY REFERENCES scenario(id) ON DELETE CASCADE,
+    retirement_age_p1 INTEGER,
+    retirement_age_p2 INTEGER,
+    social_security_claim_age_p1 INTEGER,
+    social_security_claim_age_p2 INTEGER,
+    annual_spending_target DECIMAL(14, 2),
+    inflation_rate DECIMAL(5, 2),
+    portfolio_return_rate DECIMAL(5, 2),
+    withdrawal_strategy VARCHAR(40) NOT NULL DEFAULT 'conservative',
+    withdrawal_order_custom JSONB,
+    roth_conversion_strategy VARCHAR(40) NOT NULL DEFAULT 'none',
+    notes TEXT
+);
+
+CREATE TABLE IF NOT EXISTS account_tax_profile (
+    account_id INTEGER PRIMARY KEY REFERENCES account(id) ON DELETE CASCADE,
+    cost_basis DECIMAL(14, 2),
+    unrealized_gain_percent DECIMAL(5, 2),
+    dividend_yield DECIMAL(5, 4),
+    qualified_dividend_percent DECIMAL(5, 2) DEFAULT 100,
+    modified TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS roth_conversion_plan (
+    id SERIAL PRIMARY KEY,
+    scenario_id INTEGER NOT NULL REFERENCES scenario(id) ON DELETE CASCADE,
+    strategy_type VARCHAR(40) NOT NULL DEFAULT 'none',
+    annual_fixed_amount DECIMAL(14, 2),
+    target_tax_bracket INTEGER,
+    max_taxable_income DECIMAL(14, 2),
+    max_irmaa_income DECIMAL(14, 2),
+    modified TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE (scenario_id)
+);
+
 -- ==================== MORTGAGE ====================
 CREATE TABLE IF NOT EXISTS mortgage (
     id SERIAL PRIMARY KEY,
