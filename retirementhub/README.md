@@ -60,6 +60,14 @@ psql -U postgres -d retirementhub -f retirementhub/database/migrations/006_house
 psql -U postgres -d retirementhub -f retirementhub/database/migrations/007_expense_category_type_p2_health.sql
 ```
 
+For **advanced tax planning** (scenarios, tax buckets, Roth conversions), run:
+
+```bash
+psql -U postgres -d retirementhub -f retirementhub/database/migrations/012_scenario_framework.sql
+psql -U postgres -d retirementhub -f retirementhub/database/migrations/013_account_tax_profile.sql
+psql -U postgres -d retirementhub -f retirementhub/database/migrations/014_roth_conversion_plan.sql
+```
+
 ### Environment Configuration
 
 1. Create a `.env` file in the project root directory (same level as `docker-compose.yml`):
@@ -140,3 +148,7 @@ Sample CSV templates are shown on the Import page.
 - **Stage 4:** Projections and charts — **Implemented.** Use the **Projections** page: net worth over time (with 25× retirement target line), income vs expenses by year, and configurable horizon and growth rate. Retirement dates on Household are used so wage income stops and Social Security starts per party; if P2 has no income and no P2 SS estimate, a spousal benefit (50% of P1’s) is applied when P2 retires. Set P1/P2 estimated monthly SS on Household for accurate retirement income.
 - **Retirement tax adjustments:** On **Expenses**, use the "Tax categories in retirement" card to set Federal, Medicare, and Social Security for retirement. Social Security (OASDI) is **0** in retirement (no tax on benefits). Medicare uses a suggested Part B premium from a table (by year). Federal can be estimated from taxable income using IRS-style brackets and standard deduction; optional estimator on the same card.
 - **P2 health until Medicare:** When P1 retires and goes on Medicare but P2 is not yet 65, you may need to budget for P2’s health insurance. On **Expenses**, set a category’s “In projections” to **P2 health until Medicare** and enter the monthly amount in Retirement/mo. In Projections that amount is only included for years when P1 is on Medicare and P2 is under 65, and it gets the same COLA as other expenses. The migration adds a seed category “P2 health until Medicare” you can use or rename.
+
+## Advanced tax planning
+
+The **Projections** page supports named **scenarios** (retirement ages, Social Security claim ages 62–70, annual spending target, withdrawal strategy, Roth conversion plan). A default **Baseline** scenario is seeded from household settings. Compare scenarios side-by-side; charts show balances by tax bucket, spending sources, federal tax, RMDs, and Roth conversions. For taxable brokerage accounts, set blended gain % and dividend yield when editing the account on **Accounts**. Not tax advice—federal ordinary + simplified LTCG only; no state tax, NIIT, or AMT.

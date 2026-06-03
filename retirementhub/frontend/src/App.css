@@ -283,7 +283,38 @@
   color: #1a3d35;
 }
 
+.balance-form-section {
+  flex-basis: 100%;
+  margin-top: 0.75rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid #e8eeec;
+  width: 100%;
+}
+
+.balance-form-title {
+  font-size: 0.95rem;
+  color: #1a3d35;
+  margin: 0 0 0.25rem 0;
+}
+
+.balance-form-subtitle {
+  font-size: 0.85rem;
+  margin: 0 0 0.5rem 0;
+}
+
+.balance-form-inline .form-row {
+  margin-bottom: 0;
+}
+
+.balance-form-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  align-self: flex-end;
+}
+
 .balance-history-section {
+  flex-basis: 100%;
   margin-top: 0.75rem;
   padding-top: 0.75rem;
   border-top: 1px solid #e8eeec;
@@ -394,6 +425,20 @@
   color: #b91c1c;
   background: #fef2f2;
   border-radius: 6px;
+  white-space: pre-wrap;
+  text-align: left;
+}
+
+.error-debug-panel {
+  margin: 0.75rem 0 1rem;
+  padding: 0.75rem;
+  background: #f8f4f0;
+  border: 1px solid #e0d5c8;
+  border-radius: 4px;
+  font-size: 0.8rem;
+  overflow-x: auto;
+  max-height: 20rem;
+  text-align: left;
 }
 
 .success-message {
@@ -455,6 +500,13 @@
   grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
   gap: 1rem 1.5rem;
   margin-bottom: 0.75rem;
+}
+
+.projections-insights-list {
+  margin: 0.5rem 0 0;
+  padding-left: 1.25rem;
+  color: #5a6b64;
+  font-size: 0.9rem;
 }
 
 .projections-summary-note {

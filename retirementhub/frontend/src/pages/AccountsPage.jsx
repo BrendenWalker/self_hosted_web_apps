@@ -7,9 +7,18 @@ import {
   getAccountBalances,
   getAccountBalancesHistory,
   upsertAccountBalance,
-  updateAccountBalance,
   deleteAccountBalance,
+  getAccountTaxProfile,
+  updateAccountTaxProfile,
 } from '../api/api';
+import { parseBalanceRowId, parsePositiveIntId } from '../utils/parseIds';
+import { formatApiError, apiErrorDebug } from '../utils/formatApiError';
+
+function sameAccountId(a, b) {
+  const x = parsePositiveIntId(a);
+  const y = parsePositiveIntId(b);
+  return x != null && x === y;
+}
 
 const ACCOUNT_TYPES = [
   { value: 'savings', label: 'Savings' },
@@ -45,6 +54,7 @@ export default function AccountsPage() {
   const [accounts, setAccounts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState(null);
+  const [errorDebug, setErrorDebug] = useState(null);
   const [editingId, setEditingId] = useState(null);
   const [editForm, setEditForm] = useState({
     name: '',
@@ -70,6 +80,12 @@ export default function AccountsPage() {
   const [expandedHistoryAccountId, setExpandedHistoryAccountId] = useState(null);
   const [balanceHistory, setBalanceHistory] = useState({});
   const [historyLoading, setHistoryLoading] = useState(false);
+  const [taxProfileForm, setTaxProfileForm] = useState({
+    cost_basis: '',
+    unrealized_gain_percent: '',
+    dividend_yield: '',
+    qualified_dividend_percent: '100',
+  });
 
   useEffect(() => {
     load();
@@ -85,10 +101,17 @@ export default function AccountsPage() {
       setAccounts(accountsRes.data || []);
       const byAcc = {};
       (balancesRes.data || []).forEach((b) => {
-        byAcc[b.account_id] = { id: b.id, balance: b.balance, as_of: b.as_of };
+        const accountKey = parsePositiveIntId(b.account_id);
+        if (accountKey == null) return;
+        byAcc[accountKey] = {
+          balance_id: parseBalanceRowId(b),
+          balance: b.balance,
+          as_of: b.as_of,
+        };
       });
       setBalancesByAccount(byAcc);
       setMessage(null);
+      setErrorDebug(null);
     } catch (err) {
       setMessage(err.response?.data?.error || 'Failed to load accounts');
     } finally {
@@ -136,7 +159,7 @@ export default function AccountsPage() {
     }
   };
 
-  const startEdit = (acc) => {
+  const startEdit = async (acc) => {
     setEditingId(acc.id);
     setEditForm({
       name: acc.name,
@@ -146,6 +169,28 @@ export default function AccountsPage() {
         acc.expected_depreciation_pct != null ? String(acc.expected_depreciation_pct) : '',
       rmd_owner_type: acc.rmd_owner_type != null ? String(acc.rmd_owner_type) : '',
     });
+    if (acc.account_type === 'taxable') {
+      try {
+        const res = await getAccountTaxProfile(acc.id);
+        const tp = res.data;
+        setTaxProfileForm({
+          cost_basis: tp?.cost_basis != null ? String(tp.cost_basis) : '',
+          unrealized_gain_percent:
+            tp?.unrealized_gain_percent != null ? String(tp.unrealized_gain_percent) : '',
+          dividend_yield:
+            tp?.dividend_yield != null ? String(Number(tp.dividend_yield) * 100) : '',
+          qualified_dividend_percent:
+            tp?.qualified_dividend_percent != null ? String(tp.qualified_dividend_percent) : '100',
+        });
+      } catch {
+        setTaxProfileForm({
+          cost_basis: '',
+          unrealized_gain_percent: '30',
+          dividend_yield: '2',
+          qualified_dividend_percent: '100',
+        });
+      }
+    }
   };
 
   const handleEditSubmit = async (e) => {
@@ -172,6 +217,27 @@ export default function AccountsPage() {
         payload.rmd_owner_type = raw === '' || raw == null ? null : raw;
       }
       await updateAccount(editingId, payload);
+      if (editForm.account_type === 'taxable') {
+        const divRaw = taxProfileForm.dividend_yield?.trim();
+        await updateAccountTaxProfile(editingId, {
+          cost_basis:
+            taxProfileForm.cost_basis?.trim() !== ''
+              ? parseFloat(taxProfileForm.cost_basis)
+              : null,
+          unrealized_gain_percent:
+            taxProfileForm.unrealized_gain_percent?.trim() !== ''
+              ? parseFloat(taxProfileForm.unrealized_gain_percent)
+              : null,
+          dividend_yield:
+            divRaw !== '' && Number.isFinite(parseFloat(divRaw))
+              ? parseFloat(divRaw) / 100
+              : null,
+          qualified_dividend_percent:
+            taxProfileForm.qualified_dividend_percent?.trim() !== ''
+              ? parseFloat(taxProfileForm.qualified_dividend_percent)
+              : 100,
+        });
+      }
       setEditingId(null);
       await load();
     } catch (err) {
@@ -194,22 +260,38 @@ export default function AccountsPage() {
     }
   };
 
+  const closeBalanceForm = () => {
+    setBalanceFormAccountId(null);
+    setBalanceFormBalanceId(null);
+  };
+
   const openBalanceForm = (acc, balanceRow = null) => {
-    const b = balanceRow ?? balancesByAccount[acc.id];
+    if (sameAccountId(balanceFormAccountId, acc.id) && balanceRow == null && balanceFormBalanceId == null) {
+      closeBalanceForm();
+      return;
+    }
+    const accountKey = parsePositiveIntId(acc.id);
+    const b = balanceRow ?? (accountKey != null ? balancesByAccount[accountKey] : null);
     const today = new Date().toISOString().slice(0, 10);
-    setBalanceFormAccountId(acc.id);
-    setBalanceFormBalanceId(balanceRow?.id ?? null);
+    setBalanceFormAccountId(parsePositiveIntId(acc.id));
+    setBalanceFormBalanceId(balanceRow ? parseBalanceRowId(balanceRow) : null);
     setBalanceForm({
       as_of: b?.as_of ? String(b.as_of).slice(0, 10) : today,
       balance: b != null && b.balance != null ? String(b.balance) : '',
     });
+    if (expandedHistoryAccountId != null && !sameAccountId(expandedHistoryAccountId, acc.id)) {
+      setExpandedHistoryAccountId(null);
+    }
   };
 
-  const toggleHistory = async (accountId) => {
+  const toggleHistory = async (accountIdRaw) => {
+    const accountId = parsePositiveIntId(accountIdRaw);
+    if (accountId == null) return;
     if (expandedHistoryAccountId === accountId) {
       setExpandedHistoryAccountId(null);
       return;
     }
+    closeBalanceForm();
     setExpandedHistoryAccountId(accountId);
     if (!balanceHistory[accountId]) {
       setHistoryLoading(true);
@@ -217,54 +299,65 @@ export default function AccountsPage() {
         const res = await getAccountBalancesHistory(accountId);
         setBalanceHistory((prev) => ({ ...prev, [accountId]: res.data || [] }));
       } catch (err) {
-        setMessage(err.response?.data?.error || 'Failed to load balance history');
+        setMessage(formatApiError(err, 'Failed to load balance history'));
+        setErrorDebug(apiErrorDebug(err));
       } finally {
         setHistoryLoading(false);
       }
     }
   };
 
-  const handleBalanceDelete = async (balanceId, accountId) => {
+  const handleBalanceDelete = async (balanceRow, accountId) => {
     setMessage(null);
+    const balanceRowId = parseBalanceRowId(balanceRow);
+    if (balanceRowId == null) {
+      setMessage('Cannot delete: invalid balance record id');
+      return;
+    }
     try {
-      await deleteAccountBalance(balanceId);
+      await deleteAccountBalance(balanceRowId);
       const res = await getAccountBalancesHistory(accountId);
       setBalanceHistory((prev) => ({ ...prev, [accountId]: res.data || [] }));
       await load();
     } catch (err) {
-      setMessage(err.response?.data?.error || 'Failed to delete balance');
+      setMessage(formatApiError(err, 'Failed to delete balance'));
+      setErrorDebug(apiErrorDebug(err));
     }
   };
 
-  const handleBalanceSubmit = async (e) => {
+  const handleBalanceSubmit = async (e, accountIdFromCard) => {
     e.preventDefault();
-    if (!balanceFormAccountId) return;
+    const accountId =
+      parsePositiveIntId(accountIdFromCard) ?? parsePositiveIntId(balanceFormAccountId);
+    if (!accountId) {
+      setMessage('Invalid account');
+      return;
+    }
     setMessage(null);
     setSaving(true);
-    const accountId = balanceFormAccountId;
-    const balanceId = balanceFormBalanceId;
+    const payload = {
+      as_of: balanceForm.as_of || new Date().toISOString().slice(0, 10),
+      balance: balanceForm.balance === '' ? 0 : parseFloat(balanceForm.balance),
+    };
+    if (!Number.isFinite(payload.balance) || payload.balance < 0) {
+      setMessage('Balance must be a non-negative number');
+      setSaving(false);
+      return;
+    }
     try {
-      if (balanceId != null) {
-        await updateAccountBalance(balanceId, {
-          as_of: balanceForm.as_of || new Date().toISOString().slice(0, 10),
-          balance: balanceForm.balance === '' ? 0 : parseFloat(balanceForm.balance),
-        });
-      } else {
-        await upsertAccountBalance({
-          account_id: accountId,
-          as_of: balanceForm.as_of || new Date().toISOString().slice(0, 10),
-          balance: balanceForm.balance === '' ? 0 : parseFloat(balanceForm.balance),
-        });
-      }
-      setBalanceFormAccountId(null);
-      setBalanceFormBalanceId(null);
+      await upsertAccountBalance({
+        account_id: accountId,
+        ...payload,
+      });
+      closeBalanceForm();
       if (expandedHistoryAccountId === accountId) {
         const res = await getAccountBalancesHistory(accountId);
         setBalanceHistory((prev) => ({ ...prev, [accountId]: res.data || [] }));
       }
       await load();
     } catch (err) {
-      setMessage(err.response?.data?.error || 'Failed to save balance');
+      setMessage(formatApiError(err, 'Failed to save balance'));
+      setErrorDebug(apiErrorDebug(err));
     } finally {
       setSaving(false);
     }
@@ -284,6 +377,11 @@ export default function AccountsPage() {
         Add any number of accounts: savings, checking, HSA, IRA (traditional or Roth), 401(k) (traditional or Roth), taxable, and assets (e.g. vehicle or property value). For traditional IRA and traditional 401(k), set <strong>RMD owner</strong> so each person’s required distributions use the correct balance (or choose “same as owner”). For assets, set expected annual depreciation. Record balances with an “as of” date; the latest balance per account is used for projections and history is kept.
       </p>
       {message && <div className="error-message">{message}</div>}
+      {errorDebug && (
+        <pre className="error-debug-panel" aria-label="Error debug details">
+          {JSON.stringify(errorDebug, null, 2)}
+        </pre>
+      )}
 
       <div className="card">
         <div className="card-header-row">
@@ -432,6 +530,36 @@ export default function AccountsPage() {
                         style={{ maxWidth: '6rem' }}
                       />
                     )}
+                    {editForm.account_type === 'taxable' && (
+                      <span className="tax-profile-inline" title="Tax profile for projections">
+                        <input
+                          type="number"
+                          min={0}
+                          max={100}
+                          step={0.1}
+                          value={taxProfileForm.unrealized_gain_percent}
+                          onChange={(e) =>
+                            setTaxProfileForm((p) => ({ ...p, unrealized_gain_percent: e.target.value }))
+                          }
+                          placeholder="Gain %"
+                          className="input-cell"
+                          style={{ maxWidth: '5rem' }}
+                        />
+                        <input
+                          type="number"
+                          min={0}
+                          max={20}
+                          step={0.1}
+                          value={taxProfileForm.dividend_yield}
+                          onChange={(e) =>
+                            setTaxProfileForm((p) => ({ ...p, dividend_yield: e.target.value }))
+                          }
+                          placeholder="Div %"
+                          className="input-cell"
+                          style={{ maxWidth: '5rem' }}
+                        />
+                      </span>
+                    )}
                     <button type="submit" className="btn btn-primary btn-sm" disabled={saving}>
                       Save
                     </button>
@@ -465,9 +593,9 @@ export default function AccountsPage() {
                         </>
                       )}
                     </span>
-                    {balancesByAccount[acc.id] != null && (
+                    {balancesByAccount[parsePositiveIntId(acc.id)] != null && (
                       <span className="account-balance">
-                        ${Number(balancesByAccount[acc.id].balance).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 2 })} as of {String(balancesByAccount[acc.id].as_of).slice(0, 10)}
+                        ${Number(balancesByAccount[parsePositiveIntId(acc.id)].balance).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 2 })} as of {String(balancesByAccount[parsePositiveIntId(acc.id)].as_of).slice(0, 10)}
                       </span>
                     )}
                     <div className="account-actions">
@@ -476,14 +604,18 @@ export default function AccountsPage() {
                         className="btn btn-secondary btn-sm"
                         onClick={() => openBalanceForm(acc)}
                       >
-                        {balancesByAccount[acc.id] != null ? 'Update balance' : 'Add balance'}
+                        {sameAccountId(balanceFormAccountId, acc.id) && balanceFormBalanceId == null
+                          ? 'Cancel balance'
+                          : balancesByAccount[parsePositiveIntId(acc.id)] != null
+                            ? 'Update balance'
+                            : 'Add balance'}
                       </button>
                       <button
                         type="button"
                         className="btn btn-secondary btn-sm"
                         onClick={() => toggleHistory(acc.id)}
                       >
-                        {expandedHistoryAccountId === acc.id ? 'Hide history' : 'View history'}
+                        {sameAccountId(expandedHistoryAccountId, acc.id) ? 'Hide history' : 'View history'}
                       </button>
                       <button
                         type="button"
@@ -503,7 +635,50 @@ export default function AccountsPage() {
                     </div>
                   </>
                 )}
-                {expandedHistoryAccountId === acc.id && (
+                {sameAccountId(balanceFormAccountId, acc.id) && (
+                  <div className="balance-form-section">
+                    <h4 className="balance-form-title">
+                      {balanceFormBalanceId != null ? 'Edit balance' : 'Record balance'} — {acc.name}
+                    </h4>
+                    <p className="balance-form-subtitle muted">
+                      {typeLabel(acc.account_type)} · {ownerLabel(acc.owner_type)}
+                    </p>
+                    <form onSubmit={(e) => handleBalanceSubmit(e, acc.id)} className="balance-form-inline">
+                      <div className="form-row">
+                        <div className="form-group">
+                          <label htmlFor={`balance-as-of-${acc.id}`}>As of</label>
+                          <input
+                            id={`balance-as-of-${acc.id}`}
+                            type="date"
+                            value={balanceForm.as_of}
+                            onChange={(e) => setBalanceForm((p) => ({ ...p, as_of: e.target.value }))}
+                          />
+                        </div>
+                        <div className="form-group">
+                          <label htmlFor={`balance-amount-${acc.id}`}>Balance ($)</label>
+                          <input
+                            id={`balance-amount-${acc.id}`}
+                            type="number"
+                            step="0.01"
+                            min="0"
+                            value={balanceForm.balance}
+                            onChange={(e) => setBalanceForm((p) => ({ ...p, balance: e.target.value }))}
+                            placeholder="0"
+                          />
+                        </div>
+                        <div className="form-group balance-form-actions">
+                          <button type="submit" className="btn btn-primary btn-sm" disabled={saving}>
+                            {saving ? 'Saving…' : 'Save'}
+                          </button>
+                          <button type="button" className="btn btn-secondary btn-sm" onClick={closeBalanceForm}>
+                            Cancel
+                          </button>
+                        </div>
+                      </div>
+                    </form>
+                  </div>
+                )}
+                {sameAccountId(expandedHistoryAccountId, acc.id) && (
                   <div className="balance-history-section">
                     <h4 className="balance-history-title">Balance history</h4>
                     {historyLoading ? (
@@ -511,8 +686,8 @@ export default function AccountsPage() {
                     ) : (
                       <>
                         <ul className="balance-history-list">
-                          {(balanceHistory[acc.id] || []).map((row) => (
-                            <li key={row.id} className="balance-history-item">
+                          {(balanceHistory[parsePositiveIntId(acc.id)] || []).map((row) => (
+                            <li key={row.balance_id ?? row.id} className="balance-history-item">
                               <span className="balance-history-date">{String(row.as_of).slice(0, 10)}</span>
                               <span className="balance-history-amount">
                                 ${Number(row.balance).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}
@@ -528,7 +703,7 @@ export default function AccountsPage() {
                                 <button
                                   type="button"
                                   className="btn btn-secondary btn-sm"
-                                  onClick={() => handleBalanceDelete(row.id, acc.id)}
+                                  onClick={() => handleBalanceDelete(row, parsePositiveIntId(acc.id))}
                                 >
                                   Delete
                                 </button>
@@ -536,7 +711,7 @@ export default function AccountsPage() {
                             </li>
                           ))}
                         </ul>
-                        {(balanceHistory[acc.id] || []).length === 0 && (
+                        {(balanceHistory[parsePositiveIntId(acc.id)] || []).length === 0 && (
                           <p className="muted">No balance snapshots yet. Use &quot;Add balance&quot; or &quot;Update balance&quot; to record one.</p>
                         )}
                         <button
@@ -553,46 +728,6 @@ export default function AccountsPage() {
               </li>
             ))}
           </ul>
-        )}
-
-        {balanceFormAccountId != null && (
-          <form onSubmit={handleBalanceSubmit} className="balance-form card">
-            <h3>{balanceFormBalanceId != null ? 'Edit balance' : 'Balance (as of date)'}</h3>
-            <div className="form-row">
-              <div className="form-group">
-                <label>As of</label>
-                <input
-                  type="date"
-                  value={balanceForm.as_of}
-                  onChange={(e) => setBalanceForm((p) => ({ ...p, as_of: e.target.value }))}
-                />
-              </div>
-              <div className="form-group">
-                <label>Balance $</label>
-                <input
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  value={balanceForm.balance}
-                  onChange={(e) => setBalanceForm((p) => ({ ...p, balance: e.target.value }))}
-                  placeholder="0"
-                />
-              </div>
-              <div className="form-group" style={{ alignSelf: 'flex-end' }}>
-                <button type="submit" className="btn btn-primary" disabled={saving}>Save</button>
-                <button
-                  type="button"
-                  className="btn btn-secondary"
-                  onClick={() => {
-                    setBalanceFormAccountId(null);
-                    setBalanceFormBalanceId(null);
-                  }}
-                >
-                  Cancel
-                </button>
-              </div>
-            </div>
-          </form>
         )}
       </div>
     </div>
