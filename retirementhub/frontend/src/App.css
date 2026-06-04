@@ -670,3 +670,59 @@
   color: #5a6b64;
   margin: 0.35rem 0 0.5rem 0;
 }
+
+.tax-details-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: 1.25rem;
+}
+
+.tax-add-year-form {
+  margin-bottom: 1.25rem;
+}
+
+.tax-add-year-fields {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem 1.5rem;
+  margin: 1rem 0;
+}
+
+.tax-add-year-fields label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  font-size: 0.9rem;
+}
+
+.tax-add-year-fields input,
+.tax-add-year-fields select {
+  min-width: 8rem;
+}
+
+.tax-param-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.5rem 0;
+  border-bottom: 1px solid #e8eeec;
+}
+
+.tax-source-badge {
+  font-size: 0.75rem;
+  padding: 0.15rem 0.5rem;
+  border-radius: 999px;
+}
+
+.tax-source-seeded {
+  background: #e8eeec;
+  color: #5a6b64;
+}
+
+.tax-source-edited {
+  background: #fef3c7;
+  color: #92400e;
+}

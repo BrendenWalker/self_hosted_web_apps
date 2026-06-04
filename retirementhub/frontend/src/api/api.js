@@ -112,6 +112,24 @@ export const updateAccountTaxProfile = (accountId, data) => {
 export const getSavingsLimits = (year) =>
   year != null ? api.get('/savings-limits', { params: { year } }) : api.get('/savings-limits');
 
+export const taxParameters = {
+  listYears: () => api.get('/tax-parameters/years').then((r) => r.data),
+  createYear: (body) => api.post('/tax-parameters/years', body).then((r) => r.data),
+  getYear: (year) => api.get('/tax-parameters', { params: { year } }).then((r) => r.data),
+  updateStandardDeduction: (year, fs, body) =>
+    api.put(`/tax-parameters/standard-deduction/${year}/${fs}`, body).then((r) => r.data),
+  updateBracket: (year, fs, ordinal, body) =>
+    api.put(`/tax-parameters/bracket/${year}/${fs}/${ordinal}`, body).then((r) => r.data),
+  updateContributionLimit: (year, kind, body) =>
+    api.put(`/tax-parameters/contribution-limit/${year}/${kind}`, body).then((r) => r.data),
+  updateMedicarePartB: (year, body) =>
+    api.put(`/tax-parameters/medicare-part-b/${year}`, body).then((r) => r.data),
+  resetYear: (year) =>
+    api
+      .post(`/tax-parameters/${year}/reset?confirm=true`, { confirm: true })
+      .then((r) => r.data),
+};
+
 export const importExpensesCsv = (formData) => api.post('/import/expenses', formData);
 export const importAccountBalancesCsv = (formData) => api.post('/import/account-balances', formData);
 

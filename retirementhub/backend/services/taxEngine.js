@@ -1,19 +1,6 @@
-const TAX_PARAM_BASE_YEAR = 2025;
+const taxParams = require('./taxParameters');
 
-const FEDERAL_ORDINARY_BRACKETS_2025 = {
-  married_filing_jointly: {
-    thresholds: [0, 23850, 96950, 206700, 394600, 501050, 751600, Infinity],
-    rates: [0.1, 0.12, 0.22, 0.24, 0.32, 0.35, 0.37],
-  },
-  single: {
-    thresholds: [0, 11925, 48475, 103350, 197300, 250525, 626350, Infinity],
-    rates: [0.1, 0.12, 0.22, 0.24, 0.32, 0.35, 0.37],
-  },
-  head_of_household: {
-    thresholds: [0, 17000, 64850, 103350, 197300, 256100, 626350, Infinity],
-    rates: [0.1, 0.12, 0.22, 0.24, 0.32, 0.35, 0.37],
-  },
-};
+const TAX_PARAM_BASE_YEAR = 2025;
 
 const LTCG_BRACKETS_MFJ_2025 = [
   { max: 96700, rate: 0 },
@@ -34,17 +21,12 @@ function taxParameterInflationFactor(year) {
   return Math.pow(1.02, Math.max(0, year - TAX_PARAM_BASE_YEAR));
 }
 
-function inflateTaxDollars(amount, year) {
-  const f = taxParameterInflationFactor(year);
-  return Math.round(amount * f * 100) / 100;
-}
-
 function estimateTaxableSocialSecurityAnnual(otherIncome, ssAnnual, filingStatus) {
   if (ssAnnual <= 0) return 0;
   const halfSs = ssAnnual * 0.5;
   const combined = otherIncome + halfSs;
   const fs = filingStatus || 'married_filing_jointly';
-  const mfj = fs === 'married_filing_jointly';
+  const mfj = fs === 'married_filing_jointly' || fs === 'married';
   const t0 = mfj ? 32000 : 25000;
   const t1 = mfj ? 44000 : 34000;
   const bridge = mfj ? 6000 : 4500;
@@ -57,13 +39,8 @@ function estimateTaxableSocialSecurityAnnual(otherIncome, ssAnnual, filingStatus
   return Math.round(Math.min(cap, alt) * 100) / 100;
 }
 
-function federalOrdinaryTaxWithBreakdown(taxableIncome, filingStatus, year) {
-  const fs = filingStatus || 'married_filing_jointly';
-  const key = fs === 'head_of_household' ? 'head_of_household' : fs === 'married_filing_jointly' ? 'married_filing_jointly' : 'single';
-  const cfg = FEDERAL_ORDINARY_BRACKETS_2025[key];
-  const f = taxParameterInflationFactor(year);
-  const thresholds = cfg.thresholds.map((t) => (t === Infinity ? Infinity : Math.round(t * f * 100) / 100));
-  const rates = cfg.rates;
+async function federalOrdinaryTaxWithBreakdown(pool, taxableIncome, filingStatus, year) {
+  const { thresholds, rates } = await taxParams.getFederalBracketConfig(pool, year, filingStatus);
   let remaining = Math.max(0, taxableIncome);
   let total = 0;
   const brackets = [];
@@ -87,32 +64,16 @@ function federalOrdinaryTaxWithBreakdown(taxableIncome, filingStatus, year) {
   return { total: Math.round(total * 100) / 100, brackets };
 }
 
-function standardDeductionEstimate(filingStatus, year, age1, age2) {
-  const fs = filingStatus || 'married_filing_jointly';
-  const base2025 = {
-    married_filing_jointly: 31500,
-    single: 15750,
-    head_of_household: 23625,
-    married_filing_separately: 15750,
-  };
-  let b = base2025[fs] ?? base2025.married_filing_jointly;
-  b = inflateTaxDollars(b, year);
-  const addMfj = inflateTaxDollars(1550, year);
-  const addSingle = inflateTaxDollars(1950, year);
-  if (fs === 'married_filing_jointly') {
-    const e1 = age1 != null && age1 >= 65 ? addMfj : 0;
-    const e2 = age2 != null && age2 >= 65 ? addMfj : 0;
-    return Math.round((b + e1 + e2) * 100) / 100;
-  }
-  const age = fs === 'married_filing_separately' ? age1 : age1;
-  const elderly = age != null && age >= 65;
-  return Math.round((b + (elderly ? addSingle : 0)) * 100) / 100;
+async function standardDeductionEstimate(pool, filingStatus, year, age1, age2) {
+  return taxParams.getStandardDeduction(pool, year, filingStatus, age1, age2);
 }
 
 function federalLtcgTax(ltcg, ordinaryTaxableAfterDeduction, filingStatus, year) {
   if (ltcg <= 0) return 0;
   const f = taxParameterInflationFactor(year);
-  const isMfj = (filingStatus || 'married_filing_jointly') === 'married_filing_jointly';
+  const isMfj =
+    (filingStatus || 'married_filing_jointly') === 'married_filing_jointly' ||
+    filingStatus === 'married';
   const brackets = isMfj ? LTCG_BRACKETS_MFJ_2025 : LTCG_BRACKETS_MFJ_2025;
   let tax = 0;
   let remaining = ltcg;
@@ -130,23 +91,30 @@ function federalLtcgTax(ltcg, ordinaryTaxableAfterDeduction, filingStatus, year)
   return Math.round(tax * 100) / 100;
 }
 
-function marginalOrdinaryRate(taxableIncomeAfterDeduction, filingStatus, year) {
-  const result = federalOrdinaryTaxWithBreakdown(taxableIncomeAfterDeduction + 1000, filingStatus, year);
-  const atBase = federalOrdinaryTaxWithBreakdown(taxableIncomeAfterDeduction, filingStatus, year);
+async function marginalOrdinaryRate(pool, taxableIncomeAfterDeduction, filingStatus, year) {
+  const result = await federalOrdinaryTaxWithBreakdown(
+    pool,
+    taxableIncomeAfterDeduction + 1000,
+    filingStatus,
+    year
+  );
+  const atBase = await federalOrdinaryTaxWithBreakdown(
+    pool,
+    taxableIncomeAfterDeduction,
+    filingStatus,
+    year
+  );
   const delta = result.total - atBase.total;
   return delta > 0 ? Math.round((delta / 1000) * 10000) / 10000 : 0;
 }
 
-function bracketTopForRate(targetRatePct, filingStatus, year) {
-  const fs = filingStatus || 'married_filing_jointly';
-  const key = fs === 'head_of_household' ? 'head_of_household' : fs === 'married_filing_jointly' ? 'married_filing_jointly' : 'single';
-  const cfg = FEDERAL_ORDINARY_BRACKETS_2025[key];
-  const f = taxParameterInflationFactor(year);
+async function bracketTopForRate(pool, targetRatePct, filingStatus, year) {
+  const { thresholds, rates } = await taxParams.getFederalBracketConfig(pool, year, filingStatus);
   const rate = targetRatePct / 100;
-  for (let i = 0; i < cfg.rates.length; i++) {
-    if (Math.abs(cfg.rates[i] - rate) < 0.001) {
-      const next = cfg.thresholds[i + 1];
-      return next === Infinity ? null : Math.round(next * f * 100) / 100;
+  for (let i = 0; i < rates.length; i++) {
+    if (Math.abs(rates[i] - rate) < 0.001) {
+      const next = thresholds[i + 1];
+      return next === Infinity ? null : Math.round(next * 100) / 100;
     }
   }
   return null;
@@ -154,13 +122,15 @@ function bracketTopForRate(targetRatePct, filingStatus, year) {
 
 function checkIrmaaWarning(magiProxy, filingStatus, year) {
   const f = taxParameterInflationFactor(year);
-  const isMfj = (filingStatus || 'married_filing_jointly') === 'married_filing_jointly';
+  const isMfj =
+    (filingStatus || 'married_filing_jointly') === 'married_filing_jointly' ||
+    filingStatus === 'married';
   const thresholds = isMfj ? IRMAA_THRESHOLDS_MFJ_2025 : IRMAA_THRESHOLDS_MFJ_2025;
   const firstTier = Math.round(thresholds[1].max * f * 100) / 100;
   return magiProxy >= firstTier * 0.95;
 }
 
-function computeYearTax({
+async function computeYearTax(pool, {
   wages = 0,
   bonus = 0,
   rmd = 0,
@@ -181,11 +151,10 @@ function computeYearTax({
     wages + bonus + rmd + rothConversion + preTaxWithdrawals + cashWithdrawals;
   const otherForSs = ordinaryBeforeSs + longTermCapGains + qualifiedDividends;
   const taxableSs = estimateTaxableSocialSecurityAnnual(otherForSs, ssAnnual, filingStatus);
-  const ordinaryIncome =
-    ordinaryBeforeSs + taxableSs + qualifiedDividends;
-  const standardDeduction = standardDeductionEstimate(filingStatus, year, age1, age2);
+  const ordinaryIncome = ordinaryBeforeSs + taxableSs + qualifiedDividends;
+  const standardDeduction = await standardDeductionEstimate(pool, filingStatus, year, age1, age2);
   const ordinaryTaxable = Math.max(0, Math.round((ordinaryIncome - standardDeduction) * 100) / 100);
-  const ordinaryResult = federalOrdinaryTaxWithBreakdown(ordinaryTaxable, filingStatus, year);
+  const ordinaryResult = await federalOrdinaryTaxWithBreakdown(pool, ordinaryTaxable, filingStatus, year);
   const ltcgTax = federalLtcgTax(longTermCapGains, ordinaryTaxable, filingStatus, year);
   const totalTax = Math.round((ordinaryResult.total + ltcgTax) * 100) / 100;
   const magiProxy = ordinaryIncome + longTermCapGains;
@@ -199,7 +168,7 @@ function computeYearTax({
     capitalGainsTax: ltcgTax,
     totalTax,
     effectiveRate,
-    marginalRate: marginalOrdinaryRate(ordinaryTaxable, filingStatus, year),
+    marginalRate: await marginalOrdinaryRate(pool, ordinaryTaxable, filingStatus, year),
     irmaaWarning: checkIrmaaWarning(magiProxy, filingStatus, year),
     taxableSs,
     standardDeduction,
@@ -212,7 +181,6 @@ function computeYearTax({
 module.exports = {
   TAX_PARAM_BASE_YEAR,
   taxParameterInflationFactor,
-  inflateTaxDollars,
   estimateTaxableSocialSecurityAnnual,
   federalOrdinaryTaxWithBreakdown,
   standardDeductionEstimate,

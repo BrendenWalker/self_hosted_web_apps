@@ -6,6 +6,7 @@
  */
 
 const request = require('supertest');
+const { taxQueryHandler } = require('./testFixtures/taxParametersMock');
 
 function createMockPool(queryImpl) {
   const query = jest.fn().mockImplementation(queryImpl);
@@ -64,6 +65,8 @@ function defaultQueryHandler(sql, params) {
       ],
     };
   }
+  const tax = taxQueryHandler(sql, params);
+  if (tax != null) return tax;
   return { rows: [] };
 }
 
@@ -177,10 +180,72 @@ describe('RetirementHub API', () => {
 
   describe('Error handling', () => {
     it('GET /api/household returns 500 on DB error', async () => {
-      mockPool.query.mockRejectedValueOnce(new Error('DB down'));
-      const res = await request(serverModule.app).get('/api/household');
-      expect(res.status).toBe(500);
-      expect(res.body.error).toBeDefined();
+      const errorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+      try {
+        mockPool.query.mockRejectedValueOnce(new Error('DB down'));
+        const res = await request(serverModule.app).get('/api/household');
+        expect(res.status).toBe(500);
+        expect(res.body.error).toBeDefined();
+      } finally {
+        errorSpy.mockRestore();
+      }
+    });
+  });
+
+  describe('Tax parameters API', () => {
+    it('GET /api/tax-parameters/years returns list with status', async () => {
+      const res = await request(serverModule.app).get('/api/tax-parameters/years');
+      expect(res.status).toBe(200);
+      expect(Array.isArray(res.body.years)).toBe(true);
+      expect(res.body.years[0]).toHaveProperty('year');
+      expect(res.body.years[0]).toHaveProperty('status');
+      expect(res.body.years[0]).toHaveProperty('has_irs_seed');
+    });
+
+    it('GET /api/tax-parameters?year=2026 returns all categories', async () => {
+      const res = await request(serverModule.app).get('/api/tax-parameters?year=2026');
+      expect(res.status).toBe(200);
+      expect(res.body.year).toBe(2026);
+      expect(res.body.standard_deduction).toBeDefined();
+      expect(res.body.brackets).toBeDefined();
+      expect(res.body.contribution_limits).toBeDefined();
+      expect(res.body.medicare_part_b).toBeDefined();
+    });
+
+    it('PUT updates standard deduction and flips source to user_edited', async () => {
+      mockPool.query.mockImplementation((sql, params) => {
+        if ((sql || '').includes('UPDATE tax_standard_deduction')) {
+          return Promise.resolve({
+            rows: [
+              {
+                year: 2026,
+                filing_status: 'married_filing_jointly',
+                amount: 32000,
+                age65_add_on: 1550,
+                source: 'user_edited',
+              },
+            ],
+          });
+        }
+        return asyncQueryHandler(sql, params);
+      });
+      const res = await request(serverModule.app)
+        .put('/api/tax-parameters/standard-deduction/2026/married_filing_jointly')
+        .send({ amount: 32000, age65_add_on: 1550 });
+      expect(res.status).toBe(200);
+      expect(res.body.source).toBe('user_edited');
+      mockPool.query.mockImplementation(asyncQueryHandler);
+    });
+
+    it('POST reset requires confirm=true', async () => {
+      const res = await request(serverModule.app).post('/api/tax-parameters/2026/reset');
+      expect(res.status).toBe(400);
+    });
+
+    it('POST reset with confirm restores seeded values', async () => {
+      const res = await request(serverModule.app).post('/api/tax-parameters/2026/reset?confirm=true');
+      expect(res.status).toBe(200);
+      expect(res.body.reset).toBe(true);
     });
   });
 });

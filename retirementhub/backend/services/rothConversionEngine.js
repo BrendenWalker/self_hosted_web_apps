@@ -1,6 +1,6 @@
 const { bracketTopForRate } = require('./taxEngine');
 
-function computeRothConversion({
+async function computeRothConversion(pool, {
   plan,
   year,
   tradBalance,
@@ -21,7 +21,7 @@ function computeRothConversion({
   if (strategy === 'fill_bracket') {
     const target = plan.target_tax_bracket;
     if (target == null) return 0;
-    const top = bracketTopForRate(target, filingStatus, year);
+    const top = await bracketTopForRate(pool, target, filingStatus, year);
     if (top == null) return Math.round(tradBalance * 100) / 100;
     const headroom = Math.max(0, top - baseOrdinaryIncome);
     return Math.round(Math.min(headroom, tradBalance) * 100) / 100;

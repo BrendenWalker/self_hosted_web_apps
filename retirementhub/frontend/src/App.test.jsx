@@ -20,6 +20,11 @@ vi.mock('./api/api', () => ({
   getProjections: () => mockResolve([]),
   getSavingsLimits: () => mockResolve([]),
   getRetirementTaxGuide: () => mockResolve({}),
+  taxParameters: {
+    listYears: () => mockResolve({ years: [] }),
+    createYear: () => mockResolve({ year: 2027 }),
+    getYear: () => mockResolve({}),
+  },
   default: {},
 }));
 
@@ -37,6 +42,7 @@ describe('App', () => {
     expect(within(nav).getByRole('link', { name: 'Income' })).toBeInTheDocument();
     expect(within(nav).getByRole('link', { name: 'Accounts' })).toBeInTheDocument();
     expect(within(nav).getByRole('link', { name: 'Savings limits' })).toBeInTheDocument();
+    expect(within(nav).getByRole('link', { name: 'Tax details' })).toBeInTheDocument();
     expect(within(nav).getByRole('link', { name: 'Projections' })).toBeInTheDocument();
     expect(within(nav).getByRole('link', { name: 'Expenses' })).toBeInTheDocument();
     expect(within(nav).getByRole('link', { name: 'Import' })).toBeInTheDocument();
