@@ -46,7 +46,7 @@ Optionally remove `dovecot.list.index.log` and `dovecot.index.cache` in the user
 - **Fetchmail** — Logs on `mailhub-postfix`; `FETCHMAIL_VERBOSE=1` for detail. `.fetchids` in postfix data dir tracks UIDs; delete to force a full rescan if needed.
 - **Quarantine** — Set `AMAVISD_SPAM_QUARANTINE_TO` / `AMAVISD_VIRUS_QUARANTINE_TO` to valid local users. **`MYDOMAIN`** must match the domain you receive on so Postfix treats quarantine addresses as local. If spam is discarded as outbound/nonlocal, set **`AMAVISD_LOCAL_DOMAINS`** to your parent domain (e.g. `example.com`) so addresses like `user@mail.example.com` are local—see comments in `amavisd/50-user.conf` and stack env wiring in Portainer.
 
-**Spam test** — Body or subject containing the GTUBE line (standard SpamAssassin test string) should score as spam if quarantine is enabled. **Virus test** — Attach `mailhub/eicar-test.txt` or the exact EICAR one-liner; body-only often is not detected. Use `swaks` or any SMTP client to localhost:25 if needed.
+**Spam test** — Body or subject containing the GTUBE line (standard SpamAssassin test string) should score as spam if quarantine is enabled. **Virus test** — Attach the standard [EICAR anti-malware test file](https://www.eicar.org/download-anti-malware-testfile/) (download when needed; it is not kept in this repo because desktop AV flags it). Save locally (e.g. `eicar.com.txt`) and attach it; body-only payloads are often not detected. Use `swaks` or any SMTP client to localhost:25 if needed.
 
 ## Reference configs
 
