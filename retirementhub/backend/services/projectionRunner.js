@@ -383,7 +383,8 @@ async function runProjection(pool, query = {}) {
       withdrawals.taxableWithdrawals
     );
 
-    const taxResult = await computeYearTax(pool, {
+    const [taxResult, taxParamProvenance, medicarePartB] = await Promise.all([
+      computeYearTax(pool, {
       wages: wageIncome,
       bonus: bonusAnnual,
       rmd: rmdTotal,
@@ -399,7 +400,10 @@ async function runProjection(pool, query = {}) {
       year: y,
       age1,
       age2,
-    });
+      }),
+      taxParams.getTaxParamProvenance(pool, y, filingStatus, age1, age2),
+      taxParams.getMedicarePartB(pool, y),
+    ]);
 
     const totalSavingsDraw =
       withdrawals.cashWithdrawals +
@@ -487,6 +491,8 @@ async function runProjection(pool, query = {}) {
       taxable_income_before_deduction: taxableIncomeEstimate,
       taxable_ss_plus_rmd: Math.round((taxResult.taxableSs + rmdTotal + withdrawals.preTaxWithdrawals) * 100) / 100,
       standard_deduction_estimate: taxResult.standardDeduction,
+      medicare_part_b_monthly_estimate: medicarePartB,
+      tax_param_provenance: taxParamProvenance,
       taxable_income_after_standard_deduction: taxResult.taxableIncomeAfterDeduction,
       federal_tax_ordinary_estimate: taxResult.ordinaryTax,
       federal_tax_capital_gains_estimate: taxResult.capitalGainsTax,
