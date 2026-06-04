@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import {
   Line,
   XAxis,
@@ -21,6 +22,8 @@ import {
   createScenario,
   compareScenarios,
 } from '../api/api';
+import PrecisionBadge from '../components/PrecisionBadge';
+import AssumptionsPanel from '../components/AssumptionsPanel';
 
 function formatCurrency(value) {
   if (value == null || Number.isNaN(value)) return '—';
@@ -194,6 +197,52 @@ function SavingsAssetsProjectionsChart({ data, target25x }) {
   );
 }
 
+function TaxValueCell({ amount, provenance }) {
+  if (amount == null || Number.isNaN(amount)) return '—';
+  const p = provenance;
+  return (
+    <span className="tax-value-with-badge">
+      <span>{formatCurrency(amount)}</span>
+      {p && (
+        <PrecisionBadge
+          source={p.source}
+          yearUsed={p.year_used}
+          inflationApplied={p.inflation_applied}
+          modified={p.modified}
+        />
+      )}
+    </span>
+  );
+}
+
+export function latestPublishedYearFromRows(rows) {
+  if (!rows?.length) return null;
+  let max = null;
+  for (const row of rows) {
+    const prov = row.tax_param_provenance;
+    if (!prov) continue;
+    for (const key of ['standard_deduction', 'brackets', 'medicare_part_b']) {
+      const entry = prov[key];
+      if (entry && entry.inflation_applied === false && entry.year_used != null) {
+        max = max == null ? entry.year_used : Math.max(max, entry.year_used);
+      }
+    }
+  }
+  return max;
+}
+
+function HorizonPastPublishedBanner({ data }) {
+  const latest = latestPublishedYearFromRows(data?.by_year);
+  const endYear = data?.end_year;
+  if (latest == null || endYear == null || endYear <= latest) return null;
+  return (
+    <div className="banner banner-info">
+      Beyond {latest} this projection uses inflation-adjusted estimates.
+      <Link to="/tax-details">Add or edit values on Tax details</Link> to override.
+    </div>
+  );
+}
+
 function filingStatusLabel(fs) {
   const map = {
     married_filing_jointly: 'Married filing jointly',
@@ -247,6 +296,7 @@ function ProjectionsTaxDetailTable({ rows, projectionMeta, household }) {
               <th scope="col" className="num">Taxable SS + RMD</th>
               <th scope="col" className="num">SS + RMD − std ded (info)</th>
               <th scope="col" className="num">Federal tax (est.)</th>
+              <th scope="col" className="num">Medicare Part B (mo.)</th>
               <th scope="col" className="num">Effective rate</th>
               <th scope="col" className="bracket-col">Marginal tax by bracket</th>
             </tr>
@@ -257,12 +307,28 @@ function ProjectionsTaxDetailTable({ rows, projectionMeta, household }) {
                 <td>{row.year}</td>
                 <td className="num">{row.p1_age_eoy ?? '—'}</td>
                 <td className="num">{row.p2_age_eoy ?? '—'}</td>
-                <td className="num">{formatCurrency(row.standard_deduction_estimate)}</td>
+                <td className="num">
+                  <TaxValueCell
+                    amount={row.standard_deduction_estimate}
+                    provenance={row.tax_param_provenance?.standard_deduction}
+                  />
+                </td>
                 <td className="num">{formatCurrency(row.taxable_income_before_deduction ?? row.taxable_income_estimate)}</td>
                 <td className="num">{formatCurrency(row.taxable_income_after_standard_deduction)}</td>
                 <td className="num">{formatCurrency(row.taxable_ss_plus_rmd)}</td>
                 <td className="num">{formatCurrency(row.taxable_ss_rmd_minus_std_ded)}</td>
-                <td className="num">{formatCurrency(row.federal_tax_ordinary_estimate)}</td>
+                <td className="num">
+                  <TaxValueCell
+                    amount={row.federal_tax_ordinary_estimate}
+                    provenance={row.tax_param_provenance?.brackets}
+                  />
+                </td>
+                <td className="num">
+                  <TaxValueCell
+                    amount={row.medicare_part_b_monthly_estimate}
+                    provenance={row.tax_param_provenance?.medicare_part_b}
+                  />
+                </td>
                 <td className="num">
                   {row.federal_effective_rate_pct != null && row.federal_effective_rate_pct > 0
                     ? `${row.federal_effective_rate_pct}%`
@@ -1061,6 +1127,7 @@ export default function ProjectionsPage() {
               Active scenario: <strong>{data.scenario.name}</strong>
             </p>
           )}
+          <HorizonPastPublishedBanner data={data} />
           <ProjectionsSummary data={data} />
           <PlanningInsightsCard meta={data.projection_meta} />
           {compareRows.length >= 2 && <ScenarioCompareGrid rows={compareRows} />}
@@ -1069,6 +1136,7 @@ export default function ProjectionsPage() {
           <IncomeVsExpensesChart data={chartData} household={data.household} projectionMeta={data.projection_meta} />
           <SpendingSourcesChart data={chartData} />
           <TaxesAndRmdChart data={chartData} />
+          <AssumptionsPanel />
         </>
       )}
     </div>

@@ -7,6 +7,7 @@
 
 const request = require('supertest');
 const { taxQueryHandler } = require('./testFixtures/taxParametersMock');
+const { snapshotQueryHandler } = require('./testFixtures/snapshotFixtures');
 
 function createMockPool(queryImpl) {
   const query = jest.fn().mockImplementation(queryImpl);
@@ -67,6 +68,8 @@ function defaultQueryHandler(sql, params) {
   }
   const tax = taxQueryHandler(sql, params);
   if (tax != null) return tax;
+  const snap = snapshotQueryHandler(sql, params);
+  if (snap.rows.length > 0) return snap;
   return { rows: [] };
 }
 
@@ -246,6 +249,28 @@ describe('RetirementHub API', () => {
       const res = await request(serverModule.app).post('/api/tax-parameters/2026/reset?confirm=true');
       expect(res.status).toBe(200);
       expect(res.body.reset).toBe(true);
+    });
+  });
+
+  describe('GET /api/projections', () => {
+    it('includes tax_param_provenance per year', async () => {
+      const res = await request(serverModule.app).get('/api/projections');
+      expect(res.status).toBe(200);
+      expect(res.body.by_year?.length).toBeGreaterThan(0);
+      const row = res.body.by_year[0];
+      expect(row.tax_param_provenance).toBeDefined();
+      expect(row.tax_param_provenance.standard_deduction).toMatchObject({
+        source: expect.stringMatching(/seeded|user_edited|projected/),
+        year_used: expect.any(Number),
+      });
+      expect(row.tax_param_provenance.brackets).toMatchObject({
+        source: expect.stringMatching(/seeded|user_edited|projected/),
+        year_used: expect.any(Number),
+      });
+      expect(row.tax_param_provenance.medicare_part_b).toMatchObject({
+        source: expect.stringMatching(/seeded|user_edited|projected/),
+        year_used: expect.any(Number),
+      });
     });
   });
 });

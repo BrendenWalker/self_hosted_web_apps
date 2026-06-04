@@ -108,6 +108,35 @@ describe('taxParameters service', () => {
     );
   });
 
+  test('getTaxParamProvenance marks inflated years as projected', async () => {
+    const pool = makePool({
+      "SELECT year FROM tax_year WHERE status='published'": [{ year: 2026 }],
+      'FROM tax_standard_deduction': (sql, params) => {
+        if (params && params[0] === 2026) return [{ amount: '31000', age65_add_on: '1550', source: 'seeded' }];
+        return [];
+      },
+      'FROM tax_bracket': (sql, params) => {
+        if (params && params[0] === 2026) {
+          return [{ ordinal: 0, lower_bound: '0', rate: '0.1', source: 'seeded' }];
+        }
+        return [];
+      },
+      'FROM tax_medicare_part_b': (sql, params) => {
+        if (params && params[0] === 2026) return [{ monthly_premium: '193', source: 'seeded' }];
+        return [];
+      },
+      'FROM tax_year WHERE year = $1': [{ inflation_pct: '2.00' }],
+    });
+    const prov = await tp.getTaxParamProvenance(pool, 2030, 'married_filing_jointly', 60, 60);
+    expect(prov.standard_deduction).toMatchObject({
+      source: 'projected',
+      year_used: 2026,
+      inflation_applied: true,
+    });
+    expect(prov.brackets.inflation_applied).toBe(true);
+    expect(prov.medicare_part_b.source).toBe('projected');
+  });
+
   test('getMedicarePartB falls back to last published year + growth when year missing', async () => {
     const pool = makePool({
       "SELECT year FROM tax_year WHERE status='published'": [{ year: 2026 }],
