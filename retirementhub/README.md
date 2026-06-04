@@ -68,6 +68,12 @@ psql -U postgres -d retirementhub -f retirementhub/database/migrations/013_accou
 psql -U postgres -d retirementhub -f retirementhub/database/migrations/014_roth_conversion_plan.sql
 ```
 
+If your database was created before **tax parameters** (editable IRS tables), run:
+
+```bash
+psql -U postgres -d retirementhub -f retirementhub/database/migrations/016_tax_parameters.sql
+```
+
 ### Environment Configuration
 
 1. Create a `.env` file in the project root directory (same level as `docker-compose.yml`):
@@ -143,6 +149,7 @@ Sample CSV templates are shown on the Import page.
 
 ## Later stages
 
+- **Tax details:** IRS standard deduction, brackets, contribution limits, and Medicare Part B premiums live in the database. Edit per year on the **Tax details** page. Defaults are seeded for 2024–2026 from published IRS values. Use **Add year** to clone an existing year when IRS publishes new figures — no app upgrade required.
 - **Stage 2:** Tax-leveraged savings maximums (IRA, HSA, 401k limits) — **Implemented.** Use the **Savings limits** page: limits are broken down by party (P1 / P2) with catch-up included when that person is 50+ (IRA, 401k) or 55+ (HSA) at end of each year. Income page has 401(k) contribution % and match % per party; planned 401(k) is shown per party on Savings limits.
 - **Stage 3:** Tracking and updating savings totals — **Implemented.** On the **Accounts** page, use “View history” per account to see all balance snapshots and add, edit, or delete them.
 - **Stage 4:** Projections and charts — **Implemented.** Use the **Projections** page: net worth over time (with 25× retirement target line), income vs expenses by year, and configurable horizon and growth rate. Retirement dates on Household are used so wage income stops and Social Security starts per party; if P2 has no income and no P2 SS estimate, a spousal benefit (50% of P1’s) is applied when P2 retires. Set P1/P2 estimated monthly SS on Household for accurate retirement income.

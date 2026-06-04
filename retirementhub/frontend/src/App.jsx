@@ -6,6 +6,7 @@ import IncomePage from './pages/IncomePage';
 import AccountsPage from './pages/AccountsPage';
 import ExpensesPage from './pages/ExpensesPage';
 import SavingsLimitsPage from './pages/SavingsLimitsPage';
+import TaxDetailsPage from './pages/TaxDetailsPage';
 import ProjectionsPage from './pages/ProjectionsPage';
 import ImportPage from './pages/ImportPage';
 import VersionFooter from './components/VersionFooter';
@@ -23,6 +24,7 @@ function App() {
             <Link to="/income" className="nav-link">Income</Link>
             <Link to="/accounts" className="nav-link">Accounts</Link>
             <Link to="/savings-limits" className="nav-link">Savings limits</Link>
+            <Link to="/tax-details" className="nav-link">Tax details</Link>
             <Link to="/projections" className="nav-link">Projections</Link>
             <Link to="/expenses" className="nav-link">Expenses</Link>
             <Link to="/import" className="nav-link">Import</Link>
@@ -36,6 +38,7 @@ function App() {
           <Route path="/income" element={<IncomePage />} />
           <Route path="/accounts" element={<AccountsPage />} />
           <Route path="/savings-limits" element={<SavingsLimitsPage />} />
+          <Route path="/tax-details" element={<TaxDetailsPage />} />
           <Route path="/projections" element={<ProjectionsPage />} />
           <Route path="/expenses" element={<ExpensesPage />} />
           <Route path="/import" element={<ImportPage />} />

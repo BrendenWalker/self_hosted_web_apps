@@ -18,12 +18,19 @@ const { computeWithdrawals } = require('./withdrawalEngine');
 const { computeRothConversion, applyRothConversion } = require('./rothConversionEngine');
 const { computeYearTax } = require('./taxEngine');
 const { computePlanningScores, computeSsComparison } = require('./planningInsights');
+const taxParams = require('./taxParameters');
 
-const SAVINGS_LIMITS_BY_YEAR = {
-  2024: { ira: 7000, ira_catch_up: 1000, hsa_individual: 4150, hsa_family: 8300, hsa_catch_up: 1000, '401k_elective': 23000, '401k_catch_up': 7500 },
-  2025: { ira: 7000, ira_catch_up: 1000, hsa_individual: 4300, hsa_family: 8550, hsa_catch_up: 1000, '401k_elective': 23500, '401k_catch_up': 7500 },
-  2026: { ira: 7000, ira_catch_up: 1000, hsa_individual: 4300, hsa_family: 8550, hsa_catch_up: 1000, '401k_elective': 23500, '401k_catch_up': 7500 },
-};
+function limitsToBase(limits) {
+  return {
+    ira: limits.ira?.base ?? 0,
+    ira_catch_up: limits.ira?.catch_up ?? 0,
+    '401k_elective': limits['401k_elective']?.base ?? 0,
+    '401k_catch_up': limits['401k_elective']?.catch_up ?? 0,
+    hsa_individual: limits.hsa_individual?.base ?? 0,
+    hsa_family: limits.hsa_family?.base ?? 0,
+    hsa_catch_up: limits.hsa_individual?.catch_up ?? 0,
+  };
+}
 
 function buildPartyLimitsForYear(birthYear, base, year) {
   const age = ageAtEoy(birthYear, year);
@@ -354,7 +361,7 @@ async function runProjection(pool, query = {}) {
     }
 
     const baseOrdinary = wageIncome + bonusAnnual + rmdTotal;
-    rothConversion = computeRothConversion({
+    rothConversion = await computeRothConversion(pool, {
       plan: rothPlan,
       year: y,
       tradBalance: tradP1 + tradP2,
@@ -376,7 +383,7 @@ async function runProjection(pool, query = {}) {
       withdrawals.taxableWithdrawals
     );
 
-    const taxResult = computeYearTax({
+    const taxResult = await computeYearTax(pool, {
       wages: wageIncome,
       bonus: bonusAnnual,
       rmd: rmdTotal,
@@ -408,7 +415,8 @@ async function runProjection(pool, query = {}) {
 
     let contributions401k = 0;
     if (!isRetired) {
-      const base = SAVINGS_LIMITS_BY_YEAR[y] || SAVINGS_LIMITS_BY_YEAR[2026] || SAVINGS_LIMITS_BY_YEAR[2025];
+      const limits = await taxParams.getContributionLimits(pool, y);
+      const base = limitsToBase(limits);
       const limP1 = buildPartyLimitsForYear(p1BirthYear, base, y);
       const limP2 = buildPartyLimitsForYear(p2BirthYear, base, y);
       const plannedP1 = Math.min(
@@ -596,4 +604,4 @@ async function runProjection(pool, query = {}) {
   };
 }
 
-module.exports = { runProjection, SAVINGS_LIMITS_BY_YEAR };
+module.exports = { runProjection };

@@ -3,7 +3,23 @@ const cors = require('cors');
 const multer = require('multer');
 const { parse: parseCsv } = require('csv-parse/sync');
 const { createDbPool, testConnection } = require('../../common/database/db-config');
+const { runProjection } = require('./services/projectionRunner');
+const taxParams = require('./services/taxParameters');
+const { federalOrdinaryTaxWithBreakdown } = require('./services/taxEngine');
+const seeds = require('./services/taxParametersSeeds');
 require('dotenv').config();
+
+function contributionLimitsToBase(limits) {
+  return {
+    ira: limits.ira?.base ?? 0,
+    ira_catch_up: limits.ira?.catch_up ?? 0,
+    hsa_individual: limits.hsa_individual?.base ?? 0,
+    hsa_family: limits.hsa_family?.base ?? 0,
+    hsa_catch_up: limits.hsa_individual?.catch_up ?? 0,
+    '401k_elective': limits['401k_elective']?.base ?? 0,
+    '401k_catch_up': limits['401k_elective']?.catch_up ?? 0,
+  };
+}
 
 const app = express();
 const port = process.env.PORT || 80;
@@ -1148,37 +1164,6 @@ app.put('/api/mortgage', async (req, res) => {
 });
 
 // ==================== SAVINGS LIMITS (Stage 2 — tax-leveraged maximums) ====================
-// IRS annual limits by year. Update annually; values for 2024–2026.
-
-const SAVINGS_LIMITS_BY_YEAR = {
-  2024: {
-    ira: 7000,
-    ira_catch_up: 1000,
-    hsa_individual: 4150,
-    hsa_family: 8300,
-    hsa_catch_up: 1000,
-    '401k_elective': 23000,
-    '401k_catch_up': 7500,
-  },
-  2025: {
-    ira: 7000,
-    ira_catch_up: 1000,
-    hsa_individual: 4300,
-    hsa_family: 8550,
-    hsa_catch_up: 1000,
-    '401k_elective': 23500,
-    '401k_catch_up': 7500,
-  },
-  2026: {
-    ira: 7500,
-    ira_catch_up: 1100,
-    hsa_individual: 4400,
-    hsa_family: 8750,
-    hsa_catch_up: 1000,
-    '401k_elective': 24500,
-    '401k_catch_up': 8000,
-  },
-};
 
 app.get('/api/savings-limits', async (req, res) => {
   try {
@@ -1224,7 +1209,8 @@ app.get('/api/savings-limits', async (req, res) => {
     }
 
     if (yearParam != null && Number.isInteger(yearParam) && yearParam >= 2020 && yearParam <= 2030) {
-      const base = SAVINGS_LIMITS_BY_YEAR[yearParam] || SAVINGS_LIMITS_BY_YEAR[2025];
+      const limits = await taxParams.getContributionLimits(pool, yearParam);
+      const base = contributionLimitsToBase(limits);
       const p1 = buildPartyLimits(p1BirthYear, base, yearParam);
       const p2 = buildPartyLimits(p2BirthYear, base, yearParam);
       p1.hsa_family_limit = buildHsaFamilyHouseholdLimit(base, p1BirthYear, p2BirthYear, yearParam);
@@ -1239,8 +1225,14 @@ app.get('/api/savings-limits', async (req, res) => {
     }
 
     const years = {};
-    for (const [yStr, base] of Object.entries(SAVINGS_LIMITS_BY_YEAR)) {
-      const y = parseInt(yStr, 10);
+    const yearRows = await pool.query('SELECT year FROM tax_year ORDER BY year');
+    const yearList =
+      yearRows.rows.length > 0
+        ? yearRows.rows.map((r) => parseInt(r.year, 10))
+        : [2024, 2025, 2026];
+    for (const y of yearList) {
+      const limits = await taxParams.getContributionLimits(pool, y);
+      const base = contributionLimitsToBase(limits);
       const p1 = buildPartyLimits(p1BirthYear, base, y);
       const p2 = buildPartyLimits(p2BirthYear, base, y);
       p1.hsa_family_limit = buildHsaFamilyHouseholdLimit(base, p1BirthYear, p2BirthYear, y);
@@ -1295,60 +1287,13 @@ app.get('/api/budget-summary', async (req, res) => {
 });
 
 // ==================== RETIREMENT TAX GUIDE ====================
-// Helps set Federal, Medicare, and Social Security expense categories for retirement.
-// SS (OASDI): not withheld on benefits → 0 in retirement.
-// Medicare: payroll tax pre-retirement; Part B (and Part D) premiums after — use Part B table.
-// Federal: still owed on taxable income (taxable SS + withdrawals, etc.); optional estimator below.
 
-const MEDICARE_PART_B_MONTHLY_BY_YEAR = {
-  2024: 174.70,
-  2025: 185.00,
-  2026: 193.00, // approximate; CMS publishes annually
-  2027: 201.00,
-  2028: 209.00,
-  2029: 218.00,
-  2030: 227.00,
-};
-function getPartBForYear(year) {
-  const y = year != null ? parseInt(year, 10) : new Date().getFullYear();
-  if (MEDICARE_PART_B_MONTHLY_BY_YEAR[y] != null) return MEDICARE_PART_B_MONTHLY_BY_YEAR[y];
-  const years = Object.keys(MEDICARE_PART_B_MONTHLY_BY_YEAR).map(Number).sort((a, b) => a - b);
-  const lastYear = years[years.length - 1];
-  const firstYear = years[0];
-  if (y <= firstYear) return MEDICARE_PART_B_MONTHLY_BY_YEAR[firstYear];
-  const lastPremium = MEDICARE_PART_B_MONTHLY_BY_YEAR[lastYear];
-  const annualIncrease = 0.05;
-  return Math.round(lastPremium * Math.pow(1 + annualIncrease, y - lastYear) * 100) / 100;
-}
-
-const FEDERAL_BRACKETS_MFJ = [
-  { max: 23850, rate: 0.10 },
-  { max: 96950, rate: 0.12 },
-  { max: 206700, rate: 0.22 },
-  { max: 394600, rate: 0.24 },
-  { max: 501050, rate: 0.32 },
-  { max: 751600, rate: 0.35 },
-  { max: Infinity, rate: 0.37 },
-];
-const STANDARD_DEDUCTION_MFJ_2025 = 30000;
-const STANDARD_DEDUCTION_BY_YEAR = { 2024: 29200, 2025: 30000, 2026: 31000 };
-function getStandardDeduction(year) {
-  const y = year != null ? parseInt(year, 10) : 2025;
-  return STANDARD_DEDUCTION_BY_YEAR[y] || STANDARD_DEDUCTION_MFJ_2025 + (y - 2025) * 1000;
-}
-function estimateFederalTax(taxableIncome, year, filingStatus) {
-  const deduction = filingStatus === 'married_filing_jointly' ? getStandardDeduction(year) : 25000;
+async function estimateFederalTax(pool, taxableIncome, year, filingStatus) {
+  const fs = taxParams.normalizeFilingStatus(filingStatus);
+  const deduction = await taxParams.getStandardDeduction(pool, year, fs, null, null);
   const afterDeduction = Math.max(0, (taxableIncome || 0) - deduction);
-  let tax = 0;
-  let prev = 0;
-  for (const b of FEDERAL_BRACKETS_MFJ) {
-    const taxableInBracket = Math.max(0, Math.min(b.max, afterDeduction) - prev);
-    if (taxableInBracket <= 0) break;
-    tax += taxableInBracket * b.rate;
-    if (afterDeduction <= b.max) break;
-    prev = b.max;
-  }
-  return Math.round(tax * 100) / 100;
+  const result = await federalOrdinaryTaxWithBreakdown(pool, afterDeduction, fs, year);
+  return result.total;
 }
 
 app.get('/api/retirement-tax-guide', async (req, res) => {
@@ -1358,10 +1303,10 @@ app.get('/api/retirement-tax-guide', async (req, res) => {
     const filingParam = req.query.filing_status || 'married_filing_jointly';
     const year = Number.isFinite(yearParam) && yearParam >= 2024 && yearParam <= 2050 ? yearParam : new Date().getFullYear();
 
-    const partBMonthly = getPartBForYear(year);
+    const partBMonthly = await taxParams.getMedicarePartB(pool, year);
     const partBByYear = {};
     for (let y = 2024; y <= Math.min(year + 30, 2040); y++) {
-      partBByYear[y] = getPartBForYear(y);
+      partBByYear[y] = await taxParams.getMedicarePartB(pool, y);
     }
 
     const out = {
@@ -1380,7 +1325,7 @@ app.get('/api/retirement-tax-guide', async (req, res) => {
     };
 
     if (Number.isFinite(taxableIncomeParam) && taxableIncomeParam >= 0) {
-      const estimatedAnnual = estimateFederalTax(taxableIncomeParam, year, filingParam);
+      const estimatedAnnual = await estimateFederalTax(pool, taxableIncomeParam, year, filingParam);
       out.federal.estimated_annual_tax = estimatedAnnual;
       out.federal.estimated_monthly = Math.round((estimatedAnnual / 12) * 100) / 100;
       out.federal.taxable_income_used = taxableIncomeParam;
@@ -1394,9 +1339,235 @@ app.get('/api/retirement-tax-guide', async (req, res) => {
   }
 });
 
-// ==================== SCENARIOS ====================
+// ==================== TAX PARAMETERS ====================
 
-const { runProjection } = require('./services/projectionRunner');
+app.get('/api/tax-parameters/years', async (req, res) => {
+  try {
+    const r = await pool.query('SELECT year, status, inflation_pct, notes FROM tax_year ORDER BY year');
+    res.json({
+      years: r.rows.map((row) => ({
+        ...row,
+        has_irs_seed: seeds.hasIrsSeedYear(parseInt(row.year, 10)),
+      })),
+    });
+  } catch (error) {
+    if (error.code === '42P01') {
+      return res.status(503).json({ error: 'Run migration 016_tax_parameters.sql.' });
+    }
+    console.error('Error listing tax years:', error);
+    res.status(500).json({ error: error.message || 'Failed to list tax years' });
+  }
+});
+
+app.post('/api/tax-parameters/years', async (req, res) => {
+  try {
+    const result = await taxParams.createTaxYear(pool, {
+      year: req.body?.year,
+      cloneFromYear: req.body?.clone_from_year,
+      status: req.body?.status,
+      inflation_pct: req.body?.inflation_pct,
+      notes: req.body?.notes,
+    });
+    res.status(201).json(result);
+  } catch (error) {
+    if (error.code === '42P01') {
+      return res.status(503).json({ error: 'Run migration 016_tax_parameters.sql.' });
+    }
+    const code = error.statusCode || 500;
+    if (code >= 500) console.error('Error creating tax year:', error);
+    res.status(code).json({ error: error.message || 'Failed to create tax year' });
+  }
+});
+
+app.get('/api/tax-parameters', async (req, res) => {
+  try {
+    const year = parseInt(req.query.year, 10);
+    if (!Number.isInteger(year)) return res.status(400).json({ error: 'year required' });
+    const sd = (
+      await pool.query(
+        `SELECT filing_status, amount, age65_add_on, source, modified
+         FROM tax_standard_deduction WHERE year=$1 ORDER BY filing_status`,
+        [year]
+      )
+    ).rows;
+    const br = (
+      await pool.query(
+        `SELECT filing_status, ordinal, lower_bound, rate, source, modified
+         FROM tax_bracket WHERE year=$1 ORDER BY filing_status, ordinal`,
+        [year]
+      )
+    ).rows;
+    const cl = (
+      await pool.query(
+        `SELECT kind, base_amount, catch_up_amount, source, modified
+         FROM tax_contribution_limit WHERE year=$1 ORDER BY kind`,
+        [year]
+      )
+    ).rows;
+    const mp = (
+      await pool.query('SELECT monthly_premium, source, modified FROM tax_medicare_part_b WHERE year=$1', [
+        year,
+      ])
+    ).rows[0] || null;
+    res.json({
+      year,
+      standard_deduction: sd,
+      brackets: br,
+      contribution_limits: cl,
+      medicare_part_b: mp,
+    });
+  } catch (error) {
+    if (error.code === '42P01') {
+      return res.status(503).json({ error: 'Run migration 016_tax_parameters.sql.' });
+    }
+    console.error('Error fetching tax parameters:', error);
+    res.status(500).json({ error: error.message || 'Failed to fetch tax parameters' });
+  }
+});
+
+app.put('/api/tax-parameters/standard-deduction/:year/:filingStatus', async (req, res) => {
+  try {
+    const year = parseInt(req.params.year, 10);
+    const { amount, age65_add_on } = req.body;
+    const r = await pool.query(
+      `UPDATE tax_standard_deduction SET amount=$1, age65_add_on=$2, source='user_edited', modified=NOW()
+       WHERE year=$3 AND filing_status=$4 RETURNING *`,
+      [amount, age65_add_on ?? 0, year, req.params.filingStatus]
+    );
+    if (!r.rows.length) return res.status(404).json({ error: 'Not found' });
+    res.json(r.rows[0]);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.put('/api/tax-parameters/bracket/:year/:filingStatus/:ordinal', async (req, res) => {
+  try {
+    const year = parseInt(req.params.year, 10);
+    const ordinal = parseInt(req.params.ordinal, 10);
+    const { lower_bound, rate } = req.body;
+    const r = await pool.query(
+      `UPDATE tax_bracket SET lower_bound=$1, rate=$2, source='user_edited', modified=NOW()
+       WHERE year=$3 AND filing_status=$4 AND ordinal=$5 RETURNING *`,
+      [lower_bound, rate, year, req.params.filingStatus, ordinal]
+    );
+    if (!r.rows.length) return res.status(404).json({ error: 'Not found' });
+    res.json(r.rows[0]);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.put('/api/tax-parameters/contribution-limit/:year/:kind', async (req, res) => {
+  try {
+    const year = parseInt(req.params.year, 10);
+    const { base_amount, catch_up_amount } = req.body;
+    const r = await pool.query(
+      `UPDATE tax_contribution_limit SET base_amount=$1, catch_up_amount=$2, source='user_edited', modified=NOW()
+       WHERE year=$3 AND kind=$4 RETURNING *`,
+      [base_amount, catch_up_amount ?? 0, year, req.params.kind]
+    );
+    if (!r.rows.length) return res.status(404).json({ error: 'Not found' });
+    res.json(r.rows[0]);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.put('/api/tax-parameters/medicare-part-b/:year', async (req, res) => {
+  try {
+    const year = parseInt(req.params.year, 10);
+    const { monthly_premium } = req.body;
+    const r = await pool.query(
+      `UPDATE tax_medicare_part_b SET monthly_premium=$1, source='user_edited', modified=NOW()
+       WHERE year=$2 RETURNING *`,
+      [monthly_premium, year]
+    );
+    if (!r.rows.length) return res.status(404).json({ error: 'Not found' });
+    res.json(r.rows[0]);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+function taxResetConfirmed(req) {
+  const q = req.query?.confirm;
+  const b = req.body?.confirm;
+  if (q === true || q === 'true' || b === true || b === 'true') return true;
+  if (Array.isArray(q) && q.includes('true')) return true;
+  return false;
+}
+
+app.post('/api/tax-parameters/:year/reset', async (req, res) => {
+  try {
+    if (!taxResetConfirmed(req)) {
+      return res.status(400).json({ error: 'Add ?confirm=true to reset user edits for this year' });
+    }
+    const year = parseInt(req.params.year, 10);
+    if (!Number.isInteger(year)) return res.status(400).json({ error: 'Invalid year' });
+    const data = seeds.rowsForYear(year);
+    if (!data.taxYears.length) {
+      return res.status(404).json({ error: 'No seeded data for this year' });
+    }
+
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      for (const row of data.standardDeduction) {
+        await client.query(
+          `INSERT INTO tax_standard_deduction (year, filing_status, amount, age65_add_on, source)
+           VALUES ($1,$2,$3,$4,'seeded')
+           ON CONFLICT (year, filing_status) DO UPDATE SET
+             amount=EXCLUDED.amount, age65_add_on=EXCLUDED.age65_add_on, source='seeded', modified=NOW()`,
+          [row.year, row.filing_status, row.amount, row.age65_add_on]
+        );
+      }
+      for (const row of data.brackets) {
+        await client.query(
+          `INSERT INTO tax_bracket (year, filing_status, ordinal, lower_bound, rate, source)
+           VALUES ($1,$2,$3,$4,$5,'seeded')
+           ON CONFLICT (year, filing_status, ordinal) DO UPDATE SET
+             lower_bound=EXCLUDED.lower_bound, rate=EXCLUDED.rate, source='seeded', modified=NOW()`,
+          [row.year, row.filing_status, row.ordinal, row.lower_bound, row.rate]
+        );
+      }
+      for (const row of data.contributionLimits) {
+        await client.query(
+          `INSERT INTO tax_contribution_limit (year, kind, base_amount, catch_up_amount, source)
+           VALUES ($1,$2,$3,$4,'seeded')
+           ON CONFLICT (year, kind) DO UPDATE SET
+             base_amount=EXCLUDED.base_amount, catch_up_amount=EXCLUDED.catch_up_amount,
+             source='seeded', modified=NOW()`,
+          [row.year, row.kind, row.base_amount, row.catch_up_amount]
+        );
+      }
+      for (const row of data.medicarePartB) {
+        await client.query(
+          `INSERT INTO tax_medicare_part_b (year, monthly_premium, source)
+           VALUES ($1,$2,'seeded')
+           ON CONFLICT (year) DO UPDATE SET
+             monthly_premium=EXCLUDED.monthly_premium, source='seeded', modified=NOW()`,
+          [row.year, row.monthly_premium]
+        );
+      }
+      await client.query('COMMIT');
+      res.json({ year, reset: true, message: 'Restored seeded defaults for this year' });
+    } catch (e) {
+      await client.query('ROLLBACK');
+      throw e;
+    } finally {
+      client.release();
+    }
+  } catch (error) {
+    if (error.code === '42P01') {
+      return res.status(503).json({ error: 'Run migration 016_tax_parameters.sql.' });
+    }
+    console.error('Error resetting tax parameters:', error);
+    res.status(500).json({ error: error.message || 'Failed to reset' });
+  }
+});
+
+// ==================== SCENARIOS ====================
 
 function parseScenarioAssumptionBody(body) {
   const a = body?.assumptions || body;
