@@ -31,7 +31,11 @@
     "coverageReporters": ["text", "text-summary", "json-summary"],
     "collectCoverageFrom": [
       "services/taxEngine.js",
-      "services/rmdEngine.js"
+      "services/rmdEngine.js",
+      "services/withdrawalEngine.js",
+      "services/rothConversionEngine.js",
+      "services/scenarioEngine.js",
+      "services/scenarioExplanationService.js"
     ]
   }
 }

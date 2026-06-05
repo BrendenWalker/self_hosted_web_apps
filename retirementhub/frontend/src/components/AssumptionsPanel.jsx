@@ -7,6 +7,8 @@ const INCLUDED = [
   'RMDs (Uniform Lifetime Table)',
   'Social Security taxation (Pub. 915 tiers)',
   'Medicare Part B premiums',
+  'Named scenarios with withdrawal strategy and Roth conversion modeling',
+  'Side-by-side scenario comparison (lifetime tax, peak RMD, ending net worth)',
 ];
 
 const EXCLUDED = [
@@ -18,8 +20,7 @@ const EXCLUDED = [
   'Tax credits',
   'Estate tax',
   'Tax lots / cost basis tracking',
-  'Roth conversion modeling (scenario only)',
-  'Withdrawal strategy variants beyond selected scenario',
+  'Custom withdrawal bucket ordering (advanced)',
 ];
 
 export default function AssumptionsPanel() {

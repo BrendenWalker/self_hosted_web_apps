@@ -104,4 +104,34 @@ function overlayFromScenario(household, scenario) {
   };
 }
 
-module.exports = { loadScenario, overlayFromScenario };
+async function captureHouseholdSnapshot(pool) {
+  const [householdRes, incomeRes, balanceRes] = await Promise.all([
+    pool.query(
+      `SELECT id, p1_display_name, p2_display_name, p1_birth_year, p2_birth_year,
+              p1_retirement_date, p2_retirement_date, p1_ss_at_fra, p2_ss_at_fra,
+              filing_status, required_monthly_income_retirement,
+              projection_horizon_years, projection_growth_pct,
+              projection_expense_growth_pct, projection_ssi_growth_pct
+       FROM household ORDER BY id LIMIT 1`
+    ),
+    pool.query('SELECT * FROM income ORDER BY as_of DESC, id DESC LIMIT 1'),
+    pool.query(
+      `SELECT COUNT(DISTINCT ab.account_id)::int AS account_count,
+              COALESCE(SUM(ab.balance), 0)::float AS total_balance
+       FROM (
+         SELECT DISTINCT ON (account_id) account_id, balance
+         FROM account_balance
+         ORDER BY account_id, as_of DESC, id DESC
+       ) ab`
+    ),
+  ]);
+
+  return {
+    captured_at: new Date().toISOString(),
+    household: householdRes.rows[0] || null,
+    income: incomeRes.rows[0] || null,
+    accounts: balanceRes.rows[0] || { account_count: 0, total_balance: 0 },
+  };
+}
+
+module.exports = { loadScenario, overlayFromScenario, captureHouseholdSnapshot };
