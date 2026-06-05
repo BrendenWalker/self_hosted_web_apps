@@ -69,9 +69,29 @@ function summarizeScenarioProjection(projection) {
   };
 }
 
+async function ensureScenarioComputed(pool, scenarioId, query = {}, { recompute = false } = {}) {
+  if (!recompute) {
+    const cached = await loadCachedYearlyResults(pool, scenarioId);
+    if (cached?.length) {
+      const meta = await pool.query('SELECT last_computed_at FROM scenario WHERE id = $1', [scenarioId]);
+      return {
+        by_year: cached,
+        last_computed_at: meta.rows[0]?.last_computed_at,
+        from_cache: true,
+      };
+    }
+  }
+  const projection = await runScenario(pool, scenarioId, query);
+  return {
+    ...projection,
+    from_cache: false,
+  };
+}
+
 module.exports = {
   runScenario,
   loadCachedYearlyResults,
   persistYearlyResults,
   summarizeScenarioProjection,
+  ensureScenarioComputed,
 };

@@ -16,11 +16,7 @@ import {
 } from 'recharts';
 import {
   getProjections,
-  updateHousehold,
   getScenarios,
-  updateScenarioAssumptions,
-  createScenario,
-  compareScenarios,
 } from '../api/api';
 import PrecisionBadge from '../components/PrecisionBadge';
 import AssumptionsPanel from '../components/AssumptionsPanel';
@@ -501,131 +497,6 @@ function ProjectionsYearDetailTable({ rows, household, projectionMeta, onYearSel
   );
 }
 
-function ScenarioCompareGrid({ rows, explanation }) {
-  const [sortKey, setSortKey] = useState('scenario_name');
-  const [sortAsc, setSortAsc] = useState(true);
-
-  if (!rows?.length) return null;
-
-  const sorted = [...rows].sort((a, b) => {
-    const av = a[sortKey];
-    const bv = b[sortKey];
-    if (av == null && bv == null) return 0;
-    if (av == null) return 1;
-    if (bv == null) return -1;
-    if (typeof av === 'string') return sortAsc ? av.localeCompare(bv) : bv.localeCompare(av);
-    return sortAsc ? av - bv : bv - av;
-  });
-
-  const handleSort = (key) => {
-    if (sortKey === key) setSortAsc(!sortAsc);
-    else {
-      setSortKey(key);
-      setSortAsc(key === 'scenario_name');
-    }
-  };
-
-  const sortIndicator = (key) => (sortKey === key ? (sortAsc ? ' ▲' : ' ▼') : '');
-
-  const lowestTax = explanation?.highlights?.lowest_lifetime_tax;
-  const highestWorth = explanation?.highlights?.highest_ending_net_worth;
-  const lowestRmd = explanation?.highlights?.lowest_peak_rmd;
-
-  return (
-    <div className="card">
-      <h2>Scenario comparison</h2>
-      {(lowestTax || highestWorth) && (
-        <div className="projections-summary-grid" style={{ marginBottom: '1rem' }}>
-          {lowestTax && (
-            <div>
-              <span className="summary-label">Lowest lifetime tax</span>
-              <span className="summary-value">
-                {lowestTax.scenario_name} ({formatCurrency(lowestTax.lifetime_total_tax)})
-              </span>
-            </div>
-          )}
-          {highestWorth && (
-            <div>
-              <span className="summary-label">Highest ending net worth</span>
-              <span className="summary-value">
-                {highestWorth.scenario_name} ({formatCurrency(highestWorth.ending_net_worth)})
-              </span>
-            </div>
-          )}
-          {lowestRmd && (
-            <div>
-              <span className="summary-label">Lowest peak RMD</span>
-              <span className="summary-value">
-                {lowestRmd.scenario_name} ({formatCurrency(lowestRmd.peak_rmd)})
-              </span>
-            </div>
-          )}
-        </div>
-      )}
-      {explanation?.summary && (
-        <p className="projections-summary-note" style={{ marginBottom: '0.75rem' }}>{explanation.summary}</p>
-      )}
-      {explanation?.warnings?.length > 0 && (
-        <ul className="projections-insights-list">
-          {explanation.warnings.map((w, i) => (
-            <li key={i}>{w}</li>
-          ))}
-        </ul>
-      )}
-      <div className="projections-detail-table-wrap">
-        <table className="projections-detail-table">
-          <thead>
-            <tr>
-              <th>
-                <button type="button" className="table-sort-btn" onClick={() => handleSort('scenario_name')}>
-                  Scenario{sortIndicator('scenario_name')}
-                </button>
-              </th>
-              <th className="num">P1 retire yr</th>
-              <th className="num">SS claim P1/P2</th>
-              <th className="num">Withdrawal</th>
-              <th className="num">Roth strategy</th>
-              <th className="num">
-                <button type="button" className="table-sort-btn" onClick={() => handleSort('lifetime_total_tax')}>
-                  Lifetime tax{sortIndicator('lifetime_total_tax')}
-                </button>
-              </th>
-              <th className="num">
-                <button type="button" className="table-sort-btn" onClick={() => handleSort('peak_rmd')}>
-                  Peak RMD{sortIndicator('peak_rmd')}
-                </button>
-              </th>
-              <th className="num">
-                <button type="button" className="table-sort-btn" onClick={() => handleSort('ending_net_worth')}>
-                  Ending net worth{sortIndicator('ending_net_worth')}
-                </button>
-              </th>
-            </tr>
-          </thead>
-          <tbody>
-            {sorted.map((r) => (
-              <tr key={r.scenario_id}>
-                <td>{r.scenario_name}</td>
-                <td className="num">{r.p1_retirement_year ?? '—'}</td>
-                <td className="num">
-                  {r.p1_ss_claim_age ?? '—'} / {r.p2_ss_claim_age ?? '—'}
-                </td>
-                <td className="num">{r.withdrawal_strategy ?? '—'}</td>
-                <td className="num">{r.roth_strategy ?? '—'}</td>
-                <td className="num">{formatCurrency(r.lifetime_total_tax)}</td>
-                <td className="num">
-                  {r.peak_rmd != null ? `${formatCurrency(r.peak_rmd)} (${r.peak_rmd_year ?? '—'})` : '—'}
-                </td>
-                <td className="num">{formatCurrency(r.ending_net_worth)}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </div>
-  );
-}
-
 function PlanningInsightsCard({ meta }) {
   const scores = meta?.planning_scores;
   const ss = meta?.ss_comparison;
@@ -761,87 +632,14 @@ function IncomeVsExpensesChart({ data, household, projectionMeta, onYearSelect }
   );
 }
 
-const CLAIM_AGES = [62, 63, 64, 65, 66, 67, 68, 69, 70];
-const WITHDRAWAL_STRATEGIES = [
-  { value: 'conservative', label: 'Conservative (cash → taxable → trad → Roth)' },
-  { value: 'tax_aware', label: 'Tax-aware' },
-  { value: 'custom', label: 'Custom order' },
-];
-const ROTH_STRATEGIES = [
-  { value: 'none', label: 'None' },
-  { value: 'fixed', label: 'Fixed annual amount' },
-  { value: 'fill_bracket', label: 'Fill tax bracket' },
-  { value: 'fill_income', label: 'Fill to income target' },
-  { value: 'irmaa_aware', label: 'IRMAA-aware cap' },
-];
-
 export default function ProjectionsPage() {
-  const allowZeroRates = import.meta.env.VITE_DEBUG != null && String(import.meta.env.VITE_DEBUG).trim() !== '';
-  const minGrowth = allowZeroRates ? 0 : 0.01;
-  const minIndexPct = allowZeroRates ? 0 : 0.01;
-
   const [data, setData] = useState(null);
   const [scenarios, setScenarios] = useState([]);
   const [selectedScenarioId, setSelectedScenarioId] = useState(null);
-  const [compareRows, setCompareRows] = useState([]);
-  const [compareExplanation, setCompareExplanation] = useState(null);
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState(null);
-  const [years, setYears] = useState(30);
-  const [growthPct, setGrowthPct] = useState(5);
-  const [expenseGrowthPct, setExpenseGrowthPct] = useState(2.5);
-  const [ssiGrowthPct, setSsiGrowthPct] = useState(2.5);
-  const [requiredMonthly, setRequiredMonthly] = useState('');
-  const [retirementAgeP1, setRetirementAgeP1] = useState('');
-  const [retirementAgeP2, setRetirementAgeP2] = useState('');
-  const [ssClaimP1, setSsClaimP1] = useState('67');
-  const [ssClaimP2, setSsClaimP2] = useState('67');
-  const [annualSpending, setAnnualSpending] = useState('');
-  const [withdrawalStrategy, setWithdrawalStrategy] = useState('conservative');
-  const [rothStrategy, setRothStrategy] = useState('none');
-  const [rothFixedAmount, setRothFixedAmount] = useState('');
-  const [rothTargetBracket, setRothTargetBracket] = useState('22');
-  const [rothMaxIncome, setRothMaxIncome] = useState('');
   const [selectedYear, setSelectedYear] = useState(null);
   const [detailChartTab, setDetailChartTab] = useState('balances');
-
-  const syncFormFromProjectionResponse = (payload) => {
-    if (!payload) return;
-    const y = payload.projection_horizon_years;
-    if (y != null && Number.isFinite(Number(y))) {
-      const n = parseInt(String(y), 10);
-      if (Number.isFinite(n)) setYears(Math.min(50, Math.max(5, n)));
-    }
-    const g = payload.growth_pct;
-    if (g != null && Number.isFinite(Number(g))) setGrowthPct(Math.min(20, Math.max(minGrowth, Number(g))));
-    const eg = payload.expense_growth_pct;
-    if (eg != null && Number.isFinite(Number(eg))) {
-      setExpenseGrowthPct(Math.min(10, Math.max(minIndexPct, Number(eg))));
-    }
-    const sg = payload.ssi_growth_pct;
-    if (sg != null && Number.isFinite(Number(sg))) {
-      setSsiGrowthPct(Math.min(10, Math.max(minIndexPct, Number(sg))));
-    }
-    const rmi = payload.required_monthly_income_retirement;
-    if (rmi != null && rmi > 0) setRequiredMonthly(String(rmi));
-    else setRequiredMonthly('');
-  };
-
-  const syncScenarioForm = (scenarioRow) => {
-    if (!scenarioRow) return;
-    if (scenarioRow.retirement_age_p1 != null) setRetirementAgeP1(String(scenarioRow.retirement_age_p1));
-    if (scenarioRow.retirement_age_p2 != null) setRetirementAgeP2(String(scenarioRow.retirement_age_p2));
-    if (scenarioRow.social_security_claim_age_p1 != null) setSsClaimP1(String(scenarioRow.social_security_claim_age_p1));
-    if (scenarioRow.social_security_claim_age_p2 != null) setSsClaimP2(String(scenarioRow.social_security_claim_age_p2));
-    if (scenarioRow.annual_spending_target != null && scenarioRow.annual_spending_target > 0) {
-      setAnnualSpending(String(scenarioRow.annual_spending_target));
-      setRequiredMonthly(String(Math.round(scenarioRow.annual_spending_target / 12)));
-    }
-    if (scenarioRow.portfolio_return_rate != null) setGrowthPct(Number(scenarioRow.portfolio_return_rate));
-    if (scenarioRow.inflation_rate != null) setExpenseGrowthPct(Number(scenarioRow.inflation_rate));
-    if (scenarioRow.withdrawal_strategy) setWithdrawalStrategy(scenarioRow.withdrawal_strategy);
-    if (scenarioRow.roth_conversion_strategy) setRothStrategy(scenarioRow.roth_conversion_strategy);
-  };
 
   const loadScenarios = async () => {
     try {
@@ -851,7 +649,6 @@ export default function ProjectionsPage() {
       const def = list.find((s) => s.is_default) || list[0];
       if (def) {
         setSelectedScenarioId(def.id);
-        syncScenarioForm(def);
         return def.id;
       }
     } catch {
@@ -868,25 +665,12 @@ export default function ProjectionsPage() {
       if (scenarioId != null) params.scenario_id = scenarioId;
       const res = await getProjections(params);
       setData(res.data);
-      syncFormFromProjectionResponse(res.data);
       if (res.data?.scenario?.id) setSelectedScenarioId(res.data.scenario.id);
     } catch (err) {
       setMessage(err.response?.data?.error || 'Failed to load projections');
       setData(null);
     } finally {
       setLoading(false);
-    }
-  };
-
-  const loadCompare = async () => {
-    if (scenarios.length < 2) return;
-    try {
-      const ids = scenarios.map((s) => s.id);
-      const res = await compareScenarios(ids);
-      setCompareRows(res.data?.scenarios || []);
-      setCompareExplanation(res.data?.explanation || null);
-    } catch {
-      setCompareRows([]);
     }
   };
 
@@ -897,104 +681,16 @@ export default function ProjectionsPage() {
     })();
   }, []);
 
-  useEffect(() => {
-    if (scenarios.length >= 2) loadCompare();
-  }, [scenarios, data]);
-
-  const handleApply = async (e) => {
-    e.preventDefault();
-    const trimmed = requiredMonthly.trim();
-    let rmiPayload = null;
-    if (trimmed !== '') {
-      const n = parseFloat(trimmed);
-      if (!Number.isFinite(n) || n < 0) {
-        setMessage('Required monthly income must be empty or a non-negative number.');
-        return;
-      }
-      if (n > 0) rmiPayload = n;
-    }
-    const annual =
-      annualSpending.trim() !== '' && Number.isFinite(parseFloat(annualSpending))
-        ? parseFloat(annualSpending)
-        : rmiPayload != null
-          ? rmiPayload * 12
-          : null;
-    try {
-      setLoading(true);
-      setMessage(null);
-      await updateHousehold({
-        required_monthly_income_retirement: rmiPayload,
-        projection_horizon_years: years,
-        projection_growth_pct: growthPct,
-        projection_expense_growth_pct: expenseGrowthPct,
-        projection_ssi_growth_pct: ssiGrowthPct,
-      });
-      const scenarioId = selectedScenarioId;
-      if (scenarioId != null) {
-        await updateScenarioAssumptions(scenarioId, {
-          retirement_age_p1: retirementAgeP1 !== '' ? parseInt(retirementAgeP1, 10) : null,
-          retirement_age_p2: retirementAgeP2 !== '' ? parseInt(retirementAgeP2, 10) : null,
-          social_security_claim_age_p1: parseInt(ssClaimP1, 10),
-          social_security_claim_age_p2: parseInt(ssClaimP2, 10),
-          annual_spending_target: annual,
-          inflation_rate: expenseGrowthPct,
-          portfolio_return_rate: growthPct,
-          withdrawal_strategy: withdrawalStrategy,
-          roth_conversion_strategy: rothStrategy,
-          roth_plan: {
-            strategy_type: rothStrategy,
-            annual_fixed_amount:
-              rothFixedAmount.trim() !== '' ? parseFloat(rothFixedAmount) : null,
-            target_tax_bracket: parseInt(rothTargetBracket, 10),
-            max_taxable_income: rothMaxIncome.trim() !== '' ? parseFloat(rothMaxIncome) : null,
-          },
-        });
-      }
-      await load(scenarioId);
-      await loadScenarios();
-    } catch (err) {
-      setMessage(err.response?.data?.error || 'Failed to update or load projections');
-      setData(null);
-    } finally {
-      setLoading(false);
-    }
-  };
-
   const handleScenarioChange = async (id) => {
     const sid = parseInt(id, 10);
     setSelectedScenarioId(sid);
-    const row = scenarios.find((s) => s.id === sid);
-    syncScenarioForm(row);
     await load(sid);
   };
 
-  const handleDuplicateScenario = async () => {
-    const name = window.prompt('Name for new scenario', 'Copy of ' + (data?.scenario?.name || 'Baseline'));
-    if (!name?.trim()) return;
-    try {
-      setLoading(true);
-      await createScenario({
-        name: name.trim(),
-        assumptions: {
-          retirement_age_p1: retirementAgeP1 !== '' ? parseInt(retirementAgeP1, 10) : null,
-          retirement_age_p2: retirementAgeP2 !== '' ? parseInt(retirementAgeP2, 10) : null,
-          social_security_claim_age_p1: parseInt(ssClaimP1, 10),
-          social_security_claim_age_p2: parseInt(ssClaimP2, 10),
-          annual_spending_target: annualSpending !== '' ? parseFloat(annualSpending) : null,
-          inflation_rate: expenseGrowthPct,
-          portfolio_return_rate: growthPct,
-          withdrawal_strategy: withdrawalStrategy,
-          roth_conversion_strategy: rothStrategy,
-        },
-      });
-      await loadScenarios();
-      setMessage('Scenario created. Select it from the list.');
-    } catch (err) {
-      setMessage(err.response?.data?.error || 'Failed to create scenario');
-    } finally {
-      setLoading(false);
-    }
-  };
+  const compareLink =
+    scenarios.length >= 2
+      ? `/scenarios/compare?ids=${scenarios.map((s) => s.id).join(',')}`
+      : null;
 
   const chartData = data?.by_year?.map((row) => {
     const b = row.balances_by_bucket || {};
@@ -1030,12 +726,13 @@ export default function ProjectionsPage() {
     <div className="page-scroll">
       <h1 className="page-title">Projections</h1>
       <p style={{ marginBottom: '1rem', color: '#5a6b64', fontSize: '0.95rem' }}>
-        The <strong>Projections</strong> chart stacks savings (investment accounts) and hard assets so you can see savings drawdown vs. assets over time. Income vs expenses uses current account balances, income, and expense settings. Set retirement dates on Household and 401(k) on Income for accurate savings. Optional <strong>Required monthly income</strong> sets retirement spending and funds it in order: Social Security, RMDs, wages/bonus (if still working), then withdrawals from non-RMD savings. Leave it blank to use retirement expense categories plus mortgage instead. Below the income chart, annual tables list cash-flow detail, then estimated federal taxable income (after standard deduction) and marginal federal tax by bracket. Portfolio growth applies each year to non-asset accounts; asset-type accounts use expected depreciation from the Accounts page (balance × (1 − depreciation%) each year). Traditional IRA and traditional 401(k) balances drive projected RMDs (IRS Uniform Lifetime Table; included in income). <strong>Expense growth</strong> inflates required income, category expenses, and the P2 pre-Medicare bridge each year. <strong>SSI growth</strong> compounds projected Social Security only after each person retires. Use <strong>Save &amp; refresh</strong> to store these assumptions (and required monthly income) in the database.
+        Charts and tables for the selected planning scenario. Edit assumptions on the{' '}
+        <Link to="/scenarios">Scenarios</Link> page. Set retirement dates on Household and 401(k) on Income for accurate savings.
       </p>
 
       <div className="card projections-controls-card">
-        <h2>Planning scenario</h2>
-        {scenarios.length > 0 && (
+        <h2>Active scenario</h2>
+        {scenarios.length > 0 ? (
           <div className="form-row" style={{ marginBottom: '0.75rem' }}>
             <div className="form-group">
               <label htmlFor="scenario-select">Scenario</label>
@@ -1052,186 +749,24 @@ export default function ProjectionsPage() {
               </select>
             </div>
             <div className="form-group" style={{ alignSelf: 'flex-end' }}>
-              <button type="button" className="btn btn-secondary" onClick={handleDuplicateScenario}>
-                Duplicate as new scenario
-              </button>
+              <Link to="/scenarios" className="btn btn-secondary">Manage scenarios</Link>
             </div>
+            {selectedScenarioId != null && (
+              <div className="form-group" style={{ alignSelf: 'flex-end' }}>
+                <Link to={`/scenarios/${selectedScenarioId}/edit`} className="btn btn-secondary">Edit scenario</Link>
+              </div>
+            )}
           </div>
+        ) : (
+          <p>
+            No scenarios yet. <Link to="/scenarios/new">Create a scenario</Link> to customize projections.
+          </p>
         )}
-        <h3 style={{ fontSize: '1rem', marginBottom: '0.5rem' }}>Assumptions</h3>
-        {allowZeroRates && (
-          <p style={{ fontSize: '0.85rem', color: '#6b7c75', marginBottom: '0.5rem' }}>DEBUG: 0% portfolio growth and 0% expense/SSI growth allowed for testing.</p>
+        {compareLink && (
+          <p className="projections-summary-note">
+            <Link to={compareLink}>Compare {scenarios.length} scenarios →</Link>
+          </p>
         )}
-        <form onSubmit={handleApply} className="projections-form">
-          <div className="form-row">
-            <div className="form-group">
-              <label htmlFor="ret-age-p1">P1 retirement age</label>
-              <input id="ret-age-p1" type="number" min={50} max={90} value={retirementAgeP1} onChange={(e) => setRetirementAgeP1(e.target.value)} />
-            </div>
-            <div className="form-group">
-              <label htmlFor="ret-age-p2">P2 retirement age</label>
-              <input id="ret-age-p2" type="number" min={50} max={90} value={retirementAgeP2} onChange={(e) => setRetirementAgeP2(e.target.value)} />
-            </div>
-            <div className="form-group">
-              <label htmlFor="ss-p1">P1 SS claim age</label>
-              <select id="ss-p1" value={ssClaimP1} onChange={(e) => setSsClaimP1(e.target.value)}>
-                {CLAIM_AGES.map((a) => (
-                  <option key={a} value={a}>{a}</option>
-                ))}
-              </select>
-            </div>
-            <div className="form-group">
-              <label htmlFor="ss-p2">P2 SS claim age</label>
-              <select id="ss-p2" value={ssClaimP2} onChange={(e) => setSsClaimP2(e.target.value)}>
-                {CLAIM_AGES.map((a) => (
-                  <option key={a} value={a}>{a}</option>
-                ))}
-              </select>
-            </div>
-          </div>
-          <div className="form-row">
-            <div className="form-group">
-              <label htmlFor="projections-years">Years to project</label>
-              <input
-                id="projections-years"
-                type="number"
-                min={5}
-                max={50}
-                value={years}
-                onChange={(e) => {
-                  const v = parseInt(e.target.value, 10);
-                  const clamped = Number.isFinite(v) ? Math.min(50, Math.max(5, v)) : 30;
-                  setYears(clamped);
-                }}
-              />
-            </div>
-            <div className="form-group">
-              <label htmlFor="projections-growth">Growth rate (% per year)</label>
-              <input
-                id="projections-growth"
-                type="number"
-                inputMode="decimal"
-                min={minGrowth}
-                max={20}
-                step="any"
-                value={growthPct}
-                onChange={(e) => {
-                  const raw = e.target.value.trim();
-                  if (raw === '' || raw === '-') return;
-                  const v = parseFloat(raw);
-                  if (!Number.isFinite(v)) return;
-                  setGrowthPct(Math.min(20, Math.max(minGrowth, v)));
-                }}
-                title={allowZeroRates ? 'DEBUG: 0% allowed for testing' : 'Portfolio growth on non-asset accounts; any percentage from 0.01 to 20.'}
-              />
-            </div>
-            <div className="form-group">
-              <label htmlFor="projections-expense-growth">Expense growth (% per year)</label>
-              <input
-                id="projections-expense-growth"
-                type="number"
-                inputMode="decimal"
-                min={minIndexPct}
-                max={10}
-                step="any"
-                value={expenseGrowthPct}
-                onChange={(e) => {
-                  const raw = e.target.value.trim();
-                  if (raw === '' || raw === '-') return;
-                  const v = parseFloat(raw);
-                  if (!Number.isFinite(v)) return;
-                  setExpenseGrowthPct(Math.min(10, Math.max(minIndexPct, v)));
-                }}
-                title={allowZeroRates ? 'DEBUG: 0% allowed. Inflates expenses, required monthly income in retirement, and P2 pre-Medicare bridge.' : 'Inflates expenses, required monthly income in retirement, and P2 pre-Medicare bridge (default ~2.5%). 0.01% to 10%.'}
-              />
-            </div>
-            <div className="form-group">
-              <label htmlFor="projections-ssi-growth">SSI growth (% per year)</label>
-              <input
-                id="projections-ssi-growth"
-                type="number"
-                inputMode="decimal"
-                min={minIndexPct}
-                max={10}
-                step="any"
-                value={ssiGrowthPct}
-                onChange={(e) => {
-                  const raw = e.target.value.trim();
-                  if (raw === '' || raw === '-') return;
-                  const v = parseFloat(raw);
-                  if (!Number.isFinite(v)) return;
-                  setSsiGrowthPct(Math.min(10, Math.max(minIndexPct, v)));
-                }}
-                title={allowZeroRates ? 'DEBUG: 0% allowed. Compounds on projected Social Security after each person’s retirement year.' : 'Annual increase on Social Security benefits after retirement (default ~2.5%). 0.01% to 10%.'}
-              />
-            </div>
-            <div className="form-group">
-              <label htmlFor="annual-spending">Annual spending target</label>
-              <input
-                id="annual-spending"
-                type="number"
-                min={0}
-                step={1000}
-                placeholder="Or use monthly below"
-                value={annualSpending}
-                onChange={(e) => setAnnualSpending(e.target.value)}
-              />
-            </div>
-            <div className="form-group">
-              <label htmlFor="projections-rmi">Required monthly income (retirement)</label>
-              <input
-                id="projections-rmi"
-                type="number"
-                min={0}
-                step={100}
-                placeholder="Use expense categories instead"
-                value={requiredMonthly}
-                onChange={(e) => setRequiredMonthly(e.target.value)}
-              />
-            </div>
-            <div className="form-group">
-              <label htmlFor="withdrawal-strategy">Withdrawal strategy</label>
-              <select id="withdrawal-strategy" value={withdrawalStrategy} onChange={(e) => setWithdrawalStrategy(e.target.value)}>
-                {WITHDRAWAL_STRATEGIES.map((w) => (
-                  <option key={w.value} value={w.value}>{w.label}</option>
-                ))}
-              </select>
-            </div>
-            <div className="form-group">
-              <label htmlFor="roth-strategy">Roth conversion</label>
-              <select id="roth-strategy" value={rothStrategy} onChange={(e) => setRothStrategy(e.target.value)}>
-                {ROTH_STRATEGIES.map((r) => (
-                  <option key={r.value} value={r.value}>{r.label}</option>
-                ))}
-              </select>
-            </div>
-            {rothStrategy === 'fixed' && (
-              <div className="form-group">
-                <label htmlFor="roth-fixed">Annual conversion $</label>
-                <input id="roth-fixed" type="number" min={0} value={rothFixedAmount} onChange={(e) => setRothFixedAmount(e.target.value)} />
-              </div>
-            )}
-            {rothStrategy === 'fill_bracket' && (
-              <div className="form-group">
-                <label htmlFor="roth-bracket">Target bracket %</label>
-                <select id="roth-bracket" value={rothTargetBracket} onChange={(e) => setRothTargetBracket(e.target.value)}>
-                  {[10, 12, 22, 24, 32].map((b) => (
-                    <option key={b} value={b}>{b}%</option>
-                  ))}
-                </select>
-              </div>
-            )}
-            {(rothStrategy === 'fill_income' || rothStrategy === 'irmaa_aware') && (
-              <div className="form-group">
-                <label htmlFor="roth-max-inc">Max taxable income</label>
-                <input id="roth-max-inc" type="number" min={0} value={rothMaxIncome} onChange={(e) => setRothMaxIncome(e.target.value)} />
-              </div>
-            )}
-            <div className="form-group" style={{ alignSelf: 'flex-end' }}>
-              <button type="submit" className="btn btn-primary">Save &amp; refresh</button>
-            </div>
-          </div>
-        </form>
       </div>
 
       {message && <div className="error-message">{message}</div>}
@@ -1247,9 +782,6 @@ export default function ProjectionsPage() {
           <HorizonPastPublishedBanner data={data} />
           <ProjectionsSummary data={data} />
           <PlanningInsightsCard meta={data.projection_meta} />
-          {compareRows.length >= 2 && (
-            <ScenarioCompareGrid rows={compareRows} explanation={compareExplanation} />
-          )}
           <SavingsAssetsProjectionsChart data={chartData} target25x={data.target_25x_retirement} />
           <ProjectionDetailCharts
             years={byYear}

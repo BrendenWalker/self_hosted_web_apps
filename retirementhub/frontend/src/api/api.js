@@ -92,14 +92,22 @@ export const getProjections = (params) =>
     : api.get('/projections');
 
 export const getScenarios = () => api.get('/scenarios');
+export const getScenario = (id) => api.get(`/scenarios/${id}`);
 export const createScenario = (data) => api.post('/scenarios', data);
 export const updateScenario = (id, data) => api.put(`/scenarios/${id}`, data);
 export const updateScenarioAssumptions = (id, data) => api.put(`/scenarios/${id}/assumptions`, data);
 export const deleteScenario = (id) => api.delete(`/scenarios/${id}`);
-export const compareScenarios = (ids) => api.get('/scenarios/compare', { params: { ids: ids.join(',') } });
+export const compareScenarios = (ids, options = {}) =>
+  api.get('/scenarios/compare', {
+    params: { ids: ids.join(','), ...(options.recompute ? { recompute: '1' } : {}) },
+  });
 export const computeScenario = (id, params) => api.post(`/scenarios/${id}/compute`, null, { params: params || {} });
-export const explainScenarioComparison = (ids) =>
-  api.get('/scenarios/compare/explain', { params: { ids: ids.join(',') } });
+export const getScenarioYearly = (id, options = {}) =>
+  api.get(`/scenarios/${id}/yearly`, { params: options.recompute ? { recompute: '1' } : {} });
+export const explainScenarioComparison = (ids, options = {}) =>
+  api.get('/scenarios/compare/explain', {
+    params: { ids: ids.join(','), ...(options.recompute ? { recompute: '1' } : {}) },
+  });
 
 export const getAccountTaxProfile = (accountId) => {
   const aid = parsePositiveIntId(accountId);

@@ -1000,3 +1000,151 @@
   font-size: 0.9rem;
   color: #5a6b64;
 }
+
+.page-intro {
+  margin-bottom: 1rem;
+  color: #5a6b64;
+  font-size: 0.95rem;
+}
+
+.scenario-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+
+.scenario-badge {
+  display: inline-block;
+  margin-left: 0.5rem;
+  padding: 0.1rem 0.45rem;
+  font-size: 0.75rem;
+  background: #e8f3ef;
+  color: #0d5c4a;
+  border-radius: 4px;
+}
+
+.scenario-assumption-summary {
+  font-size: 0.85rem;
+  color: #5a6b64;
+  max-width: 28rem;
+}
+
+.scenario-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.btn-sm {
+  padding: 0.25rem 0.55rem;
+  font-size: 0.8rem;
+}
+
+.scenario-wizard-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.scenario-back-link {
+  font-size: 0.9rem;
+  color: #0d5c4a;
+}
+
+.scenario-wizard-steps {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin-bottom: 1rem;
+}
+
+.scenario-wizard-step {
+  padding: 0.35rem 0.65rem;
+  border: 1px solid #d0ddd8;
+  border-radius: 6px;
+  background: #fff;
+  font-size: 0.8rem;
+  cursor: pointer;
+}
+
+.scenario-wizard-step-active {
+  background: #0d5c4a;
+  color: #fff;
+  border-color: #0d5c4a;
+}
+
+.scenario-wizard-step-done:not(.scenario-wizard-step-active) {
+  background: #e8f3ef;
+}
+
+.scenario-wizard-panel {
+  margin-bottom: 2rem;
+}
+
+.scenario-wizard-nav {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 1.5rem;
+  padding-top: 1rem;
+  border-top: 1px solid #e8eeec;
+}
+
+.scenario-help {
+  font-size: 0.85rem;
+  color: #5a6b64;
+  margin-bottom: 0.75rem;
+}
+
+.withdrawal-order-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.withdrawal-order-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid #e8eeec;
+  border-radius: 6px;
+  margin-bottom: 0.35rem;
+}
+
+.withdrawal-order-actions {
+  display: flex;
+  gap: 0.35rem;
+}
+
+.scenario-review-list {
+  margin: 0.5rem 0 0;
+  padding-left: 1.25rem;
+}
+
+.scenario-review-name {
+  margin-bottom: 0.75rem;
+}
+
+.scenario-drivers-panel h3 {
+  font-size: 1rem;
+  margin: 0 0 0.5rem;
+}
+
+.scenario-diff-highlight {
+  background: #f5faf8;
+}
+
+.scenario-year-diff-columns {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+}
+
+@media (max-width: 640px) {
+  .scenario-year-diff-columns {
+    grid-template-columns: 1fr;
+  }
+}

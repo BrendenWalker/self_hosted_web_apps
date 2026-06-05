@@ -7,6 +7,9 @@ import AccountsPage from './pages/AccountsPage';
 import ExpensesPage from './pages/ExpensesPage';
 import SavingsLimitsPage from './pages/SavingsLimitsPage';
 import TaxDetailsPage from './pages/TaxDetailsPage';
+import ScenariosPage from './pages/ScenariosPage';
+import ScenarioWizardPage from './pages/ScenarioWizardPage';
+import ScenarioComparePage from './pages/ScenarioComparePage';
 import ProjectionsPage from './pages/ProjectionsPage';
 import ImportPage from './pages/ImportPage';
 import VersionFooter from './components/VersionFooter';
@@ -25,6 +28,7 @@ function App() {
             <Link to="/accounts" className="nav-link">Accounts</Link>
             <Link to="/savings-limits" className="nav-link">Savings limits</Link>
             <Link to="/tax-details" className="nav-link">Tax details</Link>
+            <Link to="/scenarios" className="nav-link">Scenarios</Link>
             <Link to="/projections" className="nav-link">Projections</Link>
             <Link to="/expenses" className="nav-link">Expenses</Link>
             <Link to="/import" className="nav-link">Import</Link>
@@ -39,6 +43,10 @@ function App() {
           <Route path="/accounts" element={<AccountsPage />} />
           <Route path="/savings-limits" element={<SavingsLimitsPage />} />
           <Route path="/tax-details" element={<TaxDetailsPage />} />
+          <Route path="/scenarios" element={<ScenariosPage />} />
+          <Route path="/scenarios/new" element={<ScenarioWizardPage />} />
+          <Route path="/scenarios/compare" element={<ScenarioComparePage />} />
+          <Route path="/scenarios/:id/edit" element={<ScenarioWizardPage />} />
           <Route path="/projections" element={<ProjectionsPage />} />
           <Route path="/expenses" element={<ExpensesPage />} />
           <Route path="/import" element={<ImportPage />} />
