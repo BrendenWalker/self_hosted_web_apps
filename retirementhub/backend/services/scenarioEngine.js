@@ -5,7 +5,10 @@ async function persistYearlyResults(client, scenarioId, byYear) {
   for (const row of byYear) {
     await client.query(
       `INSERT INTO scenario_yearly_result (scenario_id, year, result_row, computed_at)
-       VALUES ($1, $2, $3, CURRENT_TIMESTAMP)`,
+       VALUES ($1, $2, $3, CURRENT_TIMESTAMP)
+       ON CONFLICT (scenario_id, year) DO UPDATE SET
+         result_row = EXCLUDED.result_row,
+         computed_at = EXCLUDED.computed_at`,
       [scenarioId, row.year, JSON.stringify(row)]
     );
   }
@@ -16,10 +19,13 @@ async function persistYearlyResults(client, scenarioId, byYear) {
 }
 
 async function runScenario(pool, scenarioId, query = {}) {
-  const projection = await runProjection(pool, { ...query, scenario_id: scenarioId });
   const client = await pool.connect();
+  let projection;
   try {
     await client.query('BEGIN');
+    // Serialize concurrent recompute for the same scenario (e.g. parallel compare API calls).
+    await client.query('SELECT pg_advisory_xact_lock($1)', [scenarioId]);
+    projection = await runProjection(pool, { ...query, scenario_id: scenarioId });
     await persistYearlyResults(client, scenarioId, projection.by_year || []);
     await client.query('COMMIT');
   } catch (err) {

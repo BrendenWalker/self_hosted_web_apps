@@ -50,24 +50,47 @@ export default function ScenarioComparePage() {
       try {
         setLoading(true);
         setMessage(null);
-        const [compareRes, explainRes] = await Promise.all([
-          compareScenarios(ids, { recompute }),
-          explainScenarioComparison(ids, { recompute }),
-        ]);
-        const scenarioRows = compareRes.data?.scenarios || [];
-        setRows(scenarioRows);
+        let compareRes;
+        let explainRes;
+        let baseYearly;
+        let altYearlyRes;
+
+        if (recompute) {
+          compareRes = await compareScenarios(ids, { recompute: true });
+          const scenarioRows = compareRes.data?.scenarios || [];
+          setRows(scenarioRows);
+
+          const base = scenarioRows.find((r) => r.scenario_name === 'Baseline') || scenarioRows[0];
+          const alt = scenarioRows.find((r) => r.scenario_id !== base?.scenario_id) || scenarioRows[1];
+          setBaselineId(base?.scenario_id ?? ids[0]);
+          setAltId(alt?.scenario_id ?? ids[1]);
+
+          [explainRes, baseYearly, altYearlyRes] = await Promise.all([
+            explainScenarioComparison(ids, { recompute: false }),
+            getScenarioYearly(base?.scenario_id ?? ids[0], { recompute: false }),
+            getScenarioYearly(alt?.scenario_id ?? ids[1], { recompute: false }),
+          ]);
+        } else {
+          [compareRes, explainRes] = await Promise.all([
+            compareScenarios(ids, { recompute: false }),
+            explainScenarioComparison(ids, { recompute: false }),
+          ]);
+          const scenarioRows = compareRes.data?.scenarios || [];
+          setRows(scenarioRows);
+
+          const base = scenarioRows.find((r) => r.scenario_name === 'Baseline') || scenarioRows[0];
+          const alt = scenarioRows.find((r) => r.scenario_id !== base?.scenario_id) || scenarioRows[1];
+          setBaselineId(base?.scenario_id ?? ids[0]);
+          setAltId(alt?.scenario_id ?? ids[1]);
+
+          [baseYearly, altYearlyRes] = await Promise.all([
+            getScenarioYearly(base?.scenario_id ?? ids[0], { recompute: false }),
+            getScenarioYearly(alt?.scenario_id ?? ids[1], { recompute: false }),
+          ]);
+        }
+
         const firstComparison = explainRes.data?.comparisons?.[0];
         setExplanation(firstComparison || compareRes.data?.explanation || null);
-
-        const base = scenarioRows.find((r) => r.scenario_name === 'Baseline') || scenarioRows[0];
-        const alt = scenarioRows.find((r) => r.scenario_id !== base?.scenario_id) || scenarioRows[1];
-        setBaselineId(base?.scenario_id ?? ids[0]);
-        setAltId(alt?.scenario_id ?? ids[1]);
-
-        const [baseYearly, altYearlyRes] = await Promise.all([
-          getScenarioYearly(base?.scenario_id ?? ids[0], { recompute }),
-          getScenarioYearly(alt?.scenario_id ?? ids[1], { recompute }),
-        ]);
         setBaselineYearly(baseYearly.data?.by_year || []);
         setAltYearly(altYearlyRes.data?.by_year || []);
       } catch (err) {
