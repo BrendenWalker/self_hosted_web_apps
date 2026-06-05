@@ -1,5 +1,6 @@
 const express = require('express');
 const cors = require('cors');
+const rateLimit = require('express-rate-limit');
 const multer = require('multer');
 const { parse: parseCsv } = require('csv-parse/sync');
 const { createDbPool, testConnection } = require('../../common/database/db-config');
@@ -31,6 +32,14 @@ let isReady = false;
 
 app.use(cors());
 app.use(express.json());
+app.use(
+  rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: 300,
+    standardHeaders: true,
+    legacyHeaders: false,
+  })
+);
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 2 * 1024 * 1024 } });
 

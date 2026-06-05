@@ -25,6 +25,9 @@ vi.mock('axios', () => ({
 
 describe('account balance api', () => {
   beforeEach(() => {
+    mockInstance.post.mockClear();
+    mockInstance.put.mockClear();
+    mockInstance.delete.mockClear();
     mockInstance.post.mockResolvedValue({ data: {} });
     mockInstance.put.mockResolvedValue({ data: {} });
     mockInstance.delete.mockResolvedValue({ data: {} });
