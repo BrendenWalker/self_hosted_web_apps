@@ -6,6 +6,7 @@ import {
   getAccounts,
   getAccountBalances,
   getProjections,
+  computeScenario,
   getSavingsLimits,
   getExpenseCategories,
   getExpenseLines,
@@ -99,5 +100,10 @@ describe('api', () => {
   it('getExpenseLines calls GET /expense-lines', async () => {
     await getExpenseLines();
     expect(mockInstance.get).toHaveBeenCalledWith('/expense-lines');
+  });
+
+  it('computeScenario POSTs empty object body (not null)', async () => {
+    await computeScenario(3);
+    expect(mockInstance.post).toHaveBeenCalledWith('/scenarios/3/compute', {}, { params: {} });
   });
 });
