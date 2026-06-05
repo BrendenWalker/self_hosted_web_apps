@@ -1,4 +1,4 @@
-const { formatMoney } = require('./scenarioExplanationService');
+const { formatMoney } = require('./formatMoney');
 
 const NOISE_THRESHOLD = 500;
 
