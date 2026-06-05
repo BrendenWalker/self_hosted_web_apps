@@ -1,6 +1,6 @@
 'use strict';
 
-const { ordinaryTaxFromBrackets } = require('./taxEngine');
+const { ordinaryTaxFromBrackets, taxableSocialSecurity } = require('./taxEngine');
 
 const MFJ_2025 = [
   { lower_bound: 0, rate: 0.10 },
@@ -50,5 +50,40 @@ describe('ordinaryTaxFromBrackets', () => {
 
   test('negative income treated as zero', () => {
     expect(ordinaryTaxFromBrackets(-1000, MFJ_2025).total).toBe(0);
+  });
+});
+
+describe('taxableSocialSecurity', () => {
+  test('zero benefits → zero', () => {
+    expect(taxableSocialSecurity(50000, 0, 'married_filing_jointly')).toBe(0);
+  });
+
+  test('MFJ below tier 0 (combined ≤ 32k) → zero taxable', () => {
+    expect(taxableSocialSecurity(20000, 20000, 'married_filing_jointly')).toBe(0);
+  });
+
+  test('MFJ between t0 and t1 → up to 50% of excess', () => {
+    expect(taxableSocialSecurity(30000, 20000, 'married_filing_jointly')).toBeCloseTo(4000, 2);
+  });
+
+  test('MFJ above t1 → capped at 85% of benefit', () => {
+    expect(taxableSocialSecurity(200000, 20000, 'married_filing_jointly')).toBeCloseTo(17000, 2);
+  });
+
+  test('single below tier 0 (combined ≤ 25k) → zero taxable', () => {
+    expect(taxableSocialSecurity(15000, 10000, 'single')).toBe(0);
+  });
+
+  test('single between t0 and t1 → up to 50% of excess', () => {
+    expect(taxableSocialSecurity(20000, 10000, 'single')).toBe(0);
+    expect(taxableSocialSecurity(22000, 10000, 'single')).toBeCloseTo(1000, 2);
+  });
+
+  test('single above t1 → capped at 85% of benefit', () => {
+    expect(taxableSocialSecurity(100000, 20000, 'single')).toBeCloseTo(17000, 2);
+  });
+
+  test('married alias uses MFJ thresholds', () => {
+    expect(taxableSocialSecurity(20000, 20000, 'married')).toBe(0);
   });
 });

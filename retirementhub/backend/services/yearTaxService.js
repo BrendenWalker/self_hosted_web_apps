@@ -1,5 +1,8 @@
 const taxParams = require('./taxParameters');
-const { ordinaryTaxFromBrackets } = require('./taxEngine');
+const {
+  ordinaryTaxFromBrackets,
+  estimateTaxableSocialSecurityAnnual,
+} = require('./taxEngine');
 
 const TAX_PARAM_BASE_YEAR = 2025;
 
@@ -20,24 +23,6 @@ const IRMAA_THRESHOLDS_MFJ_2025 = [
 
 function taxParameterInflationFactor(year) {
   return Math.pow(1.02, Math.max(0, year - TAX_PARAM_BASE_YEAR));
-}
-
-function estimateTaxableSocialSecurityAnnual(otherIncome, ssAnnual, filingStatus) {
-  if (ssAnnual <= 0) return 0;
-  const halfSs = ssAnnual * 0.5;
-  const combined = otherIncome + halfSs;
-  const fs = filingStatus || 'married_filing_jointly';
-  const mfj = fs === 'married_filing_jointly' || fs === 'married';
-  const t0 = mfj ? 32000 : 25000;
-  const t1 = mfj ? 44000 : 34000;
-  const bridge = mfj ? 6000 : 4500;
-  if (combined <= t0) return 0;
-  if (combined <= t1) {
-    return Math.round(Math.min(0.5 * ssAnnual, 0.5 * (combined - t0)) * 100) / 100;
-  }
-  const cap = 0.85 * ssAnnual;
-  const alt = 0.85 * (combined - t1) + bridge;
-  return Math.round(Math.min(cap, alt) * 100) / 100;
 }
 
 async function federalOrdinaryTaxWithBreakdown(pool, taxableIncome, filingStatus, year) {
