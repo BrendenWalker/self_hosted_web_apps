@@ -28,6 +28,10 @@
     "testEnvironment": "node",
     "testMatch": ["**/*.test.js"],
     "reporters": ["default", "jest-junit"],
-    "coverageReporters": ["text", "text-summary", "json-summary"]
+    "coverageReporters": ["text", "text-summary", "json-summary"],
+    "collectCoverageFrom": [
+      "services/taxEngine.js",
+      "services/rmdEngine.js"
+    ]
   }
 }
