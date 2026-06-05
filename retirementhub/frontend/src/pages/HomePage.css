@@ -77,3 +77,24 @@
   font-size: 0.95rem;
   line-height: 1.5;
 }
+
+.home-usage-steps {
+  color: #5a6b64;
+  font-size: 0.95rem;
+  line-height: 1.55;
+  margin: 0 0 1rem;
+  padding-left: 1.25rem;
+}
+
+.home-usage-steps li {
+  margin-bottom: 0.65rem;
+}
+
+.home-usage-steps li:last-child {
+  margin-bottom: 0;
+}
+
+.home-usage-note {
+  margin: 0;
+  font-size: 0.9rem;
+}

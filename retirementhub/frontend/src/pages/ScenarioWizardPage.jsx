@@ -205,6 +205,12 @@ export default function ScenarioWizardPage() {
 
   const handleBack = () => setStep((s) => Math.max(1, s - 1));
 
+  const handleStepClick = (targetStep) => {
+    if (targetStep === step) return;
+    setMessage(null);
+    setStep(targetStep);
+  };
+
   const buildHouseholdPayload = () => {
     const trimmed = form.requiredMonthly.trim();
     let rmi = null;
@@ -279,8 +285,8 @@ export default function ScenarioWizardPage() {
             key={s.id}
             type="button"
             className={`scenario-wizard-step${step === s.id ? ' scenario-wizard-step-active' : ''}${step > s.id ? ' scenario-wizard-step-done' : ''}`}
-            onClick={() => s.id < step && setStep(s.id)}
-            disabled={s.id > step}
+            onClick={() => handleStepClick(s.id)}
+            aria-current={step === s.id ? 'step' : undefined}
           >
             {s.id}. {s.label}
           </button>

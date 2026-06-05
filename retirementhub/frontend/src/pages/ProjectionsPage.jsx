@@ -684,8 +684,12 @@ export default function ProjectionsPage() {
   const handleScenarioChange = async (id) => {
     const sid = parseInt(id, 10);
     setSelectedScenarioId(sid);
+    setSelectedYear(null);
+    setData(null);
     await load(sid);
   };
+
+  const scenarioContentKey = data?.scenario?.id ?? selectedScenarioId ?? 'none';
 
   const compareLink =
     scenarios.length >= 2
@@ -770,10 +774,10 @@ export default function ProjectionsPage() {
       </div>
 
       {message && <div className="error-message">{message}</div>}
-      {loading && !data && <p className="loading-message">Loading projections…</p>}
+      {loading && <p className="loading-message">Loading projections…</p>}
 
-      {data && (
-        <>
+      {data && !loading && (
+        <div key={scenarioContentKey}>
           {data.scenario && (
             <p className="projections-summary-note" style={{ marginBottom: '0.5rem' }}>
               Active scenario: <strong>{data.scenario.name}</strong>
@@ -802,7 +806,7 @@ export default function ProjectionsPage() {
             household={data.household}
             onClose={() => setSelectedYear(null)}
           />
-        </>
+        </div>
       )}
     </div>
   );
