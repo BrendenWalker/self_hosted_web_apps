@@ -6,3 +6,11 @@ globalThis.fetch = vi.fn().mockResolvedValue({
   ok: true,
   json: () => Promise.resolve({ version: 'dev' }),
 });
+
+// recharts ResponsiveContainer requires ResizeObserver in jsdom
+class ResizeObserverMock {
+  observe() {}
+  unobserve() {}
+  disconnect() {}
+}
+globalThis.ResizeObserver = ResizeObserverMock;

@@ -531,6 +531,155 @@
   min-height: 360px;
 }
 
+.projection-chart-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin-bottom: 1rem;
+}
+
+.projection-chart-tab {
+  border: 1px solid #c5d4ce;
+  background: #f7faf9;
+  color: #1a3d35;
+  padding: 0.4rem 0.85rem;
+  border-radius: 6px;
+  font-size: 0.88rem;
+  cursor: pointer;
+}
+
+.projection-chart-tab-active {
+  background: #0d5c4a;
+  border-color: #0d5c4a;
+  color: #fff;
+}
+
+.projection-chart-panel {
+  margin-top: 0.25rem;
+}
+
+.projection-chart-title {
+  font-size: 1rem;
+  color: #1a3d35;
+  margin: 0 0 0.75rem;
+  font-weight: 600;
+}
+
+.projections-export-row {
+  margin-top: 1rem;
+  margin-bottom: 0.5rem;
+}
+
+.projections-year-row-clickable {
+  cursor: pointer;
+}
+
+.projections-year-row-clickable:hover {
+  background: #f0f7f4;
+}
+
+.year-drawer-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(26, 61, 53, 0.35);
+  border: none;
+  z-index: 1000;
+  cursor: pointer;
+}
+
+.year-drawer {
+  position: fixed;
+  top: 0;
+  right: 0;
+  width: min(420px, 100vw);
+  height: 100vh;
+  overflow-y: auto;
+  background: #fff;
+  box-shadow: -4px 0 24px rgba(0, 0, 0, 0.12);
+  z-index: 1001;
+  padding: 1rem 1.25rem 2rem;
+}
+
+.year-drawer-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+  padding-bottom: 0.75rem;
+  border-bottom: 1px solid #e8eeec;
+}
+
+.year-drawer-header h2 {
+  margin: 0;
+  font-size: 1.25rem;
+  color: #1a3d35;
+}
+
+.year-drawer-close {
+  flex-shrink: 0;
+}
+
+.year-drawer-section {
+  margin-bottom: 1.25rem;
+}
+
+.year-drawer-section h3 {
+  font-size: 0.95rem;
+  color: #0d5c4a;
+  margin: 0 0 0.5rem;
+  font-weight: 600;
+}
+
+.year-drawer-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.75rem;
+  font-size: 0.88rem;
+  padding: 0.2rem 0;
+  border-bottom: 1px solid #f3f6f5;
+}
+
+.year-drawer-label {
+  color: #5a6b64;
+}
+
+.year-drawer-value {
+  text-align: right;
+  color: #1a3d35;
+  font-variant-numeric: tabular-nums;
+}
+
+.year-drawer-bracket-table {
+  width: 100%;
+  font-size: 0.85rem;
+  border-collapse: collapse;
+  margin-top: 0.35rem;
+}
+
+.year-drawer-bracket-table th,
+.year-drawer-bracket-table td {
+  padding: 0.25rem 0.35rem;
+  border-bottom: 1px solid #e8eeec;
+}
+
+.year-drawer-bracket-table .num {
+  text-align: right;
+}
+
+.year-drawer-muted {
+  font-size: 0.85rem;
+  color: #5a6b64;
+  margin: 0;
+}
+
+.year-drawer-warnings ul {
+  margin: 0;
+  padding-left: 1.1rem;
+  font-size: 0.88rem;
+  color: #8a4a12;
+}
+
 .chart-tooltip {
   background: #fff;
   border: 1px solid #e8eeec;
