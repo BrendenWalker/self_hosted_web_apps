@@ -51,9 +51,9 @@ describe('TaxDetailsPage', () => {
     render(<TaxDetailsPage />);
     await waitFor(() => expect(screen.getByText(/Tax Details/i)).toBeInTheDocument());
     expect(screen.getByLabelText(/Year/i)).toBeInTheDocument();
-    expect(screen.getByText(/Standard Deduction/i)).toBeInTheDocument();
-    expect(screen.getByText(/Tax Brackets/i)).toBeInTheDocument();
-    expect(screen.getByText(/Contribution Limits/i)).toBeInTheDocument();
-    expect(screen.getByText(/Medicare Part B/i)).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: /Standard Deduction/i })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: /Tax Brackets/i })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: /Contribution Limits/i })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: /Medicare Part B/i })).toBeInTheDocument();
   });
 });
