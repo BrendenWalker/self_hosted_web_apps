@@ -30,6 +30,11 @@ const port = process.env.PORT || 80;
 
 let isReady = false;
 
+// Behind Docker/reverse proxy (X-Forwarded-For); required by express-rate-limit.
+if (process.env.TRUST_PROXY !== 'false') {
+  app.set('trust proxy', 1);
+}
+
 app.use(cors());
 app.use(express.json());
 app.use(

@@ -101,7 +101,9 @@ export const compareScenarios = (ids, options = {}) =>
   api.get('/scenarios/compare', {
     params: { ids: ids.join(','), ...(options.recompute ? { recompute: '1' } : {}) },
   });
-export const computeScenario = (id, params) => api.post(`/scenarios/${id}/compute`, null, { params: params || {} });
+/** POST with empty object — axios serializes `null` as the JSON string "null", which breaks body-parser. */
+export const computeScenario = (id, params) =>
+  api.post(`/scenarios/${id}/compute`, {}, { params: params || {} });
 export const getScenarioYearly = (id, options = {}) =>
   api.get(`/scenarios/${id}/yearly`, { params: options.recompute ? { recompute: '1' } : {} });
 export const explainScenarioComparison = (ids, options = {}) =>
