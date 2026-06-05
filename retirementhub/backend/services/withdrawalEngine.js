@@ -1,5 +1,6 @@
 const DEFAULT_CONSERVATIVE = ['cash', 'taxable', 'pre_tax', 'roth', 'hsa'];
-const DEFAULT_TAX_AWARE = ['cash', 'taxable', 'pre_tax', 'roth', 'hsa'];
+/** Roth before pre-tax to reduce taxable withdrawals and future RMD pressure. */
+const DEFAULT_TAX_AWARE = ['cash', 'taxable', 'roth', 'pre_tax', 'hsa'];
 
 function resolveOrder(strategy, customOrder) {
   if (strategy === 'custom' && Array.isArray(customOrder) && customOrder.length > 0) {

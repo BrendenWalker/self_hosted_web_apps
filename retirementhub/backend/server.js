@@ -4,6 +4,9 @@ const multer = require('multer');
 const { parse: parseCsv } = require('csv-parse/sync');
 const { createDbPool, testConnection } = require('../../common/database/db-config');
 const { runProjection } = require('./services/projectionRunner');
+const { runScenario, summarizeScenarioProjection } = require('./services/scenarioEngine');
+const { explainScenarioComparison } = require('./services/scenarioExplanationService');
+const { captureHouseholdSnapshot } = require('./services/scenarioService');
 const taxParams = require('./services/taxParameters');
 const { federalOrdinaryTaxWithBreakdown } = require('./services/yearTaxService');
 const seeds = require('./services/taxParametersSeeds');
@@ -1633,6 +1636,11 @@ app.post('/api/scenarios', async (req, res) => {
       [householdId, String(name).trim(), description || null, !!is_default]
     );
     const scenarioId = ins.rows[0].id;
+    const snapshot = await captureHouseholdSnapshot(client);
+    await client.query('UPDATE scenario SET base_household_snapshot = $2 WHERE id = $1', [
+      scenarioId,
+      JSON.stringify(snapshot),
+    ]);
     const a = parseScenarioAssumptionBody({ assumptions: assumptions || req.body });
     await client.query(
       `INSERT INTO scenario_assumption (
@@ -1811,25 +1819,60 @@ app.get('/api/scenarios/compare', async (req, res) => {
     }
     const rows = [];
     for (const id of ids) {
-      const data = await runProjection(pool, { scenario_id: id });
-      const last = data.by_year[data.by_year.length - 1];
-      rows.push({
-        scenario_id: id,
-        scenario_name: data.scenario?.name,
-        p1_retirement_year: data.projection_meta?.p1_retirement_year,
-        p2_retirement_year: data.projection_meta?.p2_retirement_year,
-        p1_ss_claim_age: data.projection_meta?.p1_ss_claim_age,
-        p2_ss_claim_age: data.projection_meta?.p2_ss_claim_age,
-        roth_strategy: data.projection_meta?.roth_conversion_strategy,
-        lifetime_total_tax: data.projection_meta?.planning_scores?.lifetime_total_tax,
-        ending_net_worth: last?.net_worth,
-        year_reaches_target: data.year_reaches_target,
-      });
+      const data = await runScenario(pool, id);
+      rows.push(summarizeScenarioProjection(data));
     }
-    res.json({ scenarios: rows });
+    const defaultRow = rows.find((r) => r.scenario_name === 'Baseline') || rows[0];
+    const explanation =
+      rows.length >= 2
+        ? explainScenarioComparison(defaultRow, rows.find((r) => r !== defaultRow) || rows[1])
+        : null;
+    res.json({ scenarios: rows, explanation });
   } catch (error) {
     console.error('Error comparing scenarios:', error);
     res.status(500).json({ error: error.message || 'Failed to compare scenarios' });
+  }
+});
+
+app.get('/api/scenarios/compare/explain', async (req, res) => {
+  try {
+    const ids = (req.query.ids || '')
+      .split(',')
+      .map((x) => parseInt(x.trim(), 10))
+      .filter((n) => Number.isFinite(n));
+    if (ids.length < 2) {
+      return res.status(400).json({ error: 'ids query required with at least two scenario ids' });
+    }
+    const summaries = [];
+    for (const id of ids) {
+      const data = await runScenario(pool, id);
+      summaries.push(summarizeScenarioProjection(data));
+    }
+    const baseline = summaries[0];
+    const comparisons = summaries.slice(1).map((alt) => ({
+      vs: alt.scenario_name,
+      ...explainScenarioComparison(baseline, alt),
+    }));
+    res.json({ baseline: baseline.scenario_name, comparisons });
+  } catch (error) {
+    console.error('Error explaining scenario comparison:', error);
+    res.status(500).json({ error: error.message || 'Failed to explain comparison' });
+  }
+});
+
+app.post('/api/scenarios/:id/compute', async (req, res) => {
+  try {
+    const id = parseInt(req.params.id, 10);
+    const data = await runScenario(pool, id, req.query);
+    res.json({
+      scenario_id: id,
+      last_computed_at: new Date().toISOString(),
+      summary: summarizeScenarioProjection(data),
+      by_year: data.by_year,
+    });
+  } catch (error) {
+    console.error('Error computing scenario:', error);
+    res.status(500).json({ error: error.message || 'Failed to compute scenario' });
   }
 });
 
