@@ -13,9 +13,17 @@ function pickBest(rows, field, preferLower = false) {
   }, null);
 }
 
-function explainScenarioComparison(baseline, alternative) {
+const { explainYearlyDiff } = require('./scenarioYearlyDiffService');
+
+function explainScenarioComparison(baseline, alternative, options = {}) {
   if (!baseline || !alternative) {
-    return { summary: 'Insufficient data to compare scenarios.', drivers: [], warnings: [] };
+    return {
+      summary: 'Insufficient data to compare scenarios.',
+      drivers: [],
+      structured_drivers: [],
+      warnings: [],
+      yearly_deltas: [],
+    };
   }
 
   const taxDelta = (alternative.lifetime_total_tax ?? 0) - (baseline.lifetime_total_tax ?? 0);
@@ -99,10 +107,27 @@ function explainScenarioComparison(baseline, alternative) {
       ? `${summaryParts[0]}${summaryParts.length > 1 ? `; ${summaryParts.slice(1).join('; ')}` : ''}.`
       : `${alternative.scenario_name} produces similar lifetime tax and ending net worth to ${baseline.scenario_name}.`;
 
+  let yearly_deltas = [];
+  let structured_drivers = [];
+
+  if (options.baselineRows && options.altRows) {
+    const yearly = explainYearlyDiff(options.baselineRows, options.altRows);
+    yearly_deltas = yearly.yearly_deltas;
+    structured_drivers = yearly.period_drivers;
+    for (const w of yearly.irmaa_warnings) {
+      if (!warnings.includes(w)) warnings.push(w);
+    }
+    for (const sd of structured_drivers) {
+      if (sd.label && !drivers.includes(sd.label)) drivers.push(sd.label);
+    }
+  }
+
   return {
     summary,
     drivers,
+    structured_drivers,
     warnings,
+    yearly_deltas,
     highlights: {
       lowest_lifetime_tax: pickBest([baseline, alternative], 'lifetime_total_tax', true),
       highest_ending_net_worth: pickBest([baseline, alternative], 'ending_net_worth', false),

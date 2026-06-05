@@ -8,7 +8,7 @@ const INCLUDED = [
   'Social Security taxation (Pub. 915 tiers)',
   'Medicare Part B premiums',
   'Named scenarios with withdrawal strategy and Roth conversion modeling',
-  'Side-by-side scenario comparison (lifetime tax, peak RMD, ending net worth)',
+  'Side-by-side scenario comparison with year-by-year explainability',
 ];
 
 const EXCLUDED = [
@@ -20,7 +20,6 @@ const EXCLUDED = [
   'Tax credits',
   'Estate tax',
   'Tax lots / cost basis tracking',
-  'Custom withdrawal bucket ordering (advanced)',
 ];
 
 export default function AssumptionsPanel() {
@@ -61,6 +60,7 @@ export default function AssumptionsPanel() {
           </div>
           <p className="assumptions-panel-footer">
             Edit IRS values on the <Link to="/tax-details">Tax details</Link> page.
+            Manage scenarios on the <Link to="/scenarios">Scenarios</Link> page.
           </p>
         </div>
       )}

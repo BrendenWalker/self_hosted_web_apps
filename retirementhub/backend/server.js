@@ -5,9 +5,9 @@ const multer = require('multer');
 const { parse: parseCsv } = require('csv-parse/sync');
 const { createDbPool, testConnection } = require('../../common/database/db-config');
 const { runProjection } = require('./services/projectionRunner');
-const { runScenario, summarizeScenarioProjection } = require('./services/scenarioEngine');
+const { runScenario, summarizeScenarioProjection, ensureScenarioComputed } = require('./services/scenarioEngine');
 const { explainScenarioComparison } = require('./services/scenarioExplanationService');
-const { captureHouseholdSnapshot } = require('./services/scenarioService');
+const { captureHouseholdSnapshot, loadScenario } = require('./services/scenarioService');
 const taxParams = require('./services/taxParameters');
 const { federalOrdinaryTaxWithBreakdown } = require('./services/yearTaxService');
 const seeds = require('./services/taxParametersSeeds');
@@ -1579,6 +1579,54 @@ app.post('/api/tax-parameters/:year/reset', async (req, res) => {
   }
 });
 
+function summarizeFromCached(byYear, scenario) {
+  if (!byYear?.length || !scenario) return null;
+  const last = byYear[byYear.length - 1];
+  const a = scenario.assumptions || {};
+  let peakRmd = 0;
+  let peakRmdYear = null;
+  let lifetimeTax = 0;
+  let totalRoth = 0;
+  let p1RetirementYear = null;
+  let p2RetirementYear = null;
+  for (const r of byYear) {
+    lifetimeTax += r.federal_tax_total || 0;
+    totalRoth += r.roth_conversion || 0;
+    if ((r.rmd || 0) > peakRmd) {
+      peakRmd = r.rmd;
+      peakRmdYear = r.year;
+    }
+    if (p1RetirementYear == null && r.p1_retired) p1RetirementYear = r.year;
+    if (p2RetirementYear == null && r.p2_retired) p2RetirementYear = r.year;
+  }
+  return {
+    scenario_id: scenario.id,
+    scenario_name: scenario.name,
+    p1_retirement_year: p1RetirementYear,
+    p2_retirement_year: p2RetirementYear,
+    p1_ss_claim_age: a.social_security_claim_age_p1,
+    p2_ss_claim_age: a.social_security_claim_age_p2,
+    withdrawal_strategy: a.withdrawal_strategy,
+    roth_strategy: a.roth_conversion_strategy,
+    lifetime_total_tax: Math.round(lifetimeTax * 100) / 100,
+    ending_net_worth: last?.net_worth,
+    peak_rmd: peakRmd,
+    peak_rmd_year: peakRmdYear,
+    total_roth_conversions: Math.round(totalRoth * 100) / 100,
+  };
+}
+
+async function loadScenarioCompareBundle(pool, id, recompute) {
+  const scenario = await loadScenario(pool, id);
+  if (!scenario) return null;
+  const computed = await ensureScenarioComputed(pool, id, {}, { recompute: !!recompute });
+  const byYear = computed.by_year || [];
+  const summary = computed.from_cache
+    ? summarizeFromCached(byYear, scenario)
+    : summarizeScenarioProjection(computed);
+  return { scenario, byYear, summary };
+}
+
 // ==================== SCENARIOS ====================
 
 function parseScenarioAssumptionBody(body) {
@@ -1607,7 +1655,7 @@ function parseScenarioAssumptionBody(body) {
 app.get('/api/scenarios', async (req, res) => {
   try {
     const result = await pool.query(
-      `SELECT s.id, s.name, s.description, s.is_default, s.created_at, s.updated_at,
+      `SELECT s.id, s.name, s.description, s.is_default, s.created_at, s.updated_at, s.last_computed_at,
               sa.retirement_age_p1, sa.retirement_age_p2,
               sa.social_security_claim_age_p1, sa.social_security_claim_age_p2,
               sa.annual_spending_target, sa.inflation_rate, sa.portfolio_return_rate,
@@ -1697,6 +1745,115 @@ app.post('/api/scenarios', async (req, res) => {
     res.status(500).json({ error: error.message || 'Failed to create scenario' });
   } finally {
     client.release();
+  }
+});
+
+app.get('/api/scenarios/compare', async (req, res) => {
+  try {
+    const ids = (req.query.ids || '')
+      .split(',')
+      .map((x) => parseInt(x.trim(), 10))
+      .filter((n) => Number.isFinite(n));
+    if (!ids.length) {
+      return res.status(400).json({ error: 'ids query required (comma-separated scenario ids)' });
+    }
+    const recompute = req.query.recompute === '1' || req.query.recompute === 'true';
+    const bundles = [];
+    for (const id of ids) {
+      const bundle = await loadScenarioCompareBundle(pool, id, recompute);
+      if (bundle) bundles.push(bundle);
+    }
+    const rows = bundles.map((b) => b.summary);
+    const defaultBundle =
+      bundles.find((b) => b.summary.scenario_name === 'Baseline') ||
+      bundles.find((b) => b.scenario.is_default) ||
+      bundles[0];
+    const altBundle =
+      bundles.find((b) => b.summary.scenario_id !== defaultBundle.summary.scenario_id) || bundles[1];
+    const explanation =
+      rows.length >= 2 && defaultBundle && altBundle
+        ? explainScenarioComparison(defaultBundle.summary, altBundle.summary, {
+            baselineRows: defaultBundle.byYear,
+            altRows: altBundle.byYear,
+          })
+        : null;
+    res.json({ scenarios: rows, explanation });
+  } catch (error) {
+    console.error('Error comparing scenarios:', error);
+    res.status(500).json({ error: error.message || 'Failed to compare scenarios' });
+  }
+});
+
+app.get('/api/scenarios/compare/explain', async (req, res) => {
+  try {
+    const ids = (req.query.ids || '')
+      .split(',')
+      .map((x) => parseInt(x.trim(), 10))
+      .filter((n) => Number.isFinite(n));
+    if (ids.length < 2) {
+      return res.status(400).json({ error: 'ids query required with at least two scenario ids' });
+    }
+    const recompute = req.query.recompute === '1' || req.query.recompute === 'true';
+    const bundles = [];
+    for (const id of ids) {
+      const bundle = await loadScenarioCompareBundle(pool, id, recompute);
+      if (bundle) bundles.push(bundle);
+    }
+    const baseline = bundles[0];
+    const comparisons = bundles.slice(1).map((alt) => ({
+      vs: alt.summary.scenario_name,
+      ...explainScenarioComparison(baseline.summary, alt.summary, {
+        baselineRows: baseline.byYear,
+        altRows: alt.byYear,
+      }),
+    }));
+    res.json({ baseline: baseline.summary.scenario_name, comparisons });
+  } catch (error) {
+    console.error('Error explaining scenario comparison:', error);
+    res.status(500).json({ error: error.message || 'Failed to explain comparison' });
+  }
+});
+
+app.get('/api/scenarios/:id', async (req, res) => {
+  try {
+    const id = parseInt(req.params.id, 10);
+    const scenario = await loadScenario(pool, id);
+    if (!scenario) return res.status(404).json({ error: 'Scenario not found' });
+    const meta = await pool.query(
+      'SELECT last_computed_at, description FROM scenario WHERE id = $1',
+      [id]
+    );
+    res.json({
+      ...scenario,
+      description: meta.rows[0]?.description,
+      last_computed_at: meta.rows[0]?.last_computed_at,
+    });
+  } catch (error) {
+    console.error('Error loading scenario:', error);
+    if (error.code === '42P01') {
+      return res.status(503).json({ error: 'Scenario tables missing. Run migration 012_scenario_framework.sql.' });
+    }
+    res.status(500).json({ error: error.message || 'Failed to load scenario' });
+  }
+});
+
+app.get('/api/scenarios/:id/yearly', async (req, res) => {
+  try {
+    const id = parseInt(req.params.id, 10);
+    const recompute = req.query.recompute === '1' || req.query.recompute === 'true';
+    const computed = await ensureScenarioComputed(pool, id, req.query, { recompute });
+    if (!computed.by_year?.length) {
+      return res.status(404).json({ error: 'No computed results for this scenario. Run compute first.' });
+    }
+    res.json({
+      scenario_id: id,
+      last_computed_at: computed.last_computed_at || new Date().toISOString(),
+      from_cache: !!computed.from_cache,
+      by_year: computed.by_year,
+    });
+  } catch (error) {
+    console.error('Error loading scenario yearly results:', error);
+    res.status(500).json({ error: error.message || 'Failed to load yearly results' });
   }
 });
 
@@ -1814,58 +1971,6 @@ app.delete('/api/scenarios/:id', async (req, res) => {
   } catch (error) {
     console.error('Error deleting scenario:', error);
     res.status(500).json({ error: error.message || 'Failed to delete scenario' });
-  }
-});
-
-app.get('/api/scenarios/compare', async (req, res) => {
-  try {
-    const ids = (req.query.ids || '')
-      .split(',')
-      .map((x) => parseInt(x.trim(), 10))
-      .filter((n) => Number.isFinite(n));
-    if (!ids.length) {
-      return res.status(400).json({ error: 'ids query required (comma-separated scenario ids)' });
-    }
-    const rows = [];
-    for (const id of ids) {
-      const data = await runScenario(pool, id);
-      rows.push(summarizeScenarioProjection(data));
-    }
-    const defaultRow = rows.find((r) => r.scenario_name === 'Baseline') || rows[0];
-    const explanation =
-      rows.length >= 2
-        ? explainScenarioComparison(defaultRow, rows.find((r) => r !== defaultRow) || rows[1])
-        : null;
-    res.json({ scenarios: rows, explanation });
-  } catch (error) {
-    console.error('Error comparing scenarios:', error);
-    res.status(500).json({ error: error.message || 'Failed to compare scenarios' });
-  }
-});
-
-app.get('/api/scenarios/compare/explain', async (req, res) => {
-  try {
-    const ids = (req.query.ids || '')
-      .split(',')
-      .map((x) => parseInt(x.trim(), 10))
-      .filter((n) => Number.isFinite(n));
-    if (ids.length < 2) {
-      return res.status(400).json({ error: 'ids query required with at least two scenario ids' });
-    }
-    const summaries = [];
-    for (const id of ids) {
-      const data = await runScenario(pool, id);
-      summaries.push(summarizeScenarioProjection(data));
-    }
-    const baseline = summaries[0];
-    const comparisons = summaries.slice(1).map((alt) => ({
-      vs: alt.scenario_name,
-      ...explainScenarioComparison(baseline, alt),
-    }));
-    res.json({ baseline: baseline.scenario_name, comparisons });
-  } catch (error) {
-    console.error('Error explaining scenario comparison:', error);
-    res.status(500).json({ error: error.message || 'Failed to explain comparison' });
   }
 });
 
