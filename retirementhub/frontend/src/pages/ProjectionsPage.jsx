@@ -24,15 +24,61 @@ import {
 } from '../api/api';
 import PrecisionBadge from '../components/PrecisionBadge';
 import AssumptionsPanel from '../components/AssumptionsPanel';
+import AccountBalanceChart from '../components/charts/AccountBalanceChart';
+import TaxableIncomeChart from '../components/charts/TaxableIncomeChart';
+import FederalTaxChart from '../components/charts/FederalTaxChart';
+import SpendingSourceChart from '../components/charts/SpendingSourceChart';
+import YearDetailDrawer from '../components/YearDetailDrawer';
+import { formatCurrency } from '../utils/formatCurrency';
+import { yearsToCsv } from '../utils/csvExport';
 
-function formatCurrency(value) {
-  if (value == null || Number.isNaN(value)) return '—';
-  return new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency: 'USD',
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 0,
-  }).format(value);
+const PROJECTION_CHART_TABS = [
+  { id: 'balances', label: 'Balances' },
+  { id: 'taxable', label: 'Taxable Income' },
+  { id: 'federal', label: 'Federal Tax' },
+  { id: 'spending', label: 'Spending Sources' },
+];
+
+export function downloadProjectionsCsv(years) {
+  const blob = new Blob([yearsToCsv(years)], { type: 'text/csv;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `retirementhub-projection-${new Date().toISOString().slice(0, 10)}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+function ProjectionDetailCharts({ years, activeTab, onTabChange, onYearClick }) {
+  if (!years?.length) return null;
+  return (
+    <div className="card projections-chart-card">
+      <h2>Year-by-year detail charts</h2>
+      <p className="projections-chart-intro">
+        Click a year on any chart to open a side panel with full income, tax, spending, and balance detail for that year.
+      </p>
+      <div className="projection-chart-tabs" role="tablist" aria-label="Projection detail charts">
+        {PROJECTION_CHART_TABS.map((tab) => (
+          <button
+            key={tab.id}
+            type="button"
+            role="tab"
+            aria-selected={activeTab === tab.id}
+            className={`projection-chart-tab${activeTab === tab.id ? ' projection-chart-tab-active' : ''}`}
+            onClick={() => onTabChange(tab.id)}
+          >
+            {tab.label}
+          </button>
+        ))}
+      </div>
+      <div role="tabpanel">
+        {activeTab === 'balances' && <AccountBalanceChart years={years} onYearClick={onYearClick} />}
+        {activeTab === 'taxable' && <TaxableIncomeChart years={years} onYearClick={onYearClick} />}
+        {activeTab === 'federal' && <FederalTaxChart years={years} onYearClick={onYearClick} />}
+        {activeTab === 'spending' && <SpendingSourceChart years={years} onYearClick={onYearClick} />}
+      </div>
+    </div>
+  );
 }
 
 function ProjectionsSummary({ data }) {
@@ -268,7 +314,7 @@ function FederalBracketLines({ brackets }) {
   );
 }
 
-function ProjectionsTaxDetailTable({ rows, projectionMeta, household }) {
+function ProjectionsTaxDetailTable({ rows, projectionMeta, household, onYearSelect }) {
   if (!rows || rows.length === 0) return null;
   const p1Name = household?.p1_display_name || 'P1';
   const p2Name = household?.p2_display_name || 'P2';
@@ -303,7 +349,23 @@ function ProjectionsTaxDetailTable({ rows, projectionMeta, household }) {
           </thead>
           <tbody>
             {rows.map((row) => (
-              <tr key={row.year}>
+              <tr
+                key={row.year}
+                className={onYearSelect ? 'projections-year-row-clickable' : undefined}
+                onClick={onYearSelect ? () => onYearSelect(row.year) : undefined}
+                onKeyDown={
+                  onYearSelect
+                    ? (e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault();
+                          onYearSelect(row.year);
+                        }
+                      }
+                    : undefined
+                }
+                tabIndex={onYearSelect ? 0 : undefined}
+                role={onYearSelect ? 'button' : undefined}
+              >
                 <td>{row.year}</td>
                 <td className="num">{row.p1_age_eoy ?? '—'}</td>
                 <td className="num">{row.p2_age_eoy ?? '—'}</td>
@@ -344,7 +406,7 @@ function ProjectionsTaxDetailTable({ rows, projectionMeta, household }) {
   );
 }
 
-function ProjectionsYearDetailTable({ rows, household, projectionMeta }) {
+function ProjectionsYearDetailTable({ rows, household, projectionMeta, onYearSelect }) {
   if (!rows || rows.length === 0) return null;
   const p1Name = household?.p1_display_name || 'P1';
   const p2Name = household?.p2_display_name || 'P2';
@@ -388,7 +450,23 @@ function ProjectionsYearDetailTable({ rows, household, projectionMeta }) {
           </thead>
           <tbody>
             {rows.map((row) => (
-              <tr key={row.year}>
+              <tr
+                key={row.year}
+                className={onYearSelect ? 'projections-year-row-clickable' : undefined}
+                onClick={onYearSelect ? () => onYearSelect(row.year) : undefined}
+                onKeyDown={
+                  onYearSelect
+                    ? (e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault();
+                          onYearSelect(row.year);
+                        }
+                      }
+                    : undefined
+                }
+                tabIndex={onYearSelect ? 0 : undefined}
+                role={onYearSelect ? 'button' : undefined}
+              >
                 <td>{row.year}</td>
                 <td className="num">{row.p1_age_eoy ?? '—'}</td>
                 <td className="num">{row.p2_age_eoy ?? '—'}</td>
@@ -418,81 +496,6 @@ function ProjectionsYearDetailTable({ rows, household, projectionMeta }) {
             ))}
           </tbody>
         </table>
-      </div>
-    </div>
-  );
-}
-
-function BucketBalancesChart({ data }) {
-  if (!data?.length) return null;
-  return (
-    <div className="card projections-chart-card">
-      <h2>Balances by tax bucket</h2>
-      <div className="chart-container">
-        <ResponsiveContainer width="100%" height={300}>
-          <AreaChart data={data} margin={{ top: 8, right: 16, left: 8, bottom: 28 }}>
-            <CartesianGrid strokeDasharray="3 3" stroke="#e8eeec" />
-            <XAxis dataKey="year" tick={{ fontSize: 11 }} />
-            <YAxis tickFormatter={(v) => `$${v >= 1000 ? `${(v / 1000).toFixed(0)}k` : v}`} />
-            <Tooltip formatter={(value) => formatCurrency(value)} />
-            <Legend />
-            <Area type="monotone" dataKey="bucket_pre_tax" name="Traditional" stackId="b" fill="#4a6fa5" stroke="#4a6fa5" />
-            <Area type="monotone" dataKey="bucket_roth" name="Roth" stackId="b" fill="#2d8a6e" stroke="#2d8a6e" />
-            <Area type="monotone" dataKey="bucket_taxable" name="Taxable" stackId="b" fill="#7a9e7e" stroke="#7a9e7e" />
-            <Area type="monotone" dataKey="bucket_cash" name="Cash" stackId="b" fill="#a8c4b8" stroke="#a8c4b8" />
-            <Area type="monotone" dataKey="bucket_hsa" name="HSA" stackId="b" fill="#c9b87a" stroke="#c9b87a" />
-          </AreaChart>
-        </ResponsiveContainer>
-      </div>
-    </div>
-  );
-}
-
-function SpendingSourcesChart({ data }) {
-  if (!data?.length) return null;
-  const hasSources = data.some((r) => (r.spending_ss ?? 0) > 0 || (r.spending_traditional ?? 0) > 0);
-  if (!hasSources) return null;
-  return (
-    <div className="card projections-chart-card">
-      <h2>Retirement spending sources</h2>
-      <div className="chart-container">
-        <ResponsiveContainer width="100%" height={280}>
-          <AreaChart data={data} margin={{ top: 8, right: 16, left: 8, bottom: 28 }}>
-            <CartesianGrid strokeDasharray="3 3" stroke="#e8eeec" />
-            <XAxis dataKey="year" tick={{ fontSize: 11 }} />
-            <YAxis tickFormatter={(v) => `$${v >= 1000 ? `${(v / 1000).toFixed(0)}k` : v}`} />
-            <Tooltip formatter={(value) => formatCurrency(value)} />
-            <Legend />
-            <Area type="monotone" dataKey="spending_ss" name="Social Security" stackId="s" fill="#3d6b8a" />
-            <Area type="monotone" dataKey="spending_traditional" name="Traditional / RMD" stackId="s" fill="#a67c52" />
-            <Area type="monotone" dataKey="spending_taxable" name="Taxable" stackId="s" fill="#6b8f71" />
-            <Area type="monotone" dataKey="spending_roth" name="Roth" stackId="s" fill="#0d5c4a" />
-            <Area type="monotone" dataKey="spending_cash" name="Cash" stackId="s" fill="#9ab5a8" />
-          </AreaChart>
-        </ResponsiveContainer>
-      </div>
-    </div>
-  );
-}
-
-function TaxesAndRmdChart({ data }) {
-  if (!data?.length) return null;
-  return (
-    <div className="card projections-chart-card">
-      <h2>Taxes and RMDs</h2>
-      <div className="chart-container">
-        <ResponsiveContainer width="100%" height={280}>
-          <ComposedChart data={data} margin={{ top: 8, right: 16, left: 8, bottom: 28 }}>
-            <CartesianGrid strokeDasharray="3 3" stroke="#e8eeec" />
-            <XAxis dataKey="year" tick={{ fontSize: 11 }} />
-            <YAxis tickFormatter={(v) => `$${v >= 1000 ? `${(v / 1000).toFixed(0)}k` : v}`} />
-            <Tooltip formatter={(value) => formatCurrency(value)} />
-            <Legend />
-            <Bar dataKey="federal_tax_total" name="Federal tax" fill="#5a6b64" radius={[2, 2, 0, 0]} />
-            <Line type="monotone" dataKey="rmd" name="RMD" stroke="#a67c52" strokeWidth={2} />
-            <Line type="monotone" dataKey="roth_conversion" name="Roth conversion" stroke="#2d6a4f" strokeWidth={2} strokeDasharray="4 4" />
-          </ComposedChart>
-        </ResponsiveContainer>
       </div>
     </div>
   );
@@ -583,7 +586,7 @@ function PlanningInsightsCard({ meta }) {
   );
 }
 
-function IncomeVsExpensesChart({ data, household, projectionMeta }) {
+function IncomeVsExpensesChart({ data, household, projectionMeta, onYearSelect }) {
   if (!data || data.length === 0) return null;
   const p1Name = household?.p1_display_name || 'P1';
   const p2Name = household?.p2_display_name || 'P2';
@@ -645,8 +648,27 @@ function IncomeVsExpensesChart({ data, household, projectionMeta }) {
           </ComposedChart>
         </ResponsiveContainer>
       </div>
-      <ProjectionsYearDetailTable rows={data} household={household} projectionMeta={projectionMeta} />
-      <ProjectionsTaxDetailTable rows={data} projectionMeta={projectionMeta} household={household} />
+      <div className="projections-export-row">
+        <button
+          type="button"
+          className="btn btn-secondary"
+          onClick={() => downloadProjectionsCsv(data)}
+        >
+          Export CSV
+        </button>
+      </div>
+      <ProjectionsYearDetailTable
+        rows={data}
+        household={household}
+        projectionMeta={projectionMeta}
+        onYearSelect={onYearSelect}
+      />
+      <ProjectionsTaxDetailTable
+        rows={data}
+        projectionMeta={projectionMeta}
+        household={household}
+        onYearSelect={onYearSelect}
+      />
     </div>
   );
 }
@@ -691,6 +713,8 @@ export default function ProjectionsPage() {
   const [rothFixedAmount, setRothFixedAmount] = useState('');
   const [rothTargetBracket, setRothTargetBracket] = useState('22');
   const [rothMaxIncome, setRothMaxIncome] = useState('');
+  const [selectedYear, setSelectedYear] = useState(null);
+  const [detailChartTab, setDetailChartTab] = useState('balances');
 
   const syncFormFromProjectionResponse = (payload) => {
     if (!payload) return;
@@ -908,6 +932,9 @@ export default function ProjectionsPage() {
       retirement_funding_shortfall: row.retirement_funding_shortfall ?? 0,
     };
   }) ?? [];
+
+  const byYear = data?.by_year ?? [];
+  const selectedRow = selectedYear != null ? byYear.find((y) => y.year === selectedYear) : null;
 
   return (
     <div className="page-scroll">
@@ -1132,11 +1159,25 @@ export default function ProjectionsPage() {
           <PlanningInsightsCard meta={data.projection_meta} />
           {compareRows.length >= 2 && <ScenarioCompareGrid rows={compareRows} />}
           <SavingsAssetsProjectionsChart data={chartData} target25x={data.target_25x_retirement} />
-          <BucketBalancesChart data={chartData} />
-          <IncomeVsExpensesChart data={chartData} household={data.household} projectionMeta={data.projection_meta} />
-          <SpendingSourcesChart data={chartData} />
-          <TaxesAndRmdChart data={chartData} />
+          <ProjectionDetailCharts
+            years={byYear}
+            activeTab={detailChartTab}
+            onTabChange={setDetailChartTab}
+            onYearClick={setSelectedYear}
+          />
+          <IncomeVsExpensesChart
+            data={chartData}
+            household={data.household}
+            projectionMeta={data.projection_meta}
+            onYearSelect={setSelectedYear}
+          />
           <AssumptionsPanel />
+          <YearDetailDrawer
+            year={selectedYear}
+            row={selectedRow}
+            household={data.household}
+            onClose={() => setSelectedYear(null)}
+          />
         </>
       )}
     </div>
