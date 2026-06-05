@@ -60,8 +60,10 @@ describe('scenarioEngine', () => {
     await runScenario(pool, 2);
     expect(runProjection).toHaveBeenCalledWith(pool, { scenario_id: 2 });
     expect(client.query).toHaveBeenCalledWith('BEGIN');
+    expect(client.query).toHaveBeenCalledWith('SELECT pg_advisory_xact_lock($1)', [2]);
     expect(client.query).toHaveBeenCalledWith('COMMIT');
     expect(queries.some((q) => q.sql.includes('INSERT INTO scenario_yearly_result'))).toBe(true);
+    expect(queries.some((q) => q.sql.includes('ON CONFLICT (scenario_id, year)'))).toBe(true);
   });
 
   it('persistYearlyResults replaces existing rows', async () => {
