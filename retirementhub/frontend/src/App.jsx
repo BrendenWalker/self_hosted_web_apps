@@ -25,12 +25,12 @@ function App() {
             <Link to="/" className="nav-link">Home</Link>
             <Link to="/household" className="nav-link">Household</Link>
             <Link to="/income" className="nav-link">Income</Link>
+            <Link to="/expenses" className="nav-link">Expenses</Link>
             <Link to="/accounts" className="nav-link">Accounts</Link>
             <Link to="/savings-limits" className="nav-link">Savings limits</Link>
             <Link to="/tax-details" className="nav-link">Tax details</Link>
             <Link to="/scenarios" className="nav-link">Scenarios</Link>
             <Link to="/projections" className="nav-link">Projections</Link>
-            <Link to="/expenses" className="nav-link">Expenses</Link>
             <Link to="/import" className="nav-link">Import</Link>
           </div>
         </div>
