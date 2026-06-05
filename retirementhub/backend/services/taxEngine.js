@@ -25,4 +25,28 @@ function ordinaryTaxFromBrackets(taxableIncome, brackets) {
   return { total: Math.round(total * 100) / 100, brackets: out };
 }
 
-module.exports = { ordinaryTaxFromBrackets };
+function taxableSocialSecurity(otherIncome, ssAnnual, filingStatus) {
+  if (ssAnnual <= 0) return 0;
+  const halfSs = ssAnnual * 0.5;
+  const combined = otherIncome + halfSs;
+  const fs = filingStatus || 'married_filing_jointly';
+  const mfj = fs === 'married_filing_jointly' || fs === 'married';
+  const t0 = mfj ? 32000 : 25000;
+  const t1 = mfj ? 44000 : 34000;
+  const bridge = mfj ? 6000 : 4500;
+  if (combined <= t0) return 0;
+  if (combined <= t1) {
+    return Math.round(Math.min(0.5 * ssAnnual, 0.5 * (combined - t0)) * 100) / 100;
+  }
+  const cap = 0.85 * ssAnnual;
+  const alt = 0.85 * (combined - t1) + bridge;
+  return Math.round(Math.min(cap, alt) * 100) / 100;
+}
+
+const estimateTaxableSocialSecurityAnnual = taxableSocialSecurity;
+
+module.exports = {
+  ordinaryTaxFromBrackets,
+  taxableSocialSecurity,
+  estimateTaxableSocialSecurityAnnual,
+};
