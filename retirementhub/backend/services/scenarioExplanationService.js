@@ -1,7 +1,4 @@
-function formatMoney(n) {
-  if (n == null || !Number.isFinite(n)) return '—';
-  return `$${Math.round(n).toLocaleString('en-US')}`;
-}
+const { formatMoney } = require('./formatMoney');
 
 function pickBest(rows, field, preferLower = false) {
   const valid = rows.filter((r) => r[field] != null && Number.isFinite(r[field]));
