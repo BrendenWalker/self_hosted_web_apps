@@ -16,7 +16,7 @@ const {
 } = require('./taxBuckets');
 const { computeWithdrawals } = require('./withdrawalEngine');
 const { computeRothConversion, applyRothConversion } = require('./rothConversionEngine');
-const { computeYearTax } = require('./taxEngine');
+const { computeYearTax } = require('./yearTaxService');
 const { computePlanningScores, computeSsComparison } = require('./planningInsights');
 const taxParams = require('./taxParameters');
 

@@ -5,7 +5,7 @@ const { parse: parseCsv } = require('csv-parse/sync');
 const { createDbPool, testConnection } = require('../../common/database/db-config');
 const { runProjection } = require('./services/projectionRunner');
 const taxParams = require('./services/taxParameters');
-const { federalOrdinaryTaxWithBreakdown } = require('./services/taxEngine');
+const { federalOrdinaryTaxWithBreakdown } = require('./services/yearTaxService');
 const seeds = require('./services/taxParametersSeeds');
 require('dotenv').config();
 
