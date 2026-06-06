@@ -40,7 +40,7 @@ const ACCOUNT_BALANCES = [
   {
     account_id: 1,
     balance: 500000,
-    account_type: '401k',
+    account_type: '401k_traditional',
     expected_depreciation_pct: null,
     owner_type: 'p1',
     rmd_owner_type: 'p1',
@@ -48,7 +48,7 @@ const ACCOUNT_BALANCES = [
   {
     account_id: 2,
     balance: 300000,
-    account_type: '401k',
+    account_type: '401k_traditional',
     expected_depreciation_pct: null,
     owner_type: 'p2',
     rmd_owner_type: 'p2',

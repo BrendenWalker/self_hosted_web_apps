@@ -91,6 +91,7 @@ function ProjectionsSummary({ data }) {
     year_reaches_target,
     current_annual,
     retirement_annual,
+    annual_spending_target,
     required_monthly_income_retirement,
     projection_meta,
     household,
@@ -137,10 +138,15 @@ function ProjectionsSummary({ data }) {
       <p className="projections-summary-note">
         Current annual expenses: {formatCurrency(current_annual)}
         {' · '}
-        {required_monthly_income_retirement != null && required_monthly_income_retirement > 0 ? (
+        {annual_spending_target != null && annual_spending_target > 0 ? (
           <>
-            Required monthly income (ret.): {formatCurrency(required_monthly_income_retirement)}/mo (
-            {formatCurrency(required_monthly_income_retirement * 12)}/yr before expense growth)
+            Retirement spending: {formatCurrency(annual_spending_target / 12)}/mo (
+            {formatCurrency(annual_spending_target)}/yr in first retirement year, +{expense_growth_pct}%/yr)
+          </>
+        ) : required_monthly_income_retirement != null && required_monthly_income_retirement > 0 ? (
+          <>
+            Retirement spending: {formatCurrency(required_monthly_income_retirement)}/mo (
+            {formatCurrency(required_monthly_income_retirement * 12)}/yr in first retirement year, +{expense_growth_pct}%/yr)
           </>
         ) : (
           <>Retirement annual (from expense categories + mortgage): {formatCurrency(retirement_annual)}</>
@@ -154,16 +160,17 @@ function ProjectionsSummary({ data }) {
             <>
               {' '}
               · Expenses use retirement amounts from {projection_meta.expense_retirement_year}
-              {projection_meta.use_required_monthly_income
-                ? ' (required monthly income + expense growth; P2 pre-Medicare bridge added when applicable)'
+              {(projection_meta.use_retirement_spending || projection_meta.use_required_monthly_income)
+                ? ' (retirement spending + expense growth; P2 pre-Medicare bridge added when applicable)'
                 : ''}
             </>
           )}
         </p>
       )}
-      {projection_meta?.use_required_monthly_income && projection_meta?.required_monthly_income_note && (
+      {(projection_meta?.use_retirement_spending || projection_meta?.use_required_monthly_income) &&
+        (projection_meta?.retirement_spending_note || projection_meta?.required_monthly_income_note) && (
         <p className="projections-summary-note" style={{ marginTop: '0.5rem' }}>
-          {projection_meta.required_monthly_income_note}
+          {projection_meta.retirement_spending_note || projection_meta.required_monthly_income_note}
         </p>
       )}
       {projection_meta != null && (projection_meta.p1_rmd_start_age != null || projection_meta.p2_rmd_start_age != null) && (
@@ -407,7 +414,8 @@ function ProjectionsYearDetailTable({ rows, household, projectionMeta, onYearSel
   const p1Name = household?.p1_display_name || 'P1';
   const p2Name = household?.p2_display_name || 'P2';
   const fsLabel = filingStatusLabel(household?.filing_status);
-  const useRmi = projectionMeta?.use_required_monthly_income;
+  const useRmi =
+    projectionMeta?.use_retirement_spending || projectionMeta?.use_required_monthly_income;
   return (
     <div className="projections-detail-grid">
       <h3 className="projections-detail-title">Annual detail (cash flow and taxable income)</h3>
