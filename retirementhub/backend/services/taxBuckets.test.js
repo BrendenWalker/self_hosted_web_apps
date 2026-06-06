@@ -17,4 +17,11 @@ describe('taxBuckets', () => {
     expect(snap.pre_tax).toBe(100000);
     expect(snap.roth).toBe(50000);
   });
+
+  it('maps legacy 401k type to pre-tax bucket', () => {
+    const b = classifyAccounts([
+      { account_type: '401k', balance: 250000, owner_type: 'p1', rmd_owner_type: 'p1' },
+    ]);
+    expect(b.preTaxP1).toBe(250000);
+  });
 });

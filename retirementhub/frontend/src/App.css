@@ -1070,6 +1070,11 @@
   cursor: pointer;
 }
 
+.scenario-wizard-step:hover:not(.scenario-wizard-step-active) {
+  border-color: #0d5c4a;
+  background: #f4faf8;
+}
+
 .scenario-wizard-step-active {
   background: #0d5c4a;
   color: #fff;
@@ -1096,6 +1101,44 @@
   font-size: 0.85rem;
   color: #5a6b64;
   margin-bottom: 0.75rem;
+}
+
+.retirement-spending-input-row {
+  display: flex;
+  gap: 0.5rem;
+  align-items: stretch;
+}
+
+.retirement-spending-input-row input {
+  flex: 1;
+  min-width: 0;
+}
+
+.retirement-spending-period-toggle {
+  display: flex;
+  flex-shrink: 0;
+}
+
+.retirement-spending-period-toggle .btn {
+  padding: 0.4rem 0.65rem;
+  min-width: 3rem;
+}
+
+.retirement-spending-period-toggle .btn + .btn {
+  margin-left: 0;
+  border-left: none;
+}
+
+.retirement-spending-period-active {
+  background: #0d5c4a;
+  color: #fff;
+  border-color: #0d5c4a;
+}
+
+.form-hint {
+  margin: 0.35rem 0 0;
+  font-size: 0.85rem;
+  color: #5a6b64;
 }
 
 .withdrawal-order-list {
@@ -1135,6 +1178,22 @@
 
 .scenario-diff-highlight {
   background: #f5faf8;
+}
+
+.scenario-compare-group-header {
+  text-align: center;
+  background: #f0f7f4;
+  color: #0d5c4a;
+  font-weight: 600;
+}
+
+.scenario-income-breakdown-table-wrap {
+  margin-top: 1.25rem;
+}
+
+.scenario-income-shortfall {
+  font-size: 0.82em;
+  color: #a04545;
 }
 
 .scenario-year-diff-columns {

@@ -32,7 +32,8 @@ function classifyAccounts(balanceRows, taxProfilesByAccountId = {}) {
 
   for (const row of balanceRows) {
     const bal = parseFloat(row.balance) || 0;
-    const type = row.account_type;
+    let type = row.account_type;
+    if (type === '401k') type = '401k_traditional';
     const accountId = row.account_id;
 
     if (BUCKET_TYPES.asset.has(type)) {

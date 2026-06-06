@@ -260,7 +260,10 @@ async function runProjection(pool, query = {}) {
     let salaryP1 = grossP1 * (y === startYear ? 1 : raiseFactor);
     let salaryP2 = grossP2Num * (y === startYear ? 1 : raiseFactor);
     const wageIncome = (p1Retired ? 0 : salaryP1) + (p2Retired ? 0 : salaryP2);
-    const bonusAnnual = expenseRetirementYear != null && y >= expenseRetirementYear ? 0 : bonusQuarterly * 4;
+    const bonusAnnual =
+      expenseRetirementYear != null && y >= expenseRetirementYear
+        ? 0
+        : bonusQuarterly * 4 * (y === startYear ? 1 : raiseFactor);
 
     const p1SsActive = overlay.p1SsStartYear != null && y >= overlay.p1SsStartYear;
     const p2SsActive = overlay.p2SsStartYear != null && y >= overlay.p2SsStartYear;
@@ -330,19 +333,6 @@ async function runProjection(pool, query = {}) {
         baseNeed += bridgeAnnual;
       }
       expensesAmount = Math.round(baseNeed * 100) / 100;
-      const spendingGap = Math.max(0, expensesAmount - totalSs - rmdTotal - wageIncome - bonusAnnual);
-      withdrawals = computeWithdrawals(
-        spendingGap,
-        workingBuckets,
-        overlay.withdrawalStrategy,
-        overlay.withdrawalOrderCustom
-      );
-      tradP1 = workingBuckets.preTaxP1;
-      tradP2 = workingBuckets.preTaxP2;
-      buckets.roth = workingBuckets.roth;
-      buckets.taxable = workingBuckets.taxable;
-      buckets.cash = workingBuckets.cash;
-      buckets.hsa = workingBuckets.hsa;
     } else {
       const expenseBase = expensesUseRetirement ? retirementAnnual : currentAnnual;
       const expenseGrowthYears =
@@ -358,6 +348,22 @@ async function runProjection(pool, query = {}) {
         }
         expensesAmount = Math.round((expensesAmount + bridgeAnnual) * 100) / 100;
       }
+    }
+
+    const spendingGap = Math.max(0, expensesAmount - totalSs - rmdTotal - wageIncome - bonusAnnual);
+    if (spendingGap > 0) {
+      withdrawals = computeWithdrawals(
+        spendingGap,
+        workingBuckets,
+        overlay.withdrawalStrategy,
+        overlay.withdrawalOrderCustom
+      );
+      tradP1 = workingBuckets.preTaxP1;
+      tradP2 = workingBuckets.preTaxP2;
+      buckets.roth = workingBuckets.roth;
+      buckets.taxable = workingBuckets.taxable;
+      buckets.cash = workingBuckets.cash;
+      buckets.hsa = workingBuckets.hsa;
     }
 
     const baseOrdinary = wageIncome + bonusAnnual + rmdTotal;
@@ -412,23 +418,28 @@ async function runProjection(pool, query = {}) {
       withdrawals.rothWithdrawals +
       withdrawals.hsaWithdrawals;
 
-    const incomeAmount = Math.round(
-      (wageIncome + bonusAnnual + totalSs + rmdTotal + totalSavingsDraw + rothConversion) * 100
-    ) / 100;
+    const incomeAmount =
+      withdrawals.unmetSpending === 0 && spendingGap > 0
+        ? Math.round(expensesAmount * 100) / 100
+        : Math.round(
+            (wageIncome + bonusAnnual + totalSs + rmdTotal + totalSavingsDraw) * 100
+          ) / 100;
     const savingsAmount = Math.round((incomeAmount - expensesAmount) * 100) / 100;
 
     let contributions401k = 0;
-    if (!isRetired) {
+    const contribSalaryP1 = p1Retired ? 0 : salaryP1;
+    const contribSalaryP2 = p2Retired ? 0 : salaryP2;
+    if (contribSalaryP1 > 0 || contribSalaryP2 > 0) {
       const limits = await taxParams.getContributionLimits(pool, y);
       const base = limitsToBase(limits);
       const limP1 = buildPartyLimitsForYear(p1BirthYear, base, y);
       const limP2 = buildPartyLimitsForYear(p2BirthYear, base, y);
       const plannedP1 = Math.min(
-        salaryP1 * fourOOneKPctP1 + salaryP1 * matchPctP1,
+        contribSalaryP1 * fourOOneKPctP1 + contribSalaryP1 * matchPctP1,
         limP1['401k_elective_limit'] || 1e9
       );
       const plannedP2 = Math.min(
-        salaryP2 * fourOOneKPctP2 + salaryP2 * matchPctP2,
+        contribSalaryP2 * fourOOneKPctP2 + contribSalaryP2 * matchPctP2,
         limP2['401k_elective_limit'] || 1e9
       );
       contributions401k = (plannedP1 || 0) + (plannedP2 || 0);
@@ -598,6 +609,13 @@ async function runProjection(pool, query = {}) {
       withdrawal_strategy: overlay.withdrawalStrategy,
       roth_conversion_strategy: overlay.rothConversionStrategy,
       use_required_monthly_income: useSpendingTarget && spendingAnnualBase != null,
+      use_retirement_spending: useSpendingTarget && spendingAnnualBase != null,
+      retirement_spending_annual_base: spendingAnnualBase,
+      retirement_spending_expense_growth_pct: expenseGrowthPct,
+      retirement_spending_note:
+        spendingAnnualBase != null && expenseRetirementYear != null
+          ? `Retirement spending starts at $${Math.round(spendingAnnualBase).toLocaleString('en-US')}/yr in ${expenseRetirementYear} and increases ${expenseGrowthPct}% per year (P2 pre-Medicare bridge added when applicable).`
+          : null,
       ss_comparison: ssComparison,
       planning_scores: planningScores,
       rmd_note:

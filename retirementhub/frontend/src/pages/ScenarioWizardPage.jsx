@@ -19,6 +19,11 @@ import {
   DEFAULT_CONSERVATIVE_ORDER,
   labelForStrategy,
 } from '../constants/scenarioOptions';
+import {
+  annualFromRetirementSpending,
+  describeRetirementSpending,
+  retirementSpendingFormFromAnnual,
+} from '../utils/retirementSpending';
 
 const emptyForm = () => ({
   name: '',
@@ -32,8 +37,8 @@ const emptyForm = () => ({
   growthPct: 5,
   expenseGrowthPct: 2.5,
   ssiGrowthPct: 2.5,
-  annualSpending: '',
-  requiredMonthly: '',
+  retirementSpending: '',
+  retirementSpendingPeriod: 'monthly',
   withdrawalStrategy: 'conservative',
   withdrawalOrder: [...DEFAULT_CONSERVATIVE_ORDER],
   rothStrategy: 'none',
@@ -65,14 +70,18 @@ export default function ScenarioWizardPage() {
         try {
           const hh = await getHousehold();
           const h = hh.data;
+          const spending = retirementSpendingFormFromAnnual(
+            h.required_monthly_income_retirement > 0 ? h.required_monthly_income_retirement * 12 : null,
+            'monthly'
+          );
           setForm((f) => ({
             ...f,
             years: h.projection_horizon_years ?? 30,
             growthPct: h.projection_growth_pct ?? 5,
             expenseGrowthPct: h.projection_expense_growth_pct ?? 2.5,
             ssiGrowthPct: h.projection_ssi_growth_pct ?? 2.5,
-            requiredMonthly:
-              h.required_monthly_income_retirement > 0 ? String(h.required_monthly_income_retirement) : '',
+            retirementSpending: spending.amount,
+            retirementSpendingPeriod: spending.period,
           }));
         } catch {
           /* household defaults optional */
@@ -89,6 +98,10 @@ export default function ScenarioWizardPage() {
         const h = hhRes.data;
         const a = s.assumptions || {};
         const rp = s.roth_plan || {};
+        const spending = retirementSpendingFormFromAnnual(
+          a.annual_spending_target > 0 ? a.annual_spending_target : null,
+          'monthly'
+        );
         setScenarioId(s.id);
         setForm({
           name: s.name || '',
@@ -102,9 +115,8 @@ export default function ScenarioWizardPage() {
           growthPct: a.portfolio_return_rate ?? h.projection_growth_pct ?? 5,
           expenseGrowthPct: a.inflation_rate ?? h.projection_expense_growth_pct ?? 2.5,
           ssiGrowthPct: h.projection_ssi_growth_pct ?? 2.5,
-          annualSpending: a.annual_spending_target > 0 ? String(a.annual_spending_target) : '',
-          requiredMonthly:
-            a.annual_spending_target > 0 ? String(Math.round(a.annual_spending_target / 12)) : '',
+          retirementSpending: spending.amount,
+          retirementSpendingPeriod: spending.period,
           withdrawalStrategy: a.withdrawal_strategy || 'conservative',
           withdrawalOrder: a.withdrawal_order_custom?.length
             ? a.withdrawal_order_custom
@@ -123,18 +135,10 @@ export default function ScenarioWizardPage() {
   }, [idParam, isNew]);
 
   const buildAssumptionsPayload = () => {
-    const trimmed = form.requiredMonthly.trim();
-    let rmi = null;
-    if (trimmed !== '') {
-      const n = parseFloat(trimmed);
-      if (Number.isFinite(n) && n >= 0) rmi = n > 0 ? n : null;
-    }
-    const annual =
-      form.annualSpending.trim() !== '' && Number.isFinite(parseFloat(form.annualSpending))
-        ? parseFloat(form.annualSpending)
-        : rmi != null
-          ? rmi * 12
-          : null;
+    const annual = annualFromRetirementSpending(
+      form.retirementSpending,
+      form.retirementSpendingPeriod
+    );
     return {
       retirement_age_p1: form.retirementAgeP1 !== '' ? parseInt(form.retirementAgeP1, 10) : null,
       retirement_age_p2: form.retirementAgeP2 !== '' ? parseInt(form.retirementAgeP2, 10) : null,
@@ -212,19 +216,35 @@ export default function ScenarioWizardPage() {
   };
 
   const buildHouseholdPayload = () => {
-    const trimmed = form.requiredMonthly.trim();
-    let rmi = null;
-    if (trimmed !== '') {
-      const n = parseFloat(trimmed);
-      if (Number.isFinite(n) && n >= 0) rmi = n > 0 ? n : null;
-    }
+    const annual = annualFromRetirementSpending(
+      form.retirementSpending,
+      form.retirementSpendingPeriod
+    );
     return {
       projection_horizon_years: form.years,
       projection_growth_pct: form.growthPct,
       projection_expense_growth_pct: form.expenseGrowthPct,
       projection_ssi_growth_pct: form.ssiGrowthPct,
-      required_monthly_income_retirement: rmi,
+      required_monthly_income_retirement:
+        annual != null ? Math.round((annual / 12) * 100) / 100 : null,
     };
+  };
+
+  const setRetirementSpendingPeriod = (period) => {
+    const annual = annualFromRetirementSpending(
+      form.retirementSpending,
+      form.retirementSpendingPeriod
+    );
+    if (annual == null) {
+      setField('retirementSpendingPeriod', period);
+      return;
+    }
+    const converted = retirementSpendingFormFromAnnual(annual, period);
+    setForm((f) => ({
+      ...f,
+      retirementSpending: converted.amount,
+      retirementSpendingPeriod: converted.period,
+    }));
   };
 
   const handleFinish = async () => {
@@ -399,28 +419,55 @@ export default function ScenarioWizardPage() {
         {step === 4 && (
           <>
             <h2>Spending &amp; growth</h2>
+            <p className="scenario-help">
+              Retirement spending is the cash you need in your first full retirement year. Projections
+              increase it each year by the expense growth rate below.
+            </p>
             <div className="form-row">
               <div className="form-group">
-                <label htmlFor="annual-spending">Annual spending target</label>
-                <input
-                  id="annual-spending"
-                  type="number"
-                  min={0}
-                  step={1000}
-                  value={form.annualSpending}
-                  onChange={(e) => setField('annualSpending', e.target.value)}
-                />
-              </div>
-              <div className="form-group">
-                <label htmlFor="required-monthly">Required monthly income (retirement)</label>
-                <input
-                  id="required-monthly"
-                  type="number"
-                  min={0}
-                  step={100}
-                  value={form.requiredMonthly}
-                  onChange={(e) => setField('requiredMonthly', e.target.value)}
-                />
+                <label htmlFor="retirement-spending">Retirement spending</label>
+                <div className="retirement-spending-input-row">
+                  <input
+                    id="retirement-spending"
+                    type="number"
+                    min={0}
+                    step={form.retirementSpendingPeriod === 'monthly' ? 100 : 1000}
+                    value={form.retirementSpending}
+                    onChange={(e) => setField('retirementSpending', e.target.value)}
+                    placeholder={form.retirementSpendingPeriod === 'monthly' ? 'Monthly $' : 'Annual $'}
+                  />
+                  <div className="retirement-spending-period-toggle" role="group" aria-label="Spending period">
+                    <button
+                      type="button"
+                      className={`btn btn-secondary${form.retirementSpendingPeriod === 'monthly' ? ' retirement-spending-period-active' : ''}`}
+                      aria-pressed={form.retirementSpendingPeriod === 'monthly'}
+                      onClick={() => setRetirementSpendingPeriod('monthly')}
+                    >
+                      /mo
+                    </button>
+                    <button
+                      type="button"
+                      className={`btn btn-secondary${form.retirementSpendingPeriod === 'yearly' ? ' retirement-spending-period-active' : ''}`}
+                      aria-pressed={form.retirementSpendingPeriod === 'yearly'}
+                      onClick={() => setRetirementSpendingPeriod('yearly')}
+                    >
+                      /yr
+                    </button>
+                  </div>
+                </div>
+                {describeRetirementSpending(
+                  annualFromRetirementSpending(form.retirementSpending, form.retirementSpendingPeriod),
+                  form.retirementSpendingPeriod,
+                  form.expenseGrowthPct
+                ) && (
+                  <p className="form-hint">
+                    {describeRetirementSpending(
+                      annualFromRetirementSpending(form.retirementSpending, form.retirementSpendingPeriod),
+                      form.retirementSpendingPeriod,
+                      form.expenseGrowthPct
+                    )}
+                  </p>
+                )}
               </div>
               <div className="form-group">
                 <label htmlFor="growth-pct">Portfolio growth (%/yr)</label>
@@ -552,6 +599,14 @@ export default function ScenarioWizardPage() {
               <li>P1/P2 retirement age: {form.retirementAgeP1 || '—'} / {form.retirementAgeP2 || '—'}</li>
               <li>SS claim ages: {form.ssClaimP1} / {form.ssClaimP2}</li>
               <li>Horizon: {form.years} years · Growth {form.growthPct}% · Expense {form.expenseGrowthPct}%</li>
+              <li>
+                Retirement spending:{' '}
+                {describeRetirementSpending(
+                  annualFromRetirementSpending(form.retirementSpending, form.retirementSpendingPeriod),
+                  form.retirementSpendingPeriod,
+                  form.expenseGrowthPct
+                ) || '— (uses expense categories)'}
+              </li>
               <li>Withdrawal: {labelForStrategy(form.withdrawalStrategy, WITHDRAWAL_STRATEGIES)}</li>
               <li>Roth: {labelForStrategy(form.rothStrategy, ROTH_STRATEGIES)}</li>
             </ul>

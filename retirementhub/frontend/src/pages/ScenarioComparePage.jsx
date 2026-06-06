@@ -15,8 +15,10 @@ import {
   getScenarioYearly,
 } from '../api/api';
 import ScenarioCompareGrid from '../components/scenarios/ScenarioCompareGrid';
+import ScenarioIncomeBreakdown from '../components/scenarios/ScenarioIncomeBreakdown';
 import ScenarioYearDiffDrawer from '../components/scenarios/ScenarioYearDiffDrawer';
 import { formatCurrency } from '../utils/formatCurrency';
+import { downloadScenarioCompareCsv } from '../utils/csvExport';
 
 export default function ScenarioComparePage() {
   const [searchParams] = useSearchParams();
@@ -134,6 +136,20 @@ export default function ScenarioComparePage() {
         <button type="button" className="btn btn-secondary" onClick={() => load(true)} disabled={loading}>
           Recompute
         </button>
+        {!loading && baselineYearly.length > 0 && altYearly.length > 0 && (
+          <button
+            type="button"
+            className="btn btn-secondary"
+            onClick={() =>
+              downloadScenarioCompareCsv(baselineYearly, altYearly, {
+                baselineName,
+                altName,
+              })
+            }
+          >
+            Export CSV
+          </button>
+        )}
       </div>
 
       {message && <div className="error-message">{message}</div>}
@@ -142,6 +158,14 @@ export default function ScenarioComparePage() {
       {!loading && rows.length >= 2 && (
         <>
           <ScenarioCompareGrid rows={rows} explanation={explanation} />
+
+          <ScenarioIncomeBreakdown
+            baselineYears={baselineYearly}
+            altYears={altYearly}
+            baselineName={baselineName}
+            altName={altName}
+            onYearSelect={setSelectedYear}
+          />
 
           {chartData.length > 0 && (
             <div className="card projections-chart-card">
