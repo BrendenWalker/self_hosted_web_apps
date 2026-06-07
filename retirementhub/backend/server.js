@@ -308,38 +308,97 @@ app.get('/api/income', async (req, res) => {
   }
 });
 
+function parseOptionalIncomeFloat(value) {
+  if (value == null || value === '') return null;
+  const n = parseFloat(value);
+  return Number.isFinite(n) ? n : null;
+}
+
+function parseOptionalIncomeBoolean(value) {
+  if (value == null || value === '') return null;
+  return !!value;
+}
+
+function incomeUpdateParams(body) {
+  const {
+    as_of,
+    gross_salary,
+    gross_salary_p2,
+    expected_raise_pct,
+    bonus_quarterly,
+    bonus_quarterly_p2,
+    four_o_one_k_pct,
+    four_o_one_k_match_pct,
+    four_o_one_k_pct_p2,
+    four_o_one_k_match_pct_p2,
+    ira_traditional_annual_p1,
+    ira_roth_annual_p1,
+    hsa_annual_p1,
+    taxable_savings_annual_p1,
+    ira_traditional_annual_p2,
+    ira_roth_annual_p2,
+    hsa_annual_p2,
+    taxable_savings_annual_p2,
+    surplus_to_taxable_p1,
+    surplus_to_taxable_p2,
+  } = body;
+  return [
+    as_of && String(as_of).trim() ? String(as_of).trim() : null,
+    gross_salary != null ? parseFloat(gross_salary) : null,
+    parseOptionalIncomeFloat(gross_salary_p2),
+    parseOptionalIncomeFloat(expected_raise_pct),
+    parseOptionalIncomeFloat(bonus_quarterly),
+    parseOptionalIncomeFloat(bonus_quarterly_p2),
+    parseOptionalIncomeFloat(four_o_one_k_pct),
+    parseOptionalIncomeFloat(four_o_one_k_match_pct),
+    parseOptionalIncomeFloat(four_o_one_k_pct_p2),
+    parseOptionalIncomeFloat(four_o_one_k_match_pct_p2),
+    parseOptionalIncomeFloat(ira_traditional_annual_p1),
+    parseOptionalIncomeFloat(ira_roth_annual_p1),
+    parseOptionalIncomeFloat(hsa_annual_p1),
+    parseOptionalIncomeFloat(taxable_savings_annual_p1),
+    parseOptionalIncomeFloat(ira_traditional_annual_p2),
+    parseOptionalIncomeFloat(ira_roth_annual_p2),
+    parseOptionalIncomeFloat(hsa_annual_p2),
+    parseOptionalIncomeFloat(taxable_savings_annual_p2),
+    parseOptionalIncomeBoolean(surplus_to_taxable_p1),
+    parseOptionalIncomeBoolean(surplus_to_taxable_p2),
+  ];
+}
+
+const INCOME_UPDATE_SET = `
+  as_of = COALESCE($1, as_of),
+  gross_salary = COALESCE($2, gross_salary),
+  gross_salary_p2 = $3,
+  expected_raise_pct = $4,
+  bonus_quarterly = $5,
+  bonus_quarterly_p2 = $6,
+  four_o_one_k_pct = $7,
+  four_o_one_k_match_pct = $8,
+  four_o_one_k_pct_p2 = $9,
+  four_o_one_k_match_pct_p2 = $10,
+  ira_traditional_annual_p1 = $11,
+  ira_roth_annual_p1 = $12,
+  hsa_annual_p1 = $13,
+  taxable_savings_annual_p1 = $14,
+  ira_traditional_annual_p2 = $15,
+  ira_roth_annual_p2 = $16,
+  hsa_annual_p2 = $17,
+  taxable_savings_annual_p2 = $18,
+  surplus_to_taxable_p1 = COALESCE($19, surplus_to_taxable_p1),
+  surplus_to_taxable_p2 = COALESCE($20, surplus_to_taxable_p2),
+  modified = CURRENT_TIMESTAMP
+`;
+
 app.put('/api/income', async (req, res) => {
   try {
-    const { id, as_of, gross_salary, gross_salary_p2, expected_raise_pct, bonus_quarterly,
-      four_o_one_k_pct, four_o_one_k_match_pct, four_o_one_k_pct_p2, four_o_one_k_match_pct_p2 } = req.body;
+    const { id } = req.body;
+    const params = incomeUpdateParams(req.body);
     const targetId = id != null ? parseInt(id, 10) : null;
     if (targetId != null && Number.isInteger(targetId)) {
       const result = await pool.query(
-        `UPDATE income SET
-          as_of = COALESCE($1, as_of),
-          gross_salary = COALESCE($2, gross_salary),
-          gross_salary_p2 = $3,
-          expected_raise_pct = $4,
-          bonus_quarterly = $5,
-          four_o_one_k_pct = $6,
-          four_o_one_k_match_pct = $7,
-          four_o_one_k_pct_p2 = $8,
-          four_o_one_k_match_pct_p2 = $9,
-          modified = CURRENT_TIMESTAMP
-         WHERE id = $10
-         RETURNING *`,
-        [
-          as_of && String(as_of).trim() ? String(as_of).trim() : null,
-          gross_salary != null ? parseFloat(gross_salary) : null,
-          gross_salary_p2 != null ? parseFloat(gross_salary_p2) : null,
-          expected_raise_pct != null ? parseFloat(expected_raise_pct) : null,
-          bonus_quarterly != null ? parseFloat(bonus_quarterly) : null,
-          four_o_one_k_pct != null ? parseFloat(four_o_one_k_pct) : null,
-          four_o_one_k_match_pct != null ? parseFloat(four_o_one_k_match_pct) : null,
-          four_o_one_k_pct_p2 != null ? parseFloat(four_o_one_k_pct_p2) : null,
-          four_o_one_k_match_pct_p2 != null ? parseFloat(four_o_one_k_match_pct_p2) : null,
-          targetId,
-        ]
+        `UPDATE income SET ${INCOME_UPDATE_SET} WHERE id = $21 RETURNING *`,
+        [...params, targetId]
       );
       if (result.rows.length === 0) {
         return res.status(404).json({ error: 'Income not found' });
@@ -347,30 +406,10 @@ app.put('/api/income', async (req, res) => {
       return res.json(result.rows[0]);
     }
     const result = await pool.query(
-      `UPDATE income SET
-        as_of = COALESCE($1, as_of),
-        gross_salary = COALESCE($2, gross_salary),
-        gross_salary_p2 = $3,
-        expected_raise_pct = $4,
-        bonus_quarterly = $5,
-        four_o_one_k_pct = $6,
-        four_o_one_k_match_pct = $7,
-        four_o_one_k_pct_p2 = $8,
-        four_o_one_k_match_pct_p2 = $9,
-        modified = CURRENT_TIMESTAMP
+      `UPDATE income SET ${INCOME_UPDATE_SET}
        WHERE id = (SELECT id FROM income ORDER BY as_of DESC, id DESC LIMIT 1)
        RETURNING *`,
-      [
-        as_of && String(as_of).trim() ? String(as_of).trim() : null,
-        gross_salary != null ? parseFloat(gross_salary) : null,
-        gross_salary_p2 != null ? parseFloat(gross_salary_p2) : null,
-        expected_raise_pct != null ? parseFloat(expected_raise_pct) : null,
-        bonus_quarterly != null ? parseFloat(bonus_quarterly) : null,
-        four_o_one_k_pct != null ? parseFloat(four_o_one_k_pct) : null,
-        four_o_one_k_match_pct != null ? parseFloat(four_o_one_k_match_pct) : null,
-        four_o_one_k_pct_p2 != null ? parseFloat(four_o_one_k_pct_p2) : null,
-        four_o_one_k_match_pct_p2 != null ? parseFloat(four_o_one_k_match_pct_p2) : null,
-      ]
+      params
     );
     if (result.rows.length === 0) {
       return res.status(404).json({ error: 'Income not found' });
@@ -417,8 +456,9 @@ app.get('/api/accounts/:id', async (req, res) => {
 function parseExpectedDepreciationPct(raw) {
   if (raw == null || raw === '') return null;
   const n = parseFloat(String(raw).trim());
-  if (!Number.isFinite(n) || n < 0) return null;
-  return Math.min(100, Math.round(n * 100) / 100);
+  if (!Number.isFinite(n)) return null;
+  const clamped = Math.max(-100, Math.min(100, n));
+  return Math.round(clamped * 100) / 100;
 }
 
 const RMD_ACCOUNT_TYPES = new Set(['ira_traditional', '401k_traditional']);
@@ -432,21 +472,30 @@ function parseRmdOwnerType(raw, accountType) {
   return null;
 }
 
+function parseLiquidateInRetirement(raw, accountType) {
+  if (accountType !== 'asset') return false;
+  if (raw === undefined || raw === null) return false;
+  if (typeof raw === 'boolean') return raw;
+  const s = String(raw).trim().toLowerCase();
+  return s === '1' || s === 'true' || s === 'yes' || s === 'on';
+}
+
 app.post('/api/accounts', async (req, res) => {
   try {
-    const { name, account_type, owner_type, sort_order, expected_depreciation_pct, rmd_owner_type } = req.body;
+    const { name, account_type, owner_type, sort_order, expected_depreciation_pct, rmd_owner_type, liquidate_in_retirement } = req.body;
     const trimmedName = name != null ? String(name).trim() : '';
     if (!trimmedName) {
       return res.status(400).json({ error: 'Account name is required' });
     }
     const at = account_type || 'taxable';
     const dep = at === 'asset' ? parseExpectedDepreciationPct(expected_depreciation_pct) : null;
+    const liquidate = parseLiquidateInRetirement(liquidate_in_retirement, at);
     const rmdOt = parseRmdOwnerType(rmd_owner_type, at);
     const result = await pool.query(
-      `INSERT INTO account (name, account_type, owner_type, sort_order, expected_depreciation_pct, rmd_owner_type)
-       VALUES ($1, $2, COALESCE($3, 'joint'), COALESCE($4, 0), $5, $6)
+      `INSERT INTO account (name, account_type, owner_type, sort_order, expected_depreciation_pct, rmd_owner_type, liquidate_in_retirement)
+       VALUES ($1, $2, COALESCE($3, 'joint'), COALESCE($4, 0), $5, $6, $7)
        RETURNING *`,
-      [trimmedName, at, owner_type || 'joint', sort_order != null ? parseInt(sort_order, 10) : 0, dep, rmdOt]
+      [trimmedName, at, owner_type || 'joint', sort_order != null ? parseInt(sort_order, 10) : 0, dep, rmdOt, liquidate]
     );
     res.status(201).json(result.rows[0]);
   } catch (error) {
@@ -460,14 +509,14 @@ app.post('/api/accounts', async (req, res) => {
 
 app.put('/api/accounts/:id', async (req, res) => {
   try {
-    const { name, account_type, owner_type, sort_order, expected_depreciation_pct, rmd_owner_type } = req.body;
+    const { name, account_type, owner_type, sort_order, expected_depreciation_pct, rmd_owner_type, liquidate_in_retirement } = req.body;
     const id = parsePositiveIntParam(req.params.id);
     if (!id) {
       return res.status(400).json({ error: 'Invalid account id' });
     }
     const trimmedName = name != null ? String(name).trim() : null;
     const existing = await pool.query(
-      'SELECT account_type, expected_depreciation_pct, rmd_owner_type, owner_type FROM account WHERE id = $1',
+      'SELECT account_type, expected_depreciation_pct, rmd_owner_type, owner_type, liquidate_in_retirement FROM account WHERE id = $1',
       [id]
     );
     if (existing.rows.length === 0) {
@@ -496,6 +545,14 @@ app.put('/api/accounts/:id', async (req, res) => {
         rmdOt = null;
       }
     }
+    let liquidate = false;
+    if (resolvedType === 'asset') {
+      if (liquidate_in_retirement !== undefined) {
+        liquidate = parseLiquidateInRetirement(liquidate_in_retirement, resolvedType);
+      } else if (prev.account_type === 'asset') {
+        liquidate = !!prev.liquidate_in_retirement;
+      }
+    }
     const result = await pool.query(
       `UPDATE account SET
         name = COALESCE($1, name),
@@ -504,8 +561,9 @@ app.put('/api/accounts/:id', async (req, res) => {
         sort_order = COALESCE($4, sort_order),
         expected_depreciation_pct = $5,
         rmd_owner_type = $6,
+        liquidate_in_retirement = $7,
         modified = CURRENT_TIMESTAMP
-       WHERE id = $7
+       WHERE id = $8
        RETURNING *`,
       [
         trimmedName,
@@ -514,6 +572,7 @@ app.put('/api/accounts/:id', async (req, res) => {
         sort_order != null ? parseInt(sort_order, 10) : null,
         dep,
         rmdOt,
+        liquidate,
         id,
       ]
     );

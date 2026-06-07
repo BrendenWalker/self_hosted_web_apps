@@ -50,6 +50,14 @@ const RMD_OWNER_OPTIONS = [
   { value: 'joint', label: 'Joint (50/50 RMD split)' },
 ];
 
+function formatAssetAnnualChange(pct) {
+  if (pct == null || pct === '') return 'no annual change set';
+  const n = Number(pct);
+  if (!Number.isFinite(n) || n === 0) return '0% change / yr';
+  if (n > 0) return `${n}% dep. / yr`;
+  return `${Math.abs(n)}% appr. / yr`;
+}
+
 export default function AccountsPage() {
   const [accounts, setAccounts] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -62,6 +70,7 @@ export default function AccountsPage() {
     owner_type: 'joint',
     expected_depreciation_pct: '',
     rmd_owner_type: '',
+    liquidate_in_retirement: false,
   });
   const [showAdd, setShowAdd] = useState(false);
   const [addForm, setAddForm] = useState({
@@ -70,6 +79,7 @@ export default function AccountsPage() {
     owner_type: 'joint',
     expected_depreciation_pct: '',
     rmd_owner_type: '',
+    liquidate_in_retirement: false,
   });
   const [saving, setSaving] = useState(false);
   const [deletingId, setDeletingId] = useState(null);
@@ -137,6 +147,7 @@ export default function AccountsPage() {
       if (addForm.account_type === 'asset') {
         const raw = addForm.expected_depreciation_pct?.trim();
         payload.expected_depreciation_pct = raw === '' ? null : parseFloat(raw);
+        payload.liquidate_in_retirement = !!addForm.liquidate_in_retirement;
       }
       if (isTraditionalRetirement(addForm.account_type)) {
         const raw = addForm.rmd_owner_type?.trim();
@@ -149,6 +160,7 @@ export default function AccountsPage() {
         owner_type: 'joint',
         expected_depreciation_pct: '',
         rmd_owner_type: '',
+        liquidate_in_retirement: false,
       });
       setShowAdd(false);
       await load();
@@ -168,6 +180,7 @@ export default function AccountsPage() {
       expected_depreciation_pct:
         acc.expected_depreciation_pct != null ? String(acc.expected_depreciation_pct) : '',
       rmd_owner_type: acc.rmd_owner_type != null ? String(acc.rmd_owner_type) : '',
+      liquidate_in_retirement: !!acc.liquidate_in_retirement,
     });
     if (acc.account_type === 'taxable') {
       try {
@@ -211,6 +224,7 @@ export default function AccountsPage() {
       if (editForm.account_type === 'asset') {
         const raw = editForm.expected_depreciation_pct?.trim();
         payload.expected_depreciation_pct = raw === '' ? null : parseFloat(raw);
+        payload.liquidate_in_retirement = !!editForm.liquidate_in_retirement;
       }
       if (isTraditionalRetirement(editForm.account_type)) {
         const raw = editForm.rmd_owner_type?.trim();
@@ -374,7 +388,7 @@ export default function AccountsPage() {
     <div className="page-scroll">
       <h1 className="page-title">Accounts</h1>
       <p style={{ marginBottom: '1rem', color: '#5a6b64', fontSize: '0.95rem' }}>
-        Add any number of accounts: savings, checking, HSA, IRA (traditional or Roth), 401(k) (traditional or Roth), taxable, and assets (e.g. vehicle or property value). For traditional IRA and traditional 401(k), set <strong>RMD owner</strong> so each person’s required distributions use the correct balance (or choose “same as owner”). For assets, set expected annual depreciation. Record balances with an “as of” date; the latest balance per account is used for projections and history is kept.
+        Add any number of accounts: savings, checking, HSA, IRA (traditional or Roth), 401(k) (traditional or Roth), taxable, and assets (e.g. vehicle or property value). For traditional IRA and traditional 401(k), set <strong>RMD owner</strong> so each person’s required distributions use the correct balance (or choose “same as owner”). For assets, set expected annual change (positive = depreciation, negative = appreciation) and optionally allow liquidation in retirement to cover expense shortfalls. Record balances with an “as of” date; the latest balance per account is used for projections and history is kept.
       </p>
       {message && <div className="error-message">{message}</div>}
       {errorDebug && (
@@ -450,18 +464,38 @@ export default function AccountsPage() {
               )}
               {addForm.account_type === 'asset' && (
                 <div className="form-group">
-                  <label htmlFor="add_depreciation">Expected depreciation (% / year)</label>
+                  <label htmlFor="add_depreciation">Expected annual change (% / year)</label>
                   <input
                     id="add_depreciation"
                     type="number"
-                    min={0}
+                    min={-100}
                     max={100}
                     step={0.1}
                     value={addForm.expected_depreciation_pct}
                     onChange={(e) => setAddForm((p) => ({ ...p, expected_depreciation_pct: e.target.value }))}
-                    placeholder="e.g. 10"
-                    title="Used in projections: balance declines by this percent each year"
+                    placeholder="e.g. 10 or -3"
+                    title="Positive = depreciation, negative = appreciation. Used in projections each year."
                   />
+                  <span className="muted" style={{ fontSize: '0.85rem' }}>
+                    Positive depreciates; negative appreciates (e.g. −3 = 3% growth).
+                  </span>
+                </div>
+              )}
+              {addForm.account_type === 'asset' && (
+                <div className="form-group">
+                  <label className="checkbox-label">
+                    <input
+                      type="checkbox"
+                      checked={!!addForm.liquidate_in_retirement}
+                      onChange={(e) =>
+                        setAddForm((p) => ({ ...p, liquidate_in_retirement: e.target.checked }))
+                      }
+                    />
+                    Liquidate in retirement
+                  </label>
+                  <span className="muted" style={{ fontSize: '0.85rem', display: 'block' }}>
+                    When checked, this asset can be sold in retirement to cover living expense shortfalls after savings withdrawals.
+                  </span>
                 </div>
               )}
               <div className="form-group" style={{ alignSelf: 'flex-end' }}>
@@ -519,16 +553,28 @@ export default function AccountsPage() {
                     {editForm.account_type === 'asset' && (
                       <input
                         type="number"
-                        min={0}
+                        min={-100}
                         max={100}
                         step={0.1}
                         value={editForm.expected_depreciation_pct}
                         onChange={(e) => setEditForm((p) => ({ ...p, expected_depreciation_pct: e.target.value }))}
                         placeholder="% / yr"
                         className="input-cell"
-                        title="Expected annual depreciation for projections"
+                        title="Positive = depreciation, negative = appreciation"
                         style={{ maxWidth: '6rem' }}
                       />
+                    )}
+                    {editForm.account_type === 'asset' && (
+                      <label className="checkbox-label" title="Liquidate in retirement">
+                        <input
+                          type="checkbox"
+                          checked={!!editForm.liquidate_in_retirement}
+                          onChange={(e) =>
+                            setEditForm((p) => ({ ...p, liquidate_in_retirement: e.target.checked }))
+                          }
+                        />
+                        Liquidate in retirement
+                      </label>
                     )}
                     {editForm.account_type === 'taxable' && (
                       <span className="tax-profile-inline" title="Tax profile for projections">
@@ -587,9 +633,8 @@ export default function AccountsPage() {
                       {acc.account_type === 'asset' && (
                         <>
                           {' · '}
-                          {acc.expected_depreciation_pct != null && acc.expected_depreciation_pct !== ''
-                            ? `${Number(acc.expected_depreciation_pct)}% dep. / yr`
-                            : 'no depreciation set'}
+                          {formatAssetAnnualChange(acc.expected_depreciation_pct)}
+                          {acc.liquidate_in_retirement ? ' · liquidate in retirement' : ''}
                         </>
                       )}
                     </span>

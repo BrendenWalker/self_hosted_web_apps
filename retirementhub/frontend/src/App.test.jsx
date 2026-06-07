@@ -43,6 +43,7 @@ describe('App', () => {
     expect(within(nav).getByRole('link', { name: 'Income' })).toBeInTheDocument();
     expect(within(nav).getByRole('link', { name: 'Accounts' })).toBeInTheDocument();
     expect(within(nav).getByRole('link', { name: 'Savings limits' })).toBeInTheDocument();
+    expect(within(nav).getByRole('link', { name: 'Saving projections' })).toBeInTheDocument();
     expect(within(nav).getByRole('link', { name: 'Tax details' })).toBeInTheDocument();
     expect(within(nav).getByRole('link', { name: 'Scenarios' })).toBeInTheDocument();
     expect(within(nav).getByRole('link', { name: 'Projections' })).toBeInTheDocument();

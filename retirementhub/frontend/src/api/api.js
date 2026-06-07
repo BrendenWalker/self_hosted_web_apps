@@ -85,7 +85,7 @@ export const getBudgetSummary = () => api.get('/budget-summary');
 
 export const getRetirementTaxGuide = (params) => api.get('/retirement-tax-guide', { params: params || {} });
 
-/** Optional query params: scenario_id, years, growth_pct, expense_growth_pct, ssi_growth_pct */
+/** Optional query params: scenario_id, years, growth_pct, expense_growth_pct, ssi_growth_pct, retirement_age_p1, retirement_age_p2, savings_projection (1 = contributions only, no growth) */
 export const getProjections = (params) =>
   params != null && typeof params === 'object' && Object.keys(params).length > 0
     ? api.get('/projections', { params })

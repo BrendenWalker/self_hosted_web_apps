@@ -118,4 +118,24 @@ function computeWithdrawals(spendingGap, buckets, strategy, customOrder) {
   return result;
 }
 
-module.exports = { computeWithdrawals, resolveOrder, DEFAULT_CONSERVATIVE, DEFAULT_TAX_AWARE };
+/** Sell liquidatable asset balances to cover remaining retirement spending gap. */
+function liquidateAssetsForSpending(assetParts, unmetSpending) {
+  let remaining = Math.max(0, unmetSpending);
+  let assetLiquidations = 0;
+  if (!assetParts?.length || remaining <= 0) {
+    return { assetLiquidations: 0, unmetSpending: Math.round(remaining * 100) / 100 };
+  }
+  for (const ap of assetParts) {
+    if (!ap.liquidateInRetirement || remaining <= 0) continue;
+    const taken = Math.min(remaining, Math.max(0, ap.balance));
+    ap.balance -= taken;
+    remaining -= taken;
+    assetLiquidations += taken;
+  }
+  return {
+    assetLiquidations: Math.round(assetLiquidations * 100) / 100,
+    unmetSpending: Math.round(remaining * 100) / 100,
+  };
+}
+
+module.exports = { computeWithdrawals, liquidateAssetsForSpending, resolveOrder, DEFAULT_CONSERVATIVE, DEFAULT_TAX_AWARE };

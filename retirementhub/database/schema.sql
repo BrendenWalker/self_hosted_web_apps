@@ -35,10 +35,21 @@ CREATE TABLE IF NOT EXISTS income (
     gross_salary_p2 DECIMAL(14, 2),
     expected_raise_pct DECIMAL(5, 2),
     bonus_quarterly DECIMAL(14, 2),
+    bonus_quarterly_p2 DECIMAL(14, 2),
     four_o_one_k_pct DECIMAL(5, 2),
     four_o_one_k_match_pct DECIMAL(5, 2),
     four_o_one_k_pct_p2 DECIMAL(5, 2),
     four_o_one_k_match_pct_p2 DECIMAL(5, 2),
+    ira_traditional_annual_p1 DECIMAL(14, 2),
+    ira_roth_annual_p1 DECIMAL(14, 2),
+    hsa_annual_p1 DECIMAL(14, 2),
+    taxable_savings_annual_p1 DECIMAL(14, 2),
+    ira_traditional_annual_p2 DECIMAL(14, 2),
+    ira_roth_annual_p2 DECIMAL(14, 2),
+    hsa_annual_p2 DECIMAL(14, 2),
+    taxable_savings_annual_p2 DECIMAL(14, 2),
+    surplus_to_taxable_p1 BOOLEAN NOT NULL DEFAULT TRUE,
+    surplus_to_taxable_p2 BOOLEAN NOT NULL DEFAULT TRUE,
     modified TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -73,7 +84,7 @@ CREATE INDEX IF NOT EXISTS idx_expense_line_as_of ON expense_line(as_of DESC);
 
 -- ==================== ACCOUNTS (user-defined, any number) ====================
 -- Types: savings, checking, hsa, ira_traditional, ira_roth, 401k_traditional, 401k_roth, taxable, asset
--- asset: physical/financial assets valued in balances; expected_depreciation_pct = expected annual decline (%)
+-- asset: physical/financial assets valued in balances; expected_depreciation_pct = expected annual change (+% depreciates, −% appreciates)
 -- Owner: p1, p2, or joint (general). rmd_owner_type: for ira_traditional / 401k_traditional only; whose RMD rules apply (null = use owner_type).
 CREATE TABLE IF NOT EXISTS account (
     id SERIAL PRIMARY KEY,
@@ -86,6 +97,7 @@ CREATE TABLE IF NOT EXISTS account (
     rmd_owner_type VARCHAR(20)
         CHECK (rmd_owner_type IS NULL OR rmd_owner_type IN ('p1', 'p2', 'joint')),
     expected_depreciation_pct DECIMAL(5, 2),
+    liquidate_in_retirement BOOLEAN NOT NULL DEFAULT FALSE,
     sort_order INTEGER NOT NULL DEFAULT 0,
     modified TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );

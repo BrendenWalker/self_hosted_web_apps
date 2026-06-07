@@ -8,7 +8,7 @@ const LIMIT_KEYS = [
   { key: 'hsa_family_limit', label: 'HSA family (incl. catch-up if 55+ at EOY, household — P1 only)' },
 ];
 
-function PartyLimitsTable({ partyKey, displayName, yearsData, yearList, planned401k }) {
+function PartyLimitsTable({ partyKey, displayName, yearsData, yearList, planned401k, plannedIra, plannedHsa }) {
   if (!yearsData || yearList.length === 0) return null;
 
   const getPartyForYear = (y) => {
@@ -20,6 +20,34 @@ function PartyLimitsTable({ partyKey, displayName, yearsData, yearList, planned4
     if (key === 'hsa_family_limit' && partyKey === 'p2') return false;
     return true;
   });
+
+  const hasPlannedColumn = planned401k != null || plannedIra != null || plannedHsa != null;
+
+  const renderPlannedCell = (key, plannedVal) => {
+    if (!hasPlannedColumn) return null;
+    if (plannedVal == null) return <td>—</td>;
+    if (yearList.length === 0) {
+      return (
+        <td>
+          ${plannedVal.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+        </td>
+      );
+    }
+    const limit = getPartyForYear(yearList[yearList.length - 1])?.[key];
+    const displayVal = limit != null && plannedVal > limit ? limit : plannedVal;
+    const isCapped = limit != null && plannedVal > limit;
+    return (
+      <td>
+        ${displayVal.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+        {isCapped && (
+          <span className="over-limit" title="Capped at IRS max in projections">
+            {' '}
+            (capped at max)
+          </span>
+        )}
+      </td>
+    );
+  };
 
   return (
     <div className="card limits-party-card">
@@ -42,46 +70,27 @@ function PartyLimitsTable({ partyKey, displayName, yearsData, yearList, planned4
               {yearList.map((y) => (
                 <th key={y}>{y}</th>
               ))}
-              {planned401k != null && <th>Your planned 401(k)</th>}
+              {hasPlannedColumn && <th>Your planned</th>}
             </tr>
           </thead>
           <tbody>
-            {limitRows.map(({ key, label }) => {
-              const is401k = key === '401k_elective_limit';
-              return (
-                <tr key={key}>
-                  <td>{label}</td>
-                  {yearList.map((y) => {
-                    const val = getPartyForYear(y)?.[key];
-                    return (
-                      <td key={y}>
-                        {typeof val === 'number' ? `$${val.toLocaleString('en-US')}` : '—'}
-                      </td>
-                    );
-                  })}
-                  {planned401k != null && (
-                    <td>
-                      {is401k ? (
-                        <>
-                          {yearList.length > 0 && (() => {
-                            const limit = getPartyForYear(yearList[yearList.length - 1])?.[key];
-                            const displayVal = limit != null && planned401k > limit ? limit : planned401k;
-                            const isCapped = limit != null && planned401k > limit;
-                            return (
-                              <>
-                                ${displayVal.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
-                                {isCapped && <span className="over-limit" title="Capped at IRS max; plan will stop at limit"> (capped at max)</span>}
-                              </>
-                            );
-                          })()}
-                          {yearList.length === 0 && `$${planned401k.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`}
-                        </>
-                      ) : '—'}
+            {limitRows.map(({ key, label }) => (
+              <tr key={key}>
+                <td>{label}</td>
+                {yearList.map((y) => {
+                  const val = getPartyForYear(y)?.[key];
+                  return (
+                    <td key={y}>
+                      {typeof val === 'number' ? `$${val.toLocaleString('en-US')}` : '—'}
                     </td>
-                  )}
-                </tr>
-              );
-            })}
+                  );
+                })}
+                {key === '401k_elective_limit' && renderPlannedCell(key, planned401k)}
+                {key === 'ira_limit' && renderPlannedCell(key, plannedIra)}
+                {key === 'hsa_individual_limit' && renderPlannedCell(key, plannedHsa)}
+                {key === 'hsa_family_limit' && hasPlannedColumn && <td>—</td>}
+              </tr>
+            ))}
           </tbody>
         </table>
       </div>
@@ -127,12 +136,26 @@ export default function SavingsLimitsPage() {
   };
 
   const planned401kP1 = income
-    ? (parseFloat(income.gross_salary) || 0) * (parseFloat(income.four_o_one_k_pct) || 0) / 100
+    ? (parseFloat(income.gross_salary) || 0) * ((parseFloat(income.four_o_one_k_pct) || 0) + (parseFloat(income.four_o_one_k_match_pct) || 0)) / 100
     : null;
   const planned401kP2 = income
-    ? (parseFloat(income.gross_salary_p2) || 0) * (parseFloat(income.four_o_one_k_pct_p2) || 0) / 100
+    ? (parseFloat(income.gross_salary_p2) || 0) * ((parseFloat(income.four_o_one_k_pct_p2) || 0) + (parseFloat(income.four_o_one_k_match_pct_p2) || 0)) / 100
     : null;
-  const hasPlanned = (planned401kP1 != null && planned401kP1 > 0) || (planned401kP2 != null && planned401kP2 > 0);
+  const plannedIraP1 = income
+    ? (parseFloat(income.ira_traditional_annual_p1) || 0) + (parseFloat(income.ira_roth_annual_p1) || 0)
+    : null;
+  const plannedIraP2 = income
+    ? (parseFloat(income.ira_traditional_annual_p2) || 0) + (parseFloat(income.ira_roth_annual_p2) || 0)
+    : null;
+  const plannedHsaP1 = income ? parseFloat(income.hsa_annual_p1) || null : null;
+  const plannedHsaP2 = income ? parseFloat(income.hsa_annual_p2) || null : null;
+  const hasPlanned =
+    (planned401kP1 != null && planned401kP1 > 0) ||
+    (planned401kP2 != null && planned401kP2 > 0) ||
+    (plannedIraP1 != null && plannedIraP1 > 0) ||
+    (plannedIraP2 != null && plannedIraP2 > 0) ||
+    (plannedHsaP1 != null && plannedHsaP1 > 0) ||
+    (plannedHsaP2 != null && plannedHsaP2 > 0);
 
   if (loading && !apiData) {
     return <p className="loading-message">Loading savings limits…</p>;
@@ -160,6 +183,8 @@ export default function SavingsLimitsPage() {
             yearsData={years.length > 0 ? apiData.years : null}
             yearList={years}
             planned401k={planned401kP1 != null && planned401kP1 > 0 ? planned401kP1 : null}
+            plannedIra={plannedIraP1 != null && plannedIraP1 > 0 ? plannedIraP1 : null}
+            plannedHsa={plannedHsaP1 != null && plannedHsaP1 > 0 ? plannedHsaP1 : null}
           />
           <PartyLimitsTable
             partyKey="p2"
@@ -167,13 +192,17 @@ export default function SavingsLimitsPage() {
             yearsData={years.length > 0 ? apiData.years : null}
             yearList={years}
             planned401k={planned401kP2 != null && planned401kP2 > 0 ? planned401kP2 : null}
+            plannedIra={plannedIraP2 != null && plannedIraP2 > 0 ? plannedIraP2 : null}
+            plannedHsa={plannedHsaP2 != null && plannedHsaP2 > 0 ? plannedHsaP2 : null}
           />
         </>
       )}
 
       {hasPlanned && (
         <p className="muted" style={{ marginTop: '0.75rem', fontSize: '0.9rem' }}>
-          Your planned 401(k) is from the Income page (contribution % × gross salary per party). When planned exceeds the IRS limit, the value shown is capped at the max (the plan is assumed to stop at the limit). Catch-up is included when that person is 50+ at end of year.
+          Your planned amounts are from the Income page. 401(k) uses (contribution % + match %) × gross salary.
+          IRA shows traditional + Roth combined (same IRS cap as projections). HSA shows each person&apos;s planned
+          annual amount; projections also cap total household HSA at the family limit.
         </p>
       )}
     </div>

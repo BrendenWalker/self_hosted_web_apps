@@ -51,15 +51,15 @@ WHERE NOT EXISTS (
 );
 
 -- Account definitions
-INSERT INTO account (name, account_type, owner_type, rmd_owner_type, expected_depreciation_pct, sort_order)
+INSERT INTO account (name, account_type, owner_type, rmd_owner_type, expected_depreciation_pct, liquidate_in_retirement, sort_order)
 VALUES
-  ('Joint Checking', 'checking', 'joint', NULL, NULL, 10),
-  ('Emergency Savings', 'savings', 'joint', NULL, NULL, 20),
-  ('Alex 401k', '401k_traditional', 'p1', 'p1', NULL, 30),
-  ('Morgan 401k', '401k_traditional', 'p2', 'p2', NULL, 40),
-  ('Roth IRA', 'ira_roth', 'joint', NULL, NULL, 50),
-  ('Taxable Brokerage', 'taxable', 'joint', NULL, NULL, 60),
-  ('Home Equity', 'asset', 'joint', NULL, 1.0, 70)
+  ('Joint Checking', 'checking', 'joint', NULL, NULL, FALSE, 10),
+  ('Emergency Savings', 'savings', 'joint', NULL, NULL, FALSE, 20),
+  ('Alex 401k', '401k_traditional', 'p1', 'p1', NULL, FALSE, 30),
+  ('Morgan 401k', '401k_traditional', 'p2', 'p2', NULL, FALSE, 40),
+  ('Roth IRA', 'ira_roth', 'joint', NULL, NULL, FALSE, 50),
+  ('Taxable Brokerage', 'taxable', 'joint', NULL, NULL, FALSE, 60),
+  ('Home Equity', 'asset', 'joint', NULL, 1.0, TRUE, 70)
 ON CONFLICT DO NOTHING;
 
 -- Account balances

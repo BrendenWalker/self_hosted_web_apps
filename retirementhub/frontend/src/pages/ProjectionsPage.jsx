@@ -192,7 +192,7 @@ function SavingsAssetsProjectionsChart({ data, target25x }) {
       <p className="projections-chart-intro">
         <strong>Savings</strong> is all non-asset accounts (retirement, taxable, cash, etc.); <strong>Assets</strong> is balances
         entered as the asset type on the Accounts page. The stack height is net worth—watch the green band shrink as accounts
-        fund spending; assets only change by depreciation here, so a thin green band signals you may need to liquidate or borrow against hard assets.
+        fund spending; hard assets change by the annual % set on each asset account (positive = depreciation, negative = appreciation). Assets marked “liquidate in retirement” on Accounts can be sold to cover expense shortfalls after savings withdrawals.
       </p>
       <div className="chart-container">
         <ResponsiveContainer width="100%" height={360}>

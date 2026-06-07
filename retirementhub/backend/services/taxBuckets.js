@@ -13,7 +13,13 @@ function emptyBuckets() {
   return {
     preTaxP1: 0,
     preTaxP2: 0,
+    preTax401kP1: 0,
+    preTax401kP2: 0,
+    preTaxIraP1: 0,
+    preTaxIraP2: 0,
     roth: 0,
+    roth401k: 0,
+    rothIra: 0,
     taxable: 0,
     cash: 0,
     hsa: 0,
@@ -21,14 +27,33 @@ function emptyBuckets() {
   };
 }
 
+function addPreTaxBalance(buckets, balance, ownerType, to401k) {
+  const ot =
+    ownerType != null && String(ownerType).trim() !== '' ? String(ownerType).trim() : 'joint';
+  const add401k = to401k ? 'preTax401k' : 'preTaxIra';
+  if (ot === 'p1') {
+    buckets.preTaxP1 += balance;
+    buckets[`${add401k}P1`] += balance;
+  } else if (ot === 'p2') {
+    buckets.preTaxP2 += balance;
+    buckets[`${add401k}P2`] += balance;
+  } else {
+    buckets.preTaxP1 += balance * 0.5;
+    buckets.preTaxP2 += balance * 0.5;
+    buckets[`${add401k}P1`] += balance * 0.5;
+    buckets[`${add401k}P2`] += balance * 0.5;
+  }
+}
+
+function assetAnnualChangePctToFactor(pct) {
+  const p = pct != null && pct !== '' ? parseFloat(pct) : 0;
+  if (!Number.isFinite(p)) return 1;
+  const clamped = Math.max(-100, Math.min(100, p));
+  return 1 - clamped / 100;
+}
+
 function classifyAccounts(balanceRows, taxProfilesByAccountId = {}) {
   const buckets = emptyBuckets();
-
-  function depPctToFactor(pct) {
-    const p = pct != null && pct !== '' ? parseFloat(pct) : 0;
-    const n = Number.isFinite(p) && p > 0 ? Math.min(100, p) : 0;
-    return 1 - n / 100;
-  }
 
   for (const row of balanceRows) {
     const bal = parseFloat(row.balance) || 0;
@@ -40,7 +65,11 @@ function classifyAccounts(balanceRows, taxProfilesByAccountId = {}) {
       const depPct = row.expected_depreciation_pct != null ? parseFloat(row.expected_depreciation_pct) : 0;
       buckets.assets.push({
         balance: bal,
-        depFactor: depPctToFactor(Number.isFinite(depPct) ? depPct : 0),
+        depFactor: assetAnnualChangePctToFactor(Number.isFinite(depPct) ? depPct : 0),
+        liquidateInRetirement:
+          row.liquidate_in_retirement === true ||
+          row.liquidate_in_retirement === 't' ||
+          row.liquidate_in_retirement === 1,
         account_id: accountId,
       });
     } else if (RMD_ACCOUNT_TYPES.has(type)) {
@@ -48,14 +77,14 @@ function classifyAccounts(balanceRows, taxProfilesByAccountId = {}) {
         row.rmd_owner_type != null && String(row.rmd_owner_type).trim() !== ''
           ? String(row.rmd_owner_type).trim()
           : row.owner_type || 'joint';
-      if (ot === 'p1') buckets.preTaxP1 += bal;
-      else if (ot === 'p2') buckets.preTaxP2 += bal;
-      else {
-        buckets.preTaxP1 += bal * 0.5;
-        buckets.preTaxP2 += bal * 0.5;
-      }
+      const is401k = type === '401k_traditional' || type === '401k';
+      addPreTaxBalance(buckets, bal, ot, is401k);
+    } else if (type === '401k_roth') {
+      buckets.roth += bal;
+      buckets.roth401k += bal;
     } else if (BUCKET_TYPES.roth.has(type)) {
       buckets.roth += bal;
+      buckets.rothIra += bal;
     } else if (BUCKET_TYPES.taxable.has(type)) {
       buckets.taxable += bal;
       if (accountId != null && taxProfilesByAccountId[accountId]) {
@@ -90,6 +119,62 @@ function balancesByBucketSnapshot(b) {
     taxable: Math.round(b.taxable * 100) / 100,
     cash: Math.round(b.cash * 100) / 100,
     hsa: Math.round(b.hsa * 100) / 100,
+  };
+}
+
+/** Savings projection categories: 401(k), HSA, Traditional IRA, Roth IRA, Taxable (incl. cash). */
+function balancesBySavingsCategorySnapshot(b) {
+  return {
+    '401k': Math.round((b.preTax401kP1 + b.preTax401kP2 + b.roth401k) * 100) / 100,
+    hsa: Math.round(b.hsa * 100) / 100,
+    ira_traditional: Math.round((b.preTaxIraP1 + b.preTaxIraP2) * 100) / 100,
+    ira_roth: Math.round(b.rothIra * 100) / 100,
+    taxable: Math.round((b.taxable + b.cash) * 100) / 100,
+  };
+}
+
+function scaleSplitPair(buckets, keyA, keyB, prevTotal, nextTotal) {
+  if (prevTotal <= 0) {
+    if (nextTotal > 0 && buckets[keyA] + buckets[keyB] <= 0) {
+      buckets[keyA] = nextTotal * 0.5;
+      buckets[keyB] = nextTotal * 0.5;
+    }
+    return;
+  }
+  if (nextTotal === prevTotal) return;
+  const ratio = nextTotal / prevTotal;
+  buckets[keyA] *= ratio;
+  buckets[keyB] *= ratio;
+}
+
+/** Keep sub-balances aligned when aggregate pre-tax, roth, or cash/taxable totals change. */
+function syncBucketDetails(buckets, prev, next) {
+  scaleSplitPair(buckets, 'preTax401kP1', 'preTaxIraP1', prev.preTaxP1, next.preTaxP1);
+  scaleSplitPair(buckets, 'preTax401kP2', 'preTaxIraP2', prev.preTaxP2, next.preTaxP2);
+  scaleSplitPair(buckets, 'roth401k', 'rothIra', prev.roth, next.roth);
+  const prevTaxableTotal = prev.taxable + prev.cash;
+  const nextTaxableTotal = next.taxable + next.cash;
+  if (prevTaxableTotal > 0 && nextTaxableTotal !== prevTaxableTotal) {
+    const ratio = nextTaxableTotal / prevTaxableTotal;
+    buckets.taxable *= ratio;
+    buckets.cash *= ratio;
+  }
+  buckets.preTaxP1 = next.preTaxP1;
+  buckets.preTaxP2 = next.preTaxP2;
+  buckets.roth = next.roth;
+  buckets.taxable = next.taxable;
+  buckets.cash = next.cash;
+  buckets.hsa = next.hsa;
+}
+
+function snapshotBucketAggregates(buckets, tradP1, tradP2) {
+  return {
+    preTaxP1: tradP1,
+    preTaxP2: tradP2,
+    roth: buckets.roth,
+    taxable: buckets.taxable,
+    cash: buckets.cash,
+    hsa: buckets.hsa,
   };
 }
 
@@ -149,10 +234,14 @@ function estimateTaxableDividendsAndGains(buckets, taxableWithdrawal) {
 module.exports = {
   BUCKET_TYPES,
   emptyBuckets,
+  assetAnnualChangePctToFactor,
   classifyAccounts,
   totalPreTax,
   totalFinancial,
   balancesByBucketSnapshot,
+  balancesBySavingsCategorySnapshot,
+  syncBucketDetails,
+  snapshotBucketAggregates,
   applyGrowthToBuckets,
   estimateTaxableDividendsAndGains,
 };
