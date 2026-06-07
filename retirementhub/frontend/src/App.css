@@ -411,9 +411,33 @@
 .card h2 {
   color: #1a3d35;
   font-size: 1.15rem;
+  margin-top: 0;
   margin-bottom: 1rem;
   padding-bottom: 0.5rem;
   border-bottom: 1px solid #e8eeec;
+}
+
+.income-party-heading {
+  margin: 1.25rem 0 0.75rem;
+  font-size: 1.05rem;
+  color: #2c3e36;
+}
+
+.checkbox-row {
+  margin-top: 0.75rem;
+}
+
+.checkbox-label {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.checkbox-label input[type="checkbox"] {
+  margin-top: 0.2rem;
+  flex-shrink: 0;
 }
 
 .loading-message, .error-message {
@@ -514,6 +538,33 @@
   color: #5a6b64;
   margin-top: 0.5rem;
   margin-bottom: 0;
+}
+
+.savings-projection-notice {
+  background: #eef6f2;
+  border: 1px solid #b8d4c8;
+  border-radius: 6px;
+  color: #3d5a50;
+  font-size: 0.92rem;
+  line-height: 1.45;
+  margin-bottom: 1rem;
+  padding: 0.75rem 1rem;
+}
+
+.scenario-retirement-lines {
+  color: #3d5a50;
+  font-size: 0.95rem;
+  line-height: 1.5;
+  margin-top: 0.75rem;
+}
+
+.scenario-retirement-lines p {
+  margin: 0.35rem 0;
+}
+
+.projections-detail-table tr.beginning-balance-row td {
+  background: #f4f8f6;
+  font-style: italic;
 }
 
 .projections-chart-intro {

@@ -32,6 +32,7 @@ function spendingBreakdown(row) {
     { label: 'Taxable withdrawals', value: src.taxable },
     { label: 'Roth withdrawals', value: src.roth },
     { label: 'Cash withdrawals', value: src.cash },
+    { label: 'Asset liquidation', value: src.asset_liquidation },
   ].filter((x) => x.value != null && x.value > 0);
 }
 

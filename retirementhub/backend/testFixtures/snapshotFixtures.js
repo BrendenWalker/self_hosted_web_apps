@@ -30,10 +30,21 @@ const INCOME_ROW = {
   gross_salary_p2: 80000,
   expected_raise_pct: 3,
   bonus_quarterly: 0,
+  bonus_quarterly_p2: 0,
+  ira_traditional_annual_p1: null,
+  ira_roth_annual_p1: null,
+  hsa_annual_p1: null,
+  taxable_savings_annual_p1: null,
+  ira_traditional_annual_p2: null,
+  ira_roth_annual_p2: null,
+  hsa_annual_p2: null,
+  taxable_savings_annual_p2: null,
   four_o_one_k_pct: 10,
   four_o_one_k_match_pct: 4,
   four_o_one_k_pct_p2: 8,
   four_o_one_k_match_pct_p2: 4,
+  surplus_to_taxable_p1: true,
+  surplus_to_taxable_p2: true,
 };
 
 const ACCOUNT_BALANCES = [

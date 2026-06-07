@@ -1,4 +1,4 @@
-const { computeWithdrawals, resolveOrder, DEFAULT_CONSERVATIVE, DEFAULT_TAX_AWARE } = require('./withdrawalEngine');
+const { computeWithdrawals, liquidateAssetsForSpending, resolveOrder, DEFAULT_CONSERVATIVE, DEFAULT_TAX_AWARE } = require('./withdrawalEngine');
 
 describe('withdrawalEngine', () => {
   it('draws conservative order cash then taxable then pre_tax', () => {
@@ -39,5 +39,27 @@ describe('withdrawalEngine', () => {
     const r = computeWithdrawals(1500, buckets, 'conservative');
     expect(r.hsaWithdrawals).toBe(1500);
     expect(buckets.hsa).toBe(1500);
+  });
+
+  it('liquidates flagged assets after savings withdrawals are exhausted', () => {
+    const assets = [
+      { balance: 50000, liquidateInRetirement: true },
+      { balance: 20000, liquidateInRetirement: false },
+      { balance: 30000, liquidateInRetirement: true },
+    ];
+    const r = liquidateAssetsForSpending(assets, 60000);
+    expect(r.assetLiquidations).toBe(60000);
+    expect(r.unmetSpending).toBe(0);
+    expect(assets[0].balance).toBe(0);
+    expect(assets[1].balance).toBe(20000);
+    expect(assets[2].balance).toBe(20000);
+  });
+
+  it('leaves unmet spending when liquidatable assets are insufficient', () => {
+    const assets = [{ balance: 10000, liquidateInRetirement: true }];
+    const r = liquidateAssetsForSpending(assets, 25000);
+    expect(r.assetLiquidations).toBe(10000);
+    expect(r.unmetSpending).toBe(15000);
+    expect(assets[0].balance).toBe(0);
   });
 });

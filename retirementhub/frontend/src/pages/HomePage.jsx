@@ -41,6 +41,12 @@ export default function HomePage() {
               IRS contribution limits by year for 401(k), IRA, and HSA — per person and combined household view.
             </p>
           </Link>
+          <Link to="/saving-projections" className="home-card">
+            <h2>Saving projections</h2>
+            <p>
+              Project savings growth from today until retirement using income, expenses, 401(k), and account balances.
+            </p>
+          </Link>
           <Link to="/tax-details" className="home-card">
             <h2>Tax details</h2>
             <p>

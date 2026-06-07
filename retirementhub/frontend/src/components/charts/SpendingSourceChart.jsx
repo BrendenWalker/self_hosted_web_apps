@@ -20,7 +20,14 @@ function mapRow(row) {
     src.wages_bonus ??
     ((src.wages ?? 0) + (src.bonus ?? 0) || (row.income_wages ?? 0) + (row.income_bonus ?? 0));
   const savings =
-    src.savings_withdrawal ?? row.income_from_savings_draw ?? src.taxable ?? 0;
+    src.savings_withdrawal ??
+    row.income_from_savings_draw ??
+    (src.taxable ?? 0) +
+      (src.cash ?? 0) +
+      (src.roth ?? 0) +
+      (src.hsa ?? 0) +
+      (src.asset_liquidation ?? 0) +
+      Math.max(0, (src.traditional_ira ?? 0) - rmd);
   const p2Bridge = src.p2_health_bridge ?? 0;
   return {
     year: row.year,

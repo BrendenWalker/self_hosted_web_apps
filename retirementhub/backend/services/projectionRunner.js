@@ -11,32 +11,25 @@ const {
   totalPreTax,
   totalFinancial,
   balancesByBucketSnapshot,
+  balancesBySavingsCategorySnapshot,
+  syncBucketDetails,
+  snapshotBucketAggregates,
   applyGrowthToBuckets,
   estimateTaxableDividendsAndGains,
 } = require('./taxBuckets');
-const { computeWithdrawals } = require('./withdrawalEngine');
+const { computeWithdrawals, liquidateAssetsForSpending } = require('./withdrawalEngine');
 const { computeRothConversion, applyRothConversion } = require('./rothConversionEngine');
 const { computeYearTax } = require('./yearTaxService');
 const { computePlanningScores, computeSsComparison } = require('./planningInsights');
 const taxParams = require('./taxParameters');
 
-function limitsToBase(limits) {
-  return {
-    ira: limits.ira?.base ?? 0,
-    ira_catch_up: limits.ira?.catch_up ?? 0,
-    '401k_elective': limits['401k_elective']?.base ?? 0,
-    '401k_catch_up': limits['401k_elective']?.catch_up ?? 0,
-    hsa_individual: limits.hsa_individual?.base ?? 0,
-    hsa_family: limits.hsa_family?.base ?? 0,
-    hsa_catch_up: limits.hsa_individual?.catch_up ?? 0,
-  };
-}
-
-function buildPartyLimitsForYear(birthYear, base, year) {
-  const age = ageAtEoy(birthYear, year);
-  const k401CatchUp = age != null && age >= 50 ? base['401k_catch_up'] || 0 : 0;
-  return { '401k_elective_limit': (base['401k_elective'] || 0) + k401CatchUp };
-}
+const {
+  computeYearContributions,
+  applyDirectedContributions,
+  allocateSurplusAfterDirected,
+  incomeSurplusToTaxableFlag,
+  limitsToBase,
+} = require('./contributionPlanner');
 
 function tryParseFloat(v) {
   if (v == null || v === '') return null;
@@ -52,7 +45,9 @@ function tryParseInt(v) {
 
 async function runProjection(pool, query = {}) {
   const allowZeroRates = !!process.env.DEBUG;
-  const minGrowth = allowZeroRates ? 0 : 0.01;
+  const savingsProjectionMode =
+    query.savings_projection === '1' || String(query.savings_projection || '').toLowerCase() === 'true';
+  const minGrowth = savingsProjectionMode || allowZeroRates ? 0 : 0.01;
   const minIndexPct = allowZeroRates ? 0 : 0.01;
   const startYear = new Date().getFullYear();
   const scenarioIdQ = tryParseInt(query.scenario_id);
@@ -69,6 +64,7 @@ async function runProjection(pool, query = {}) {
     pool.query('SELECT * FROM income ORDER BY as_of DESC, id DESC LIMIT 1'),
     pool.query(
       `SELECT DISTINCT ON (ab.account_id) ab.account_id, ab.balance, a.account_type, a.expected_depreciation_pct,
+              a.liquidate_in_retirement,
               a.owner_type, a.rmd_owner_type
        FROM account_balance ab
        JOIN account a ON ab.account_id = a.id
@@ -108,7 +104,9 @@ async function runProjection(pool, query = {}) {
 
   const growthQ = tryParseFloat(query.growth_pct);
   let growthPct = Number.isFinite(growthQ) && growthQ >= minGrowth && growthQ <= 20 ? growthQ : null;
-  if (growthPct == null) {
+  if (savingsProjectionMode) {
+    growthPct = 0;
+  } else if (growthPct == null) {
     const fromScenario = overlay.portfolioReturnRate;
     if (fromScenario != null && fromScenario >= minGrowth) growthPct = fromScenario;
     else {
@@ -142,11 +140,20 @@ async function runProjection(pool, query = {}) {
   const p1BirthYear = household?.p1_birth_year != null ? parseInt(household.p1_birth_year, 10) : null;
   const p2BirthYear = household?.p2_birth_year != null ? parseInt(household.p2_birth_year, 10) : null;
 
+  const raP1Q = tryParseInt(query.retirement_age_p1);
+  const raP2Q = tryParseInt(query.retirement_age_p2);
+  if (raP1Q != null && raP1Q >= 62 && raP1Q <= 100 && p1BirthYear != null) {
+    overlay.p1RetirementYear = p1BirthYear + raP1Q;
+  }
+  if (raP2Q != null && raP2Q >= 62 && raP2Q <= 100 && p2BirthYear != null) {
+    overlay.p2RetirementYear = p2BirthYear + raP2Q;
+  }
+
   const p1RetirementYear = overlay.p1RetirementYear;
   const p2RetirementYear = overlay.p2RetirementYear;
   const retirementYear =
     p1RetirementYear != null || p2RetirementYear != null
-      ? Math.max(p1RetirementYear ?? 0, p2RetirementYear ?? 0)
+      ? Math.max(p1RetirementYear ?? Number.NEGATIVE_INFINITY, p2RetirementYear ?? Number.NEGATIVE_INFINITY)
       : null;
 
   const p1AtFraRaw =
@@ -222,7 +229,10 @@ async function runProjection(pool, query = {}) {
   let tradP2 = buckets.preTaxP2;
   const assetParts = buckets.assets;
 
-  let startingNetWorth = totalFinancial(buckets) + assetParts.reduce((s, a) => s + a.balance, 0);
+  const startingBalancesBySavingsCategory = balancesBySavingsCategorySnapshot(buckets);
+  const startingFinancialBalance = Math.round(totalFinancial(buckets) * 100) / 100;
+
+  let startingNetWorth = startingFinancialBalance + assetParts.reduce((s, a) => s + a.balance, 0);
   startingNetWorth = Math.round(startingNetWorth * 100) / 100;
 
   const grossP1 = income ? parseFloat(income.gross_salary) || 0 : 0;
@@ -239,18 +249,26 @@ async function runProjection(pool, query = {}) {
   const p2MedicareYear = p2BirthYear != null ? p2BirthYear + 65 : null;
 
   const raisePct = income && income.expected_raise_pct != null ? parseFloat(income.expected_raise_pct) / 100 : 0;
-  const bonusQuarterly = income ? parseFloat(income.bonus_quarterly) || 0 : 0;
+  const bonusQuarterlyP1 = income ? parseFloat(income.bonus_quarterly) || 0 : 0;
+  const bonusQuarterlyP2 = income ? parseFloat(income.bonus_quarterly_p2) || 0 : 0;
   const fourOOneKPctP1 = income && income.four_o_one_k_pct != null ? parseFloat(income.four_o_one_k_pct) / 100 : 0;
   const fourOOneKPctP2 = income && income.four_o_one_k_pct_p2 != null ? parseFloat(income.four_o_one_k_pct_p2) / 100 : 0;
   const matchPctP1 = income && income.four_o_one_k_match_pct != null ? parseFloat(income.four_o_one_k_match_pct) / 100 : 0;
   const matchPctP2 = income && income.four_o_one_k_match_pct_p2 != null ? parseFloat(income.four_o_one_k_match_pct_p2) / 100 : 0;
 
   const endYear = startYear + horizonYears;
+  const accumulationEndYear =
+    retirementYear != null ? Math.max(startYear - 1, retirementYear - 1) : null;
+  const loopEndYear =
+    savingsProjectionMode && retirementYear != null
+      ? Math.min(endYear, Math.max(startYear - 1, retirementYear - 1))
+      : endYear;
   const byYear = [];
   const growthFactor = 1 + growthPct / 100;
   const rothPlan = scenario?.roth_plan;
 
-  for (let y = startYear; y <= endYear; y++) {
+  for (let y = startYear; y <= loopEndYear; y++) {
+    const openingBalancesBySavingsCategory = balancesBySavingsCategorySnapshot(buckets);
     const p1Retired = p1RetirementYear != null && y >= p1RetirementYear;
     const p2Retired = p2RetirementYear != null && y >= p2RetirementYear;
     const isRetired = retirementYear != null && y >= retirementYear;
@@ -260,10 +278,16 @@ async function runProjection(pool, query = {}) {
     let salaryP1 = grossP1 * (y === startYear ? 1 : raiseFactor);
     let salaryP2 = grossP2Num * (y === startYear ? 1 : raiseFactor);
     const wageIncome = (p1Retired ? 0 : salaryP1) + (p2Retired ? 0 : salaryP2);
-    const bonusAnnual =
-      expenseRetirementYear != null && y >= expenseRetirementYear
-        ? 0
-        : bonusQuarterly * 4 * (y === startYear ? 1 : raiseFactor);
+    const bonusActive = expenseRetirementYear == null || y < expenseRetirementYear;
+    const bonusAnnualP1 =
+      bonusActive && !p1Retired
+        ? bonusQuarterlyP1 * 4 * (y === startYear ? 1 : raiseFactor)
+        : 0;
+    const bonusAnnualP2 =
+      bonusActive && !p2Retired
+        ? bonusQuarterlyP2 * 4 * (y === startYear ? 1 : raiseFactor)
+        : 0;
+    const bonusAnnual = bonusAnnualP1 + bonusAnnualP2;
 
     const p1SsActive = overlay.p1SsStartYear != null && y >= overlay.p1SsStartYear;
     const p2SsActive = overlay.p2SsStartYear != null && y >= overlay.p2SsStartYear;
@@ -292,8 +316,12 @@ async function runProjection(pool, query = {}) {
       rmd2 = r.rmd;
       rmdDivisor2 = r.divisor;
     }
-    tradP1 = Math.max(0, tradP1 - rmd1);
-    tradP2 = Math.max(0, tradP2 - rmd2);
+    if (rmd1 > 0 || rmd2 > 0) {
+      const prevAgg = snapshotBucketAggregates(buckets, tradP1, tradP2);
+      tradP1 = Math.max(0, tradP1 - rmd1);
+      tradP2 = Math.max(0, tradP2 - rmd2);
+      syncBucketDetails(buckets, prevAgg, snapshotBucketAggregates(buckets, tradP1, tradP2));
+    }
     const rmdTotal = Math.round((rmd1 + rmd2) * 100) / 100;
 
     const expensesUseRetirement = expenseRetirementYear != null && y >= expenseRetirementYear;
@@ -307,6 +335,7 @@ async function runProjection(pool, query = {}) {
       preTaxWithdrawals: 0,
       rothWithdrawals: 0,
       hsaWithdrawals: 0,
+      assetLiquidations: 0,
       unmetSpending: 0,
     };
     let rothConversion = 0;
@@ -352,18 +381,29 @@ async function runProjection(pool, query = {}) {
 
     const spendingGap = Math.max(0, expensesAmount - totalSs - rmdTotal - wageIncome - bonusAnnual);
     if (spendingGap > 0) {
-      withdrawals = computeWithdrawals(
-        spendingGap,
-        workingBuckets,
-        overlay.withdrawalStrategy,
-        overlay.withdrawalOrderCustom
-      );
+      const prevAgg = snapshotBucketAggregates(buckets, tradP1, tradP2);
+      withdrawals = {
+        assetLiquidations: 0,
+        ...computeWithdrawals(
+          spendingGap,
+          workingBuckets,
+          overlay.withdrawalStrategy,
+          overlay.withdrawalOrderCustom
+        ),
+      };
       tradP1 = workingBuckets.preTaxP1;
       tradP2 = workingBuckets.preTaxP2;
       buckets.roth = workingBuckets.roth;
       buckets.taxable = workingBuckets.taxable;
       buckets.cash = workingBuckets.cash;
       buckets.hsa = workingBuckets.hsa;
+      syncBucketDetails(buckets, prevAgg, snapshotBucketAggregates(buckets, tradP1, tradP2));
+    }
+    const inRetirementPhase = p1Retired || p2Retired;
+    if (inRetirementPhase && withdrawals.unmetSpending > 0) {
+      const liq = liquidateAssetsForSpending(assetParts, withdrawals.unmetSpending);
+      withdrawals.assetLiquidations = liq.assetLiquidations;
+      withdrawals.unmetSpending = liq.unmetSpending;
     }
 
     const baseOrdinary = wageIncome + bonusAnnual + rmdTotal;
@@ -377,11 +417,13 @@ async function runProjection(pool, query = {}) {
       age2,
     });
     if (rothConversion > 0) {
+      const prevAgg = snapshotBucketAggregates(buckets, tradP1, tradP2);
       const wb = { preTaxP1: tradP1, preTaxP2: tradP2, roth: buckets.roth };
       applyRothConversion(wb, rothConversion);
       tradP1 = wb.preTaxP1;
       tradP2 = wb.preTaxP2;
       buckets.roth = wb.roth;
+      syncBucketDetails(buckets, prevAgg, snapshotBucketAggregates(buckets, tradP1, tradP2));
     }
 
     const { qualifiedDividends, longTermCapGains } = estimateTaxableDividendsAndGains(
@@ -416,7 +458,8 @@ async function runProjection(pool, query = {}) {
       withdrawals.taxableWithdrawals +
       withdrawals.preTaxWithdrawals +
       withdrawals.rothWithdrawals +
-      withdrawals.hsaWithdrawals;
+      withdrawals.hsaWithdrawals +
+      (withdrawals.assetLiquidations ?? 0);
 
     const incomeAmount =
       withdrawals.unmetSpending === 0 && spendingGap > 0
@@ -427,37 +470,96 @@ async function runProjection(pool, query = {}) {
     const savingsAmount = Math.round((incomeAmount - expensesAmount) * 100) / 100;
 
     let contributions401k = 0;
-    const contribSalaryP1 = p1Retired ? 0 : salaryP1;
-    const contribSalaryP2 = p2Retired ? 0 : salaryP2;
-    if (contribSalaryP1 > 0 || contribSalaryP2 > 0) {
+    let contributionsIraTraditional = 0;
+    let contributionsIraRoth = 0;
+    let contributionsHsa = 0;
+    let contributionsTaxable = 0;
+    let surplusToTaxableP1 = 0;
+    let surplusToTaxableP2 = 0;
+    let surplusToTaxableTotal = 0;
+    let discretionarySpentP1 = 0;
+    let discretionarySpentP2 = 0;
+    let discretionarySpentTotal = 0;
+    let growthSavingsAmount = savingsAmount;
+
+    if (!p1Retired || !p2Retired) {
       const limits = await taxParams.getContributionLimits(pool, y);
-      const base = limitsToBase(limits);
-      const limP1 = buildPartyLimitsForYear(p1BirthYear, base, y);
-      const limP2 = buildPartyLimitsForYear(p2BirthYear, base, y);
-      const plannedP1 = Math.min(
-        contribSalaryP1 * fourOOneKPctP1 + contribSalaryP1 * matchPctP1,
-        limP1['401k_elective_limit'] || 1e9
-      );
-      const plannedP2 = Math.min(
-        contribSalaryP2 * fourOOneKPctP2 + contribSalaryP2 * matchPctP2,
-        limP2['401k_elective_limit'] || 1e9
-      );
-      contributions401k = (plannedP1 || 0) + (plannedP2 || 0);
+      const limitsBase = limitsToBase(limits);
+      const yearRaiseFactor = y === startYear ? 1 : raiseFactor;
+      const directed = computeYearContributions({
+        income,
+        limitsBase,
+        p1BirthYear,
+        p2BirthYear,
+        year: y,
+        p1Retired,
+        p2Retired,
+        bonusActive,
+        raiseFactor: yearRaiseFactor,
+        salaryP1,
+        salaryP2,
+        fourOOneKPctP1,
+        fourOOneKPctP2,
+        matchPctP1,
+        matchPctP2,
+      });
+      contributions401k = directed.total401k;
+      contributionsIraTraditional = directed.totalIraTraditional;
+      contributionsIraRoth = directed.totalIraRoth;
+      contributionsHsa = directed.totalHsa;
+      contributionsTaxable = directed.totalTaxable;
+      growthSavingsAmount = Math.round((savingsAmount - directed.total) * 100) / 100;
+      const applied = applyDirectedContributions(buckets, tradP1, tradP2, directed);
+      tradP1 = applied.tradP1;
+      tradP2 = applied.tradP2;
     }
 
+    const p1Earned = (p1Retired ? 0 : salaryP1) + bonusAnnualP1;
+    const p2Earned = (p2Retired ? 0 : salaryP2) + bonusAnnualP2;
+    const surplusAlloc = allocateSurplusAfterDirected({
+      surplusAfterDirected: growthSavingsAmount,
+      p1Earned,
+      p2Earned,
+      surplusToTaxableP1: incomeSurplusToTaxableFlag(income, 'surplus_to_taxable_p1'),
+      surplusToTaxableP2: incomeSurplusToTaxableFlag(income, 'surplus_to_taxable_p2'),
+    });
+    growthSavingsAmount = surplusAlloc.growthSavingsAmount;
+    surplusToTaxableP1 = surplusAlloc.surplusTaxableP1;
+    surplusToTaxableP2 = surplusAlloc.surplusTaxableP2;
+    surplusToTaxableTotal = surplusAlloc.surplusTaxableTotal;
+    discretionarySpentP1 = surplusAlloc.discretionarySpentP1;
+    discretionarySpentP2 = surplusAlloc.discretionarySpentP2;
+    discretionarySpentTotal = surplusAlloc.discretionarySpentTotal;
+    if (surplusToTaxableTotal > 0) {
+      buckets.taxable += surplusToTaxableTotal;
+    }
+
+    const savingsAddedTotal = Math.round(
+      (contributions401k +
+        contributionsIraTraditional +
+        contributionsIraRoth +
+        contributionsHsa +
+        contributionsTaxable +
+        surplusToTaxableTotal) *
+        100
+    ) / 100;
+
+    const effectiveGrowthFactor = savingsProjectionMode ? 1 : growthFactor;
     const grown = applyGrowthToBuckets(
       buckets,
-      growthFactor,
-      savingsAmount,
+      effectiveGrowthFactor,
+      growthSavingsAmount,
       tradP1,
       tradP2
     );
+    const prevAgg = snapshotBucketAggregates(buckets, tradP1, tradP2);
     tradP1 = grown.preTaxP1;
     tradP2 = grown.preTaxP2;
     buckets.roth = grown.roth;
     buckets.taxable = grown.taxable;
     buckets.cash = grown.cash;
     buckets.hsa = grown.hsa;
+    syncBucketDetails(buckets, prevAgg, snapshotBucketAggregates(buckets, tradP1, tradP2));
     buckets.preTaxP1 = tradP1;
     buckets.preTaxP2 = tradP2;
 
@@ -487,6 +589,9 @@ async function runProjection(pool, query = {}) {
       financial_balance: financialBalance,
       hard_asset_balance: hardAssetBalance,
       balances_by_bucket: balancesByBucketSnapshot(buckets),
+      balances_by_savings_category: balancesBySavingsCategorySnapshot(buckets),
+      opening_balances_by_savings_category: openingBalancesBySavingsCategory,
+      savings_added_total: savingsAddedTotal,
       income: incomeAmount,
       expenses: expensesAmount,
       savings: savingsAmount,
@@ -494,6 +599,8 @@ async function runProjection(pool, query = {}) {
       income_wage_p1: Math.round((p1Retired ? 0 : salaryP1) * 100) / 100,
       income_wage_p2: Math.round((p2Retired ? 0 : salaryP2) * 100) / 100,
       income_bonus: Math.round(bonusAnnual * 100) / 100,
+      income_bonus_p1: Math.round(bonusAnnualP1 * 100) / 100,
+      income_bonus_p2: Math.round(bonusAnnualP2 * 100) / 100,
       income_ss_total: Math.round(totalSs * 100) / 100,
       income_ss_p1: Math.round(annualSsP1 * 100) / 100,
       income_ss_p2: Math.round(annualSsP2 * 100) / 100,
@@ -527,8 +634,19 @@ async function runProjection(pool, query = {}) {
         roth: withdrawals.rothWithdrawals,
         hsa: withdrawals.hsaWithdrawals,
         cash: withdrawals.cashWithdrawals,
+        asset_liquidation: withdrawals.assetLiquidations ?? 0,
       },
       contributions_401k: Math.round(contributions401k * 100) / 100,
+      contributions_ira_traditional: Math.round(contributionsIraTraditional * 100) / 100,
+      contributions_ira_roth: Math.round(contributionsIraRoth * 100) / 100,
+      contributions_hsa: Math.round(contributionsHsa * 100) / 100,
+      contributions_taxable: Math.round(contributionsTaxable * 100) / 100,
+      surplus_to_taxable_p1: Math.round(surplusToTaxableP1 * 100) / 100,
+      surplus_to_taxable_p2: Math.round(surplusToTaxableP2 * 100) / 100,
+      surplus_to_taxable: Math.round(surplusToTaxableTotal * 100) / 100,
+      discretionary_spending_p1: Math.round(discretionarySpentP1 * 100) / 100,
+      discretionary_spending_p2: Math.round(discretionarySpentP2 * 100) / 100,
+      discretionary_spending: Math.round(discretionarySpentTotal * 100) / 100,
       is_retired: isRetired,
       p1_retired: p1Retired,
       p2_retired: p2Retired,
@@ -565,11 +683,15 @@ async function runProjection(pool, query = {}) {
 
   return {
     start_year: startYear,
-    end_year: endYear,
+    end_year: savingsProjectionMode && accumulationEndYear != null ? loopEndYear : endYear,
     projection_horizon_years: horizonYears,
     growth_pct: growthPct,
     expense_growth_pct: expenseGrowthPct,
     ssi_growth_pct: ssiGrowthPct,
+    savings_projection_mode: savingsProjectionMode,
+    accumulation_end_year: savingsProjectionMode ? accumulationEndYear : null,
+    starting_balances_by_savings_category: startingBalancesBySavingsCategory,
+    starting_financial_balance: startingFinancialBalance,
     target_25x_retirement: target25xRetirement,
     retirement_year: retirementYear,
     starting_net_worth: startingNetWorth,
@@ -624,6 +746,9 @@ async function runProjection(pool, query = {}) {
         'Includes wages, RMD, Roth conversions, bucket withdrawals, estimated taxable SS, and qualified dividends. LTCG taxed separately.',
       tax_model_note:
         'Excludes NIIT, AMT, state/local tax, credits, and payroll taxes. IRMAA warning is approximate.',
+      savings_projection_note: savingsProjectionMode
+        ? 'Account balances reflect current Accounts plus annual savings only. Investment growth is not applied.'
+        : null,
     },
   };
 }
