@@ -155,9 +155,63 @@ export function yearsToCsv(years, columns = PROJECTION_CSV_COLUMNS) {
 
 /**
  * One row per year with shared ages and prefixed columns for each scenario.
- * @param {Record<string, unknown>[]} baselineYears
- * @param {Record<string, unknown>[]} altYears
- * @param {{ baselineName?: string, altName?: string, valueColumns?: string[], indicatorColumns?: string[] }} [options]
+ * @param {{ name: string, years: Record<string, unknown>[] }[]} scenarios
+ * @param {{ valueColumns?: string[], indicatorColumns?: string[] }} [options]
+ */
+export function compareManyScenariosToCsv(
+  scenarios,
+  {
+    valueColumns = SCENARIO_COMPARE_VALUE_COLUMNS,
+    indicatorColumns = SCENARIO_COMPARE_INDICATOR_COLUMNS,
+  } = {}
+) {
+  const series = (scenarios || []).map((scenario, index) => ({
+    name: scenarioDisplayName(scenario.name, `Scenario ${index + 1}`),
+    byYear: rowsByYear(scenario.years),
+  }));
+  const years = [
+    ...new Set(series.flatMap((entry) => [...entry.byYear.keys()])),
+  ].sort((a, b) => a - b);
+
+  const headerCells = [
+    'year',
+    'p1_age_eoy',
+    'p2_age_eoy',
+    ...series.flatMap((entry) => [
+      ...indicatorColumns.map((k) => scenarioColumnHeader(entry.name, k, 'Scenario')),
+      ...valueColumns.map((k) => scenarioColumnHeader(entry.name, k, 'Scenario')),
+    ]),
+  ];
+
+  if (!years.length) {
+    return `${headerCells.map((c) => escapeCsvCell(c)).join(',')}\n`;
+  }
+
+  const body = years.map((year) => {
+    const ageRow =
+      series.map((entry) => entry.byYear.get(year)).find((row) => row?.p1_age_eoy != null) ||
+      series.map((entry) => entry.byYear.get(year)).find(Boolean) ||
+      {};
+    const cells = [
+      year,
+      ageRow.p1_age_eoy ?? '',
+      ageRow.p2_age_eoy ?? '',
+      ...series.flatMap((entry) => {
+        const row = entry.byYear.get(year) || {};
+        return [
+          ...indicatorColumns.map((k) => row[k] ?? ''),
+          ...valueColumns.map((k) => rowValue(row, k)),
+        ];
+      }),
+    ];
+    return cells.map((v) => escapeCsvCell(v)).join(',');
+  });
+
+  return `${headerCells.map((c) => escapeCsvCell(c)).join(',')}\n${body.join('\n')}\n`;
+}
+
+/**
+ * @deprecated Prefer compareManyScenariosToCsv — kept for two-scenario callers.
  */
 export function compareScenariosToCsv(
   baselineYears,
@@ -169,53 +223,34 @@ export function compareScenariosToCsv(
     indicatorColumns = SCENARIO_COMPARE_INDICATOR_COLUMNS,
   } = {}
 ) {
-  const baselineByYear = rowsByYear(baselineYears);
-  const altByYear = rowsByYear(altYears);
-  const years = [...new Set([...baselineByYear.keys(), ...altByYear.keys()])].sort((a, b) => a - b);
-
-  const headerCells = [
-    'year',
-    'p1_age_eoy',
-    'p2_age_eoy',
-    ...indicatorColumns.map((k) => scenarioColumnHeader(baselineName, k, 'Baseline')),
-    ...valueColumns.map((k) => scenarioColumnHeader(baselineName, k, 'Baseline')),
-    ...indicatorColumns.map((k) => scenarioColumnHeader(altName, k, 'Alternative')),
-    ...valueColumns.map((k) => scenarioColumnHeader(altName, k, 'Alternative')),
-  ];
-
-  if (!years.length) {
-    return `${headerCells.map((c) => escapeCsvCell(c)).join(',')}\n`;
-  }
-
-  const body = years.map((year) => {
-    const baselineRow = baselineByYear.get(year) || {};
-    const altRow = altByYear.get(year) || {};
-    const ageRow = baselineRow.p1_age_eoy != null ? baselineRow : altRow;
-    const cells = [
-      year,
-      ageRow.p1_age_eoy ?? '',
-      ageRow.p2_age_eoy ?? '',
-      ...indicatorColumns.map((k) => baselineRow[k] ?? ''),
-      ...valueColumns.map((k) => rowValue(baselineRow, k)),
-      ...indicatorColumns.map((k) => altRow[k] ?? ''),
-      ...valueColumns.map((k) => rowValue(altRow, k)),
-    ];
-    return cells.map((v) => escapeCsvCell(v)).join(',');
-  });
-
-  return `${headerCells.map((c) => escapeCsvCell(c)).join(',')}\n${body.join('\n')}\n`;
+  return compareManyScenariosToCsv(
+    [
+      { name: baselineName, years: baselineYears },
+      { name: altName, years: altYears },
+    ],
+    { valueColumns, indicatorColumns }
+  );
 }
 
-/** Trigger a browser download of a scenario comparison CSV. */
-export function downloadScenarioCompareCsv(baselineYears, altYears, { baselineName, altName } = {}) {
-  const csv = compareScenariosToCsv(baselineYears, altYears, { baselineName, altName });
+/** Trigger a browser download of a multi-scenario comparison CSV. */
+export function downloadManyScenariosCompareCsv(scenarios) {
+  const csv = compareManyScenariosToCsv(scenarios);
   const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
-  const baseSlug = scenarioFileSlug(baselineName, 'baseline');
-  const altSlug = scenarioFileSlug(altName, 'alternative');
-  a.download = `retirementhub-compare-${baseSlug}-vs-${altSlug}-${new Date().toISOString().slice(0, 10)}.csv`;
+  const slug = (scenarios || [])
+    .map((scenario, index) => scenarioFileSlug(scenario.name, `scenario_${index + 1}`))
+    .join('-vs-');
+  a.download = `retirementhub-compare-${slug || 'scenarios'}-${new Date().toISOString().slice(0, 10)}.csv`;
   a.click();
   URL.revokeObjectURL(url);
+}
+
+/** @deprecated Prefer downloadManyScenariosCompareCsv */
+export function downloadScenarioCompareCsv(baselineYears, altYears, { baselineName, altName } = {}) {
+  downloadManyScenariosCompareCsv([
+    { name: baselineName, years: baselineYears },
+    { name: altName, years: altYears },
+  ]);
 }

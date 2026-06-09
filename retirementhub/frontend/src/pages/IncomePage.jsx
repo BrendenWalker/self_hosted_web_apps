@@ -157,8 +157,9 @@ export default function IncomePage() {
         <h2>Budget context</h2>
         <p style={{ marginBottom: '1rem', color: '#5a6b64', fontSize: '0.9rem' }}>
           Gross salary, bonuses, raises, and planned savings for P1 and P2. Projections apply IRS limits to 401(k),
-          combined IRA, and HSA contributions each year. Surplus income after expenses and planned contributions can
-          flow to taxable savings or be treated as unbudgeted discretionary spending. Amounts are stored with an “as of”
+          combined IRA, and HSA contributions each year. Planned taxable savings amounts are treated as net after taxes.
+          Surplus income after expenses and planned contributions can flow to taxable savings (with estimated federal tax
+          withheld) or be treated as unbudgeted discretionary spending. Amounts are stored with an “as of”
           date; the most recent snapshot is used.
         </p>
         <form onSubmit={handleSubmit}>
@@ -305,7 +306,7 @@ export default function IncomePage() {
             <AnnualAmountInput
               id="taxable_savings_annual_p1"
               name="taxable_savings_annual_p1"
-              label="Taxable savings $/yr"
+              label="Taxable savings $/yr (net after taxes)"
               value={form.taxable_savings_annual_p1}
               onChange={handleChange}
             />
@@ -322,7 +323,8 @@ export default function IncomePage() {
               Surplus income is added to taxable savings (P1)
             </label>
             <span className="muted" style={{ fontSize: '0.85rem', display: 'block', marginTop: '0.35rem' }}>
-              When unchecked, P1&apos;s share of surplus after planned contributions is treated as discretionary
+              When checked, P1&apos;s share of surplus after planned contributions is deposited to taxable savings
+              after estimated federal tax is withheld. When unchecked, P1&apos;s share is treated as discretionary
               spending not captured in your expense categories.
             </span>
           </div>
@@ -383,7 +385,7 @@ export default function IncomePage() {
             <AnnualAmountInput
               id="taxable_savings_annual_p2"
               name="taxable_savings_annual_p2"
-              label="Taxable savings $/yr"
+              label="Taxable savings $/yr (net after taxes)"
               value={form.taxable_savings_annual_p2}
               onChange={handleChange}
             />
@@ -400,7 +402,8 @@ export default function IncomePage() {
               Surplus income is added to taxable savings (P2)
             </label>
             <span className="muted" style={{ fontSize: '0.85rem', display: 'block', marginTop: '0.35rem' }}>
-              When unchecked, P2&apos;s share of surplus after planned contributions is treated as discretionary
+              When checked, P2&apos;s share of surplus after planned contributions is deposited to taxable savings
+              after estimated federal tax is withheld. When unchecked, P2&apos;s share is treated as discretionary
               spending not captured in your expense categories.
             </span>
           </div>

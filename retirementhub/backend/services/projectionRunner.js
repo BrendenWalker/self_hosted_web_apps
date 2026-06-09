@@ -27,6 +27,7 @@ const {
   computeYearContributions,
   applyDirectedContributions,
   allocateSurplusAfterDirected,
+  applyFederalTaxToSurplusTaxable,
   incomeSurplusToTaxableFlag,
   limitsToBase,
 } = require('./contributionPlanner');
@@ -477,6 +478,7 @@ async function runProjection(pool, query = {}) {
     let surplusToTaxableP1 = 0;
     let surplusToTaxableP2 = 0;
     let surplusToTaxableTotal = 0;
+    let surplusToTaxableTaxWithheld = 0;
     let discretionarySpentP1 = 0;
     let discretionarySpentP2 = 0;
     let discretionarySpentTotal = 0;
@@ -502,6 +504,7 @@ async function runProjection(pool, query = {}) {
         fourOOneKPctP2,
         matchPctP1,
         matchPctP2,
+        filingStatus,
       });
       contributions401k = directed.total401k;
       contributionsIraTraditional = directed.totalIraTraditional;
@@ -524,12 +527,18 @@ async function runProjection(pool, query = {}) {
       surplusToTaxableP2: incomeSurplusToTaxableFlag(income, 'surplus_to_taxable_p2'),
     });
     growthSavingsAmount = surplusAlloc.growthSavingsAmount;
-    surplusToTaxableP1 = surplusAlloc.surplusTaxableP1;
-    surplusToTaxableP2 = surplusAlloc.surplusTaxableP2;
-    surplusToTaxableTotal = surplusAlloc.surplusTaxableTotal;
     discretionarySpentP1 = surplusAlloc.discretionarySpentP1;
     discretionarySpentP2 = surplusAlloc.discretionarySpentP2;
     discretionarySpentTotal = surplusAlloc.discretionarySpentTotal;
+    const surplusTaxAdj = applyFederalTaxToSurplusTaxable({
+      surplusTaxableP1: surplusAlloc.surplusTaxableP1,
+      surplusTaxableP2: surplusAlloc.surplusTaxableP2,
+      federalTaxTotal: taxResult.totalTax,
+    });
+    surplusToTaxableP1 = surplusTaxAdj.surplusTaxableP1;
+    surplusToTaxableP2 = surplusTaxAdj.surplusTaxableP2;
+    surplusToTaxableTotal = surplusTaxAdj.surplusTaxableTotal;
+    surplusToTaxableTaxWithheld = surplusTaxAdj.surplusTaxableTaxWithheld;
     if (surplusToTaxableTotal > 0) {
       buckets.taxable += surplusToTaxableTotal;
     }
@@ -644,6 +653,7 @@ async function runProjection(pool, query = {}) {
       surplus_to_taxable_p1: Math.round(surplusToTaxableP1 * 100) / 100,
       surplus_to_taxable_p2: Math.round(surplusToTaxableP2 * 100) / 100,
       surplus_to_taxable: Math.round(surplusToTaxableTotal * 100) / 100,
+      surplus_to_taxable_tax_withheld: Math.round(surplusToTaxableTaxWithheld * 100) / 100,
       discretionary_spending_p1: Math.round(discretionarySpentP1 * 100) / 100,
       discretionary_spending_p2: Math.round(discretionarySpentP2 * 100) / 100,
       discretionary_spending: Math.round(discretionarySpentTotal * 100) / 100,

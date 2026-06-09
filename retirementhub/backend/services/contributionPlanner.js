@@ -49,11 +49,28 @@ function capIraCombined(tradPlanned, rothPlanned, combinedLimit) {
   };
 }
 
-function capHsaHousehold(hsaP1, hsaP2, p1IndLimit, p2IndLimit, familyLimit) {
-  let p1 = Math.min(Math.max(0, hsaP1 || 0), p1IndLimit > 0 ? p1IndLimit : Math.max(0, hsaP1 || 0));
-  let p2 = Math.min(Math.max(0, hsaP2 || 0), p2IndLimit > 0 ? p2IndLimit : Math.max(0, hsaP2 || 0));
+function isMarriedFilingJointly(filingStatus) {
+  return filingStatus === 'married_filing_jointly';
+}
+
+function capHsaHousehold(hsaP1, hsaP2, p1IndLimit, p2IndLimit, familyLimit, filingStatus) {
+  const mfj = isMarriedFilingJointly(filingStatus);
+  const p1Cap =
+    mfj && familyLimit > 0
+      ? familyLimit
+      : p1IndLimit > 0
+        ? p1IndLimit
+        : Math.max(0, hsaP1 || 0);
+  const p2Cap =
+    mfj && familyLimit > 0
+      ? familyLimit
+      : p2IndLimit > 0
+        ? p2IndLimit
+        : Math.max(0, hsaP2 || 0);
+  let p1 = Math.min(Math.max(0, hsaP1 || 0), p1Cap);
+  let p2 = Math.min(Math.max(0, hsaP2 || 0), p2Cap);
   const total = p1 + p2;
-  if (familyLimit != null && familyLimit > 0 && total > familyLimit) {
+  if (mfj && familyLimit != null && familyLimit > 0 && total > familyLimit) {
     if (total <= 0) return { p1: 0, p2: 0 };
     const ratio = familyLimit / total;
     p1 = Math.round(p1 * ratio * 100) / 100;
@@ -96,6 +113,7 @@ function computeYearContributions({
   fourOOneKPctP2,
   matchPctP1,
   matchPctP2,
+  filingStatus = 'married_filing_jointly',
 }) {
   const limP1 = buildPartyContributionLimits(p1BirthYear, limitsBase, year);
   const limP2 = buildPartyContributionLimits(p2BirthYear, limitsBase, year);
@@ -135,7 +153,8 @@ function computeYearContributions({
     hsaRawP2,
     limP1.hsa_individual_limit || hsaRawP1,
     limP2.hsa_individual_limit || hsaRawP2,
-    familyHsaLimit
+    familyHsaLimit,
+    filingStatus
   );
 
   const taxableP1 = scaledAnnual(
@@ -276,15 +295,48 @@ function incomeSurplusToTaxableFlag(income, field) {
   return !!income[field];
 }
 
+/**
+ * Reduce surplus routed to taxable savings by estimated federal tax.
+ * Directed taxable_savings_annual_* amounts are entered net and are not adjusted here.
+ */
+function applyFederalTaxToSurplusTaxable({ surplusTaxableP1, surplusTaxableP2, federalTaxTotal }) {
+  const round = (n) => Math.round(n * 100) / 100;
+  const grossP1 = Math.max(0, surplusTaxableP1 || 0);
+  const grossP2 = Math.max(0, surplusTaxableP2 || 0);
+  const grossTotal = round(grossP1 + grossP2);
+  const taxTotal = Math.max(0, federalTaxTotal || 0);
+  if (grossTotal <= 0 || taxTotal <= 0) {
+    return {
+      surplusTaxableP1: grossP1,
+      surplusTaxableP2: grossP2,
+      surplusTaxableTotal: grossTotal,
+      surplusTaxableTaxWithheld: 0,
+    };
+  }
+  const withheld = round(Math.min(taxTotal, grossTotal));
+  const taxP1 = round(withheld * (grossP1 / grossTotal));
+  const taxP2 = round(withheld - taxP1);
+  const netP1 = round(Math.max(0, grossP1 - taxP1));
+  const netP2 = round(Math.max(0, grossP2 - taxP2));
+  return {
+    surplusTaxableP1: netP1,
+    surplusTaxableP2: netP2,
+    surplusTaxableTotal: round(netP1 + netP2),
+    surplusTaxableTaxWithheld: withheld,
+  };
+}
+
 module.exports = {
   limitsToBase,
   buildPartyContributionLimits,
   buildHsaFamilyHouseholdLimit,
+  isMarriedFilingJointly,
   capIraCombined,
   capHsaHousehold,
   computeYearContributions,
   applyDirectedContributions,
   splitSurplusByParty,
   allocateSurplusAfterDirected,
+  applyFederalTaxToSurplusTaxable,
   incomeSurplusToTaxableFlag,
 };

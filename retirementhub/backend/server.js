@@ -1691,6 +1691,30 @@ async function loadScenarioCompareBundle(pool, id, recompute) {
   return { scenario, byYear, summary };
 }
 
+function pickCompareBaselineBundle(bundles) {
+  if (!bundles?.length) return null;
+  return (
+    bundles.find((b) => b.summary?.scenario_name === 'Baseline') ||
+    bundles.find((b) => b.scenario?.is_default) ||
+    bundles[0]
+  );
+}
+
+function buildScenarioComparisons(bundles) {
+  const baseline = pickCompareBaselineBundle(bundles);
+  if (!baseline) return { baseline: null, comparisons: [] };
+  const comparisons = bundles
+    .filter((b) => b.summary?.scenario_id !== baseline.summary?.scenario_id)
+    .map((alt) => ({
+      vs: alt.summary.scenario_name,
+      ...explainScenarioComparison(baseline.summary, alt.summary, {
+        baselineRows: baseline.byYear,
+        altRows: alt.byYear,
+      }),
+    }));
+  return { baseline, comparisons };
+}
+
 // ==================== SCENARIOS ====================
 
 function parseScenarioAssumptionBody(body) {
@@ -1828,20 +1852,14 @@ app.get('/api/scenarios/compare', async (req, res) => {
       if (bundle) bundles.push(bundle);
     }
     const rows = bundles.map((b) => b.summary);
-    const defaultBundle =
-      bundles.find((b) => b.summary.scenario_name === 'Baseline') ||
-      bundles.find((b) => b.scenario.is_default) ||
-      bundles[0];
-    const altBundle =
-      bundles.find((b) => b.summary.scenario_id !== defaultBundle.summary.scenario_id) || bundles[1];
-    const explanation =
-      rows.length >= 2 && defaultBundle && altBundle
-        ? explainScenarioComparison(defaultBundle.summary, altBundle.summary, {
-            baselineRows: defaultBundle.byYear,
-            altRows: altBundle.byYear,
-          })
-        : null;
-    res.json({ scenarios: rows, explanation });
+    const { baseline, comparisons } = buildScenarioComparisons(bundles);
+    const explanation = comparisons[0] || null;
+    res.json({
+      scenarios: rows,
+      baseline: baseline?.summary?.scenario_name || null,
+      comparisons,
+      explanation,
+    });
   } catch (error) {
     console.error('Error comparing scenarios:', error);
     res.status(500).json({ error: error.message || 'Failed to compare scenarios' });
@@ -1863,15 +1881,11 @@ app.get('/api/scenarios/compare/explain', async (req, res) => {
       const bundle = await loadScenarioCompareBundle(pool, id, recompute);
       if (bundle) bundles.push(bundle);
     }
-    const baseline = bundles[0];
-    const comparisons = bundles.slice(1).map((alt) => ({
-      vs: alt.summary.scenario_name,
-      ...explainScenarioComparison(baseline.summary, alt.summary, {
-        baselineRows: baseline.byYear,
-        altRows: alt.byYear,
-      }),
-    }));
-    res.json({ baseline: baseline.summary.scenario_name, comparisons });
+    const { baseline, comparisons } = buildScenarioComparisons(bundles);
+    res.json({
+      baseline: baseline?.summary?.scenario_name || null,
+      comparisons,
+    });
   } catch (error) {
     console.error('Error explaining scenario comparison:', error);
     res.status(500).json({ error: error.message || 'Failed to explain comparison' });

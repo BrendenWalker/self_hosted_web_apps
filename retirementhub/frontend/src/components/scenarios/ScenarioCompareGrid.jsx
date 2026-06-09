@@ -1,9 +1,11 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { formatCurrency } from '../../utils/formatCurrency';
+import { pickScenarioHighlights } from '../../utils/scenarioCompare';
 
-export default function ScenarioCompareGrid({ rows, explanation, showDrivers = true }) {
+export default function ScenarioCompareGrid({ rows, drivers = [], warnings = [], showDrivers = true }) {
   const [sortKey, setSortKey] = useState('scenario_name');
   const [sortAsc, setSortAsc] = useState(true);
+  const highlights = useMemo(() => pickScenarioHighlights(rows || []), [rows]);
 
   if (!rows?.length) return null;
 
@@ -27,12 +29,12 @@ export default function ScenarioCompareGrid({ rows, explanation, showDrivers = t
 
   const sortIndicator = (key) => (sortKey === key ? (sortAsc ? ' ▲' : ' ▼') : '');
 
-  const lowestTax = explanation?.highlights?.lowest_lifetime_tax;
-  const highestWorth = explanation?.highlights?.highest_ending_net_worth;
-  const lowestRmd = explanation?.highlights?.lowest_peak_rmd;
-  const drivers = explanation?.structured_drivers?.length
-    ? explanation.structured_drivers
-    : (explanation?.drivers || []).map((label) => ({ label }));
+  const lowestTax = highlights?.lowest_lifetime_tax;
+  const highestWorth = highlights?.highest_ending_net_worth;
+  const lowestRmd = highlights?.lowest_peak_rmd;
+  const driverItems = drivers?.length
+    ? drivers
+    : [];
 
   return (
     <div className="card">
@@ -65,22 +67,19 @@ export default function ScenarioCompareGrid({ rows, explanation, showDrivers = t
           )}
         </div>
       )}
-      {explanation?.summary && (
-        <p className="projections-summary-note" style={{ marginBottom: '0.75rem' }}>{explanation.summary}</p>
-      )}
-      {showDrivers && drivers.length > 0 && (
+      {showDrivers && driverItems.length > 0 && (
         <div className="scenario-drivers-panel">
           <h3>Key drivers</h3>
           <ul className="projections-insights-list">
-            {drivers.map((d, i) => (
+            {driverItems.map((d, i) => (
               <li key={d.kind ? `${d.kind}-${d.year_start}-${i}` : i}>{d.label}</li>
             ))}
           </ul>
         </div>
       )}
-      {explanation?.warnings?.length > 0 && (
+      {warnings?.length > 0 && (
         <ul className="projections-insights-list">
-          {explanation.warnings.map((w, i) => (
+          {warnings.map((w, i) => (
             <li key={i}>{w}</li>
           ))}
         </ul>

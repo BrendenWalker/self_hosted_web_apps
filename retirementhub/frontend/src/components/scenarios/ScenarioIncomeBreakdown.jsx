@@ -12,8 +12,7 @@ import {
 } from 'recharts';
 import { formatCurrency } from '../../utils/formatCurrency';
 import {
-  incomeComponentsTotal,
-  mergeScenarioIncomeBreakdown,
+  mergeMultiScenarioIncomeBreakdown,
   scenarioChartKey,
 } from '../../utils/incomeBreakdown';
 
@@ -24,23 +23,25 @@ const STACK_SERIES = [
   { suffix: 'savings', name: 'Savings draw', fill: '#2d8a6e' },
 ];
 
-function BreakdownTooltip({ active, payload, label, baselineName, altName }) {
+const EXPENSE_LINE_COLORS = ['#5a6b64', '#c45c5c', '#4a6fa5', '#a67c52', '#6b4a8a', '#8a6b4a'];
+
+function BreakdownTooltip({ active, payload, label, scenarios }) {
   if (!active || !payload?.length) return null;
   const row = payload[0]?.payload;
   if (!row) return null;
   return (
     <div className="chart-tooltip">
       <strong>Year {label}</strong>
-      {[['baseline', baselineName], ['alt', altName]].map(([key, name]) => {
-        const b = row[key];
-        if (!b) return null;
+      {(scenarios || []).map((scenario) => {
+        const breakdown = row.scenarios?.[scenario.key];
+        if (!breakdown) return null;
         return (
-          <div key={key} style={{ marginTop: '0.35rem' }}>
-            <div><strong>{name}</strong></div>
-            <div>Income: {formatCurrency(b.total)}</div>
-            <div>Expenses: {formatCurrency(b.expenses)}</div>
-            {b.shortfall > 0 && (
-              <div className="tooltip-rmd">Shortfall: {formatCurrency(b.shortfall)}</div>
+          <div key={scenario.key} style={{ marginTop: '0.35rem' }}>
+            <div><strong>{scenario.name}</strong></div>
+            <div>Income: {formatCurrency(breakdown.total)}</div>
+            <div>Expenses: {formatCurrency(breakdown.expenses)}</div>
+            {breakdown.shortfall > 0 && (
+              <div className="tooltip-rmd">Shortfall: {formatCurrency(breakdown.shortfall)}</div>
             )}
           </div>
         );
@@ -49,40 +50,39 @@ function BreakdownTooltip({ active, payload, label, baselineName, altName }) {
   );
 }
 
-export default function ScenarioIncomeBreakdown({
-  baselineYears = [],
-  altYears = [],
-  baselineName = 'Baseline',
-  altName = 'Alternative',
-  onYearSelect,
-}) {
-  const baselineKey = scenarioChartKey(baselineName, 'baseline');
-  const altKey = scenarioChartKey(altName, 'alternative');
-
-  const rows = useMemo(
-    () => mergeScenarioIncomeBreakdown(baselineYears, altYears, baselineKey, altKey),
-    [baselineYears, altYears, baselineKey, altKey]
+/**
+ * @param {{ scenarios: { id?: number, name: string, years: Record<string, unknown>[], key?: string }[], onYearSelect?: (year: number) => void }} props
+ */
+export default function ScenarioIncomeBreakdown({ scenarios = [], onYearSelect }) {
+  const normalized = useMemo(
+    () =>
+      (scenarios || []).map((scenario, index) => ({
+        ...scenario,
+        key: scenario.key || `${scenarioChartKey(scenario.name, `scenario_${index + 1}`)}_${scenario.id ?? index}`,
+      })),
+    [scenarios]
   );
 
-  if (!rows.length) return null;
+  const rows = useMemo(
+    () => mergeMultiScenarioIncomeBreakdown(normalized),
+    [normalized]
+  );
 
-  const hasIncome = rows.some((r) => r.baseline.total > 0 || r.alt.total > 0);
+  if (!rows.length || !normalized.length) return null;
+
+  const hasIncome = rows.some((row) =>
+    normalized.some((scenario) => (row.scenarios?.[scenario.key]?.total ?? 0) > 0)
+  );
   if (!hasIncome) return null;
 
-  const chartSeries = [
-    ...STACK_SERIES.map((s) => ({
+  const chartSeries = normalized.flatMap((scenario) =>
+    STACK_SERIES.map((s) => ({
       ...s,
-      dataKey: `${baselineKey}_${s.suffix}`,
-      stackId: baselineKey,
-      legendName: `${baselineName} — ${s.name}`,
-    })),
-    ...STACK_SERIES.map((s) => ({
-      ...s,
-      dataKey: `${altKey}_${s.suffix}`,
-      stackId: altKey,
-      legendName: `${altName} — ${s.name}`,
-    })),
-  ];
+      dataKey: `${scenario.key}_${s.suffix}`,
+      stackId: scenario.key,
+      legendName: `${scenario.name} — ${s.name}`,
+    }))
+  );
 
   return (
     <div className="card projections-chart-card">
@@ -100,7 +100,7 @@ export default function ScenarioIncomeBreakdown({
             <CartesianGrid strokeDasharray="3 3" stroke="#e8eeec" />
             <XAxis dataKey="year" tick={{ fontSize: 11 }} />
             <YAxis tickFormatter={(v) => `$${v >= 1000 ? `${Math.round(v / 1000)}k` : v}`} tick={{ fontSize: 12 }} />
-            <Tooltip content={<BreakdownTooltip baselineName={baselineName} altName={altName} />} />
+            <Tooltip content={<BreakdownTooltip scenarios={normalized} />} />
             <Legend />
             {chartSeries.map((s) => (
               <Bar
@@ -111,24 +111,18 @@ export default function ScenarioIncomeBreakdown({
                 fill={s.fill}
               />
             ))}
-            <Line
-              type="monotone"
-              dataKey={`${baselineKey}_expenses`}
-              name={`${baselineName} — expenses`}
-              stroke="#5a6b64"
-              strokeWidth={2}
-              strokeDasharray="6 4"
-              dot={{ r: 2 }}
-            />
-            <Line
-              type="monotone"
-              dataKey={`${altKey}_expenses`}
-              name={`${altName} — expenses`}
-              stroke="#c45c5c"
-              strokeWidth={2}
-              strokeDasharray="6 4"
-              dot={{ r: 2 }}
-            />
+            {normalized.map((scenario, index) => (
+              <Line
+                key={`${scenario.key}_expenses`}
+                type="monotone"
+                dataKey={`${scenario.key}_expenses`}
+                name={`${scenario.name} — expenses`}
+                stroke={EXPENSE_LINE_COLORS[index % EXPENSE_LINE_COLORS.length]}
+                strokeWidth={2}
+                strokeDasharray="6 4"
+                dot={{ r: 2 }}
+              />
+            ))}
           </ComposedChart>
         </ResponsiveContainer>
       </div>
@@ -138,26 +132,21 @@ export default function ScenarioIncomeBreakdown({
           <thead>
             <tr>
               <th rowSpan={2} scope="col">Year</th>
-              <th colSpan={6} scope="colgroup" className="scenario-compare-group-header">
-                {baselineName}
-              </th>
-              <th colSpan={6} scope="colgroup" className="scenario-compare-group-header">
-                {altName}
-              </th>
+              {normalized.map((scenario) => (
+                <th key={scenario.key} colSpan={6} scope="colgroup" className="scenario-compare-group-header">
+                  {scenario.name}
+                </th>
+              ))}
             </tr>
             <tr>
-              <th scope="col" className="num">Wages</th>
-              <th scope="col" className="num">SSI</th>
-              <th scope="col" className="num">RMD</th>
-              <th scope="col" className="num">Savings</th>
-              <th scope="col" className="num">Income</th>
-              <th scope="col" className="num">Expenses</th>
-              <th scope="col" className="num">Wages</th>
-              <th scope="col" className="num">SSI</th>
-              <th scope="col" className="num">RMD</th>
-              <th scope="col" className="num">Savings</th>
-              <th scope="col" className="num">Income</th>
-              <th scope="col" className="num">Expenses</th>
+              {normalized.flatMap((scenario) => [
+                <th key={`${scenario.key}-wages`} scope="col" className="num">Wages</th>,
+                <th key={`${scenario.key}-ssi`} scope="col" className="num">SSI</th>,
+                <th key={`${scenario.key}-rmd`} scope="col" className="num">RMD</th>,
+                <th key={`${scenario.key}-savings`} scope="col" className="num">Savings</th>,
+                <th key={`${scenario.key}-income`} scope="col" className="num">Income</th>,
+                <th key={`${scenario.key}-expenses`} scope="col" className="num">Expenses</th>,
+              ])}
             </tr>
           </thead>
           <tbody>
@@ -180,32 +169,35 @@ export default function ScenarioIncomeBreakdown({
                 role={onYearSelect ? 'button' : undefined}
               >
                 <td>{row.year}</td>
-                <td className="num">{formatCurrency(row.baseline.wages + row.baseline.bonus)}</td>
-                <td className="num">{formatCurrency(row.baseline.ss)}</td>
-                <td className="num">{formatCurrency(row.baseline.rmd)}</td>
-                <td className="num">{formatCurrency(row.baseline.savings)}</td>
-                <td className="num">
-                  {formatCurrency(row.baseline.total)}
-                  {row.baseline.shortfall > 0 && (
-                    <span className="scenario-income-shortfall" title="Funding shortfall">
-                      {' '}({formatCurrency(row.baseline.shortfall)} gap)
-                    </span>
-                  )}
-                </td>
-                <td className="num">{formatCurrency(row.baseline.expenses)}</td>
-                <td className="num">{formatCurrency(row.alt.wages + row.alt.bonus)}</td>
-                <td className="num">{formatCurrency(row.alt.ss)}</td>
-                <td className="num">{formatCurrency(row.alt.rmd)}</td>
-                <td className="num">{formatCurrency(row.alt.savings)}</td>
-                <td className="num">
-                  {formatCurrency(row.alt.total)}
-                  {row.alt.shortfall > 0 && (
-                    <span className="scenario-income-shortfall" title="Funding shortfall">
-                      {' '}({formatCurrency(row.alt.shortfall)} gap)
-                    </span>
-                  )}
-                </td>
-                <td className="num">{formatCurrency(row.alt.expenses)}</td>
+                {normalized.map((scenario) => {
+                  const breakdown = row.scenarios?.[scenario.key] || {
+                    wages: 0,
+                    bonus: 0,
+                    ss: 0,
+                    rmd: 0,
+                    savings: 0,
+                    total: 0,
+                    expenses: 0,
+                    shortfall: 0,
+                  };
+                  return (
+                    <React.Fragment key={scenario.key}>
+                      <td className="num">{formatCurrency(breakdown.wages + breakdown.bonus)}</td>
+                      <td className="num">{formatCurrency(breakdown.ss)}</td>
+                      <td className="num">{formatCurrency(breakdown.rmd)}</td>
+                      <td className="num">{formatCurrency(breakdown.savings)}</td>
+                      <td className="num">
+                        {formatCurrency(breakdown.total)}
+                        {breakdown.shortfall > 0 && (
+                          <span className="scenario-income-shortfall" title="Funding shortfall">
+                            {' '}({formatCurrency(breakdown.shortfall)} gap)
+                          </span>
+                        )}
+                      </td>
+                      <td className="num">{formatCurrency(breakdown.expenses)}</td>
+                    </React.Fragment>
+                  );
+                })}
               </tr>
             ))}
           </tbody>

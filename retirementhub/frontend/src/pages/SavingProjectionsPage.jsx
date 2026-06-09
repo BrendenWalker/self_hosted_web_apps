@@ -259,7 +259,7 @@ function ContributionsChart({ rows, accumulationEndYear }) {
     <div className="card projections-chart-card">
       <h2>Annual savings</h2>
       <p className="projections-chart-intro">
-        Planned contributions from Income (401(k), IRA, HSA, taxable), capped at IRS limits. Surplus after expenses
+        Planned contributions from Income (401(k), IRA, HSA, taxable), capped at IRS limits (MFJ households use the HSA family maximum). Surplus after expenses
         may flow to taxable savings or be shown as discretionary spending when that option is unchecked on Income.
       </p>
       <div className="chart-container">
@@ -455,7 +455,8 @@ export default function SavingProjectionsPage() {
 
       <div className="savings-projection-notice" role="note">
         <strong>No investment growth.</strong> Balances start from your Accounts and increase by planned contributions
-        and surplus to taxable savings each year. Portfolio returns are not modeled on this page.
+        and surplus to taxable savings each year (surplus deposits are net of estimated federal tax). Portfolio returns
+        are not modeled on this page.
       </div>
 
       {message && <div className="error-message">{message}</div>}
