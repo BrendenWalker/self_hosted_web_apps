@@ -52,6 +52,37 @@ export function incomeComponentsTotal(breakdown) {
 }
 
 /**
+ * Merge yearly rows for one or more scenarios (side-by-side compare).
+ * @param {{ key: string, name?: string, years: Record<string, unknown>[] }[]} scenarioSeries
+ */
+export function mergeMultiScenarioIncomeBreakdown(scenarioSeries) {
+  const series = (scenarioSeries || []).map((scenario, index) => ({
+    key: scenario.key || scenarioChartKey(scenario.name, `scenario_${index + 1}`),
+    byYear: new Map((scenario.years || []).map((row) => [row.year, row])),
+  }));
+  const years = [
+    ...new Set(series.flatMap((entry) => [...entry.byYear.keys()])),
+  ].sort((a, b) => a - b);
+
+  return years.map((year) => {
+    const row = { year, scenarios: {} };
+    for (const entry of series) {
+      const breakdown = incomeBreakdownFromRow(entry.byYear.get(year));
+      row.scenarios[entry.key] = breakdown;
+      row[`${entry.key}_wages`] = breakdown.wages + breakdown.bonus;
+      row[`${entry.key}_ss`] = breakdown.ss;
+      row[`${entry.key}_rmd`] = breakdown.rmd;
+      row[`${entry.key}_savings`] = breakdown.savings;
+      row[`${entry.key}_total`] = breakdown.total;
+      row[`${entry.key}_expenses`] = breakdown.expenses;
+    }
+    if (series[0]) row.baseline = row.scenarios[series[0].key];
+    if (series[1]) row.alt = row.scenarios[series[1].key];
+    return row;
+  });
+}
+
+/**
  * Merge baseline and alternative yearly rows for side-by-side compare.
  * @param {Record<string, unknown>[]} baselineYears
  * @param {Record<string, unknown>[]} altYears
@@ -59,31 +90,10 @@ export function incomeComponentsTotal(breakdown) {
  * @param {string} altKey
  */
 export function mergeScenarioIncomeBreakdown(baselineYears, altYears, baselineKey, altKey) {
-  const baselineByYear = new Map((baselineYears || []).map((r) => [r.year, r]));
-  const altByYear = new Map((altYears || []).map((r) => [r.year, r]));
-  const years = [...new Set([...baselineByYear.keys(), ...altByYear.keys()])].sort((a, b) => a - b);
-
-  return years.map((year) => {
-    const base = incomeBreakdownFromRow(baselineByYear.get(year));
-    const alt = incomeBreakdownFromRow(altByYear.get(year));
-    return {
-      year,
-      [`${baselineKey}_wages`]: base.wages + base.bonus,
-      [`${baselineKey}_ss`]: base.ss,
-      [`${baselineKey}_rmd`]: base.rmd,
-      [`${baselineKey}_savings`]: base.savings,
-      [`${baselineKey}_total`]: base.total,
-      [`${baselineKey}_expenses`]: base.expenses,
-      [`${altKey}_wages`]: alt.wages + alt.bonus,
-      [`${altKey}_ss`]: alt.ss,
-      [`${altKey}_rmd`]: alt.rmd,
-      [`${altKey}_savings`]: alt.savings,
-      [`${altKey}_total`]: alt.total,
-      [`${altKey}_expenses`]: alt.expenses,
-      baseline: base,
-      alt,
-    };
-  });
+  return mergeMultiScenarioIncomeBreakdown([
+    { key: baselineKey, years: baselineYears },
+    { key: altKey, years: altYears },
+  ]);
 }
 
 export function scenarioChartKey(name, fallback) {

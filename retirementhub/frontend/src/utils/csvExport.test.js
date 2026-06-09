@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'vitest';
 import {
+  compareManyScenariosToCsv,
   compareScenariosToCsv,
   enrichScenarioYearRows,
   yearsToCsv,
@@ -63,5 +64,20 @@ describe('compareScenariosToCsv', () => {
     expect(lines[1]).toMatch(/^2026,60,58,/);
     expect(lines[1]).toContain('1000000');
     expect(lines[1]).toContain('950000');
+  });
+
+  test('merges three or more scenarios with prefixed columns', () => {
+    const csv = compareManyScenariosToCsv([
+      { name: 'Baseline', years: [{ year: 2026, p1_age_eoy: 60, net_worth: 1000000 }] },
+      { name: 'Retire Early', years: [{ year: 2026, p1_age_eoy: 60, net_worth: 950000 }] },
+      { name: 'At 65', years: [{ year: 2026, p1_age_eoy: 60, net_worth: 980000 }] },
+    ]);
+    const header = csv.trim().split('\n')[0];
+    expect(header).toContain('Baseline:net_worth');
+    expect(header).toContain('Retire Early:net_worth');
+    expect(header).toContain('At 65:net_worth');
+    expect(csv).toContain('1000000');
+    expect(csv).toContain('950000');
+    expect(csv).toContain('980000');
   });
 });

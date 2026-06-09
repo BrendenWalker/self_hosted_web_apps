@@ -2,6 +2,7 @@ import { describe, expect, test } from 'vitest';
 import {
   incomeBreakdownFromRow,
   incomeComponentsTotal,
+  mergeMultiScenarioIncomeBreakdown,
   mergeScenarioIncomeBreakdown,
 } from './incomeBreakdown';
 
@@ -74,5 +75,19 @@ describe('mergeScenarioIncomeBreakdown', () => {
     expect(rows[0].baseline.total).toBe(63037);
     expect(rows[0].baseline.expenses).toBe(63037);
     expect(rows[0].alt.shortfall).toBe(50);
+  });
+});
+
+describe('mergeMultiScenarioIncomeBreakdown', () => {
+  test('merges three scenarios by year', () => {
+    const rows = mergeMultiScenarioIncomeBreakdown([
+      { key: 'a', years: [{ year: 2026, income: 100, expenses: 80 }] },
+      { key: 'b', years: [{ year: 2026, income: 200, expenses: 150 }] },
+      { key: 'c', years: [{ year: 2026, income: 300, expenses: 250 }] },
+    ]);
+    expect(rows).toHaveLength(1);
+    expect(rows[0].scenarios.a.total).toBe(100);
+    expect(rows[0].scenarios.b.total).toBe(200);
+    expect(rows[0].scenarios.c.total).toBe(300);
   });
 });
