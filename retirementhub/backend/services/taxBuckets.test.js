@@ -3,6 +3,7 @@ const {
   classifyAccounts,
   balancesByBucketSnapshot,
   balancesBySavingsCategorySnapshot,
+  applyGrowthToBuckets,
 } = require('./taxBuckets');
 
 describe('taxBuckets', () => {
@@ -50,6 +51,39 @@ describe('taxBuckets', () => {
       ira_roth: 40000,
       taxable: 30000,
     });
+  });
+
+  it('applyGrowthToBuckets clamps to zero when invTotal is non-positive', () => {
+    const buckets = { roth: 0, taxable: 0, cash: 0, hsa: 0 };
+    const result = applyGrowthToBuckets(buckets, 1.05, -1000, 0, 0);
+    expect(result).toEqual({
+      preTaxP1: 0,
+      preTaxP2: 0,
+      roth: 0,
+      taxable: 0,
+      cash: 0,
+      hsa: 0,
+    });
+  });
+
+  it('applyGrowthToBuckets does not grow a zero balance with zero net flow', () => {
+    const buckets = { roth: 0, taxable: 0, cash: 0, hsa: 0 };
+    const result = applyGrowthToBuckets(buckets, 1.07, 0, 0, 0);
+    expect(result.preTaxP1 + result.preTaxP2 + result.roth + result.taxable + result.cash + result.hsa).toBe(0);
+  });
+
+  it('applyGrowthToBuckets can restart from positive net flow alone', () => {
+    const buckets = { roth: 0, taxable: 0, cash: 0, hsa: 0 };
+    const result = applyGrowthToBuckets(buckets, 1.05, 5000, 0, 0);
+    const total = result.preTaxP1 + result.preTaxP2 + result.roth + result.taxable + result.cash + result.hsa;
+    expect(total).toBeCloseTo(5000, 2);
+  });
+
+  it('applyGrowthToBuckets applies growth to post-withdrawal lump sum', () => {
+    const buckets = { roth: 0, taxable: 100000, cash: 0, hsa: 0 };
+    const result = applyGrowthToBuckets(buckets, 1.05, 0, 0, 0);
+    const total = result.preTaxP1 + result.preTaxP2 + result.roth + result.taxable + result.cash + result.hsa;
+    expect(total).toBeCloseTo(105000, 2);
   });
 
   it('applies depreciation and appreciation factors to asset accounts', () => {

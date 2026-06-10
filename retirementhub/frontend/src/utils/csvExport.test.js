@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'vitest';
 import {
+  COMPARE_EXPORT_BALANCE_NOTE,
   compareManyScenariosToCsv,
   compareScenariosToCsv,
   enrichScenarioYearRows,
@@ -39,6 +40,19 @@ describe('enrichScenarioYearRows', () => {
     expect(rows[2].p2_ss_starts).toBe('Y');
     expect(rows[2].p1_retirement_starts).toBe('');
   });
+
+  test('marks first financial depletion year after retirement', () => {
+    const rows = enrichScenarioYearRows([
+      { year: 2026, p1_retired: false, p2_retired: false, financial_balance: 100000 },
+      { year: 2027, p1_retired: true, p2_retired: false, financial_balance: 50000 },
+      { year: 2028, p1_retired: true, p2_retired: false, financial_balance: 0 },
+      { year: 2029, p1_retired: true, p2_retired: false, financial_balance: 0 },
+    ]);
+    expect(rows[0].financial_balance_depleted).toBe('');
+    expect(rows[1].financial_balance_depleted).toBe('');
+    expect(rows[2].financial_balance_depleted).toBe('Y');
+    expect(rows[3].financial_balance_depleted).toBe('');
+  });
 });
 
 describe('compareScenariosToCsv', () => {
@@ -55,15 +69,17 @@ describe('compareScenariosToCsv', () => {
       { baselineName: 'Baseline', altName: 'Retire Early' }
     );
     const lines = csv.trim().split('\n');
-    expect(lines[0]).toContain('year,p1_age_eoy,p2_age_eoy');
-    expect(lines[0]).toContain('Baseline:net_worth');
-    expect(lines[0]).toContain('Retire Early:net_worth');
-    expect(lines[0]).toContain('Baseline:p1_retirement_starts');
-    expect(lines[0]).toContain('Retire Early:p1_ss_starts');
-    expect(lines.length).toBe(3);
-    expect(lines[1]).toMatch(/^2026,60,58,/);
-    expect(lines[1]).toContain('1000000');
-    expect(lines[1]).toContain('950000');
+    expect(lines[0]).toMatch(/^# Balance validation:/);
+    const header = lines[1];
+    expect(header).toContain('year,p1_age_eoy,p2_age_eoy');
+    expect(header).toContain('Baseline:net_worth');
+    expect(header).toContain('Retire Early:net_worth');
+    expect(header).toContain('Baseline:p1_retirement_starts');
+    expect(header).toContain('Retire Early:p1_ss_starts');
+    expect(lines.length).toBe(4);
+    expect(lines[2]).toMatch(/^2026,60,58,/);
+    expect(lines[2]).toContain('1000000');
+    expect(lines[2]).toContain('950000');
   });
 
   test('merges three or more scenarios with prefixed columns', () => {
@@ -72,12 +88,42 @@ describe('compareScenariosToCsv', () => {
       { name: 'Retire Early', years: [{ year: 2026, p1_age_eoy: 60, net_worth: 950000 }] },
       { name: 'At 65', years: [{ year: 2026, p1_age_eoy: 60, net_worth: 980000 }] },
     ]);
-    const header = csv.trim().split('\n')[0];
+    const header = csv.trim().split('\n')[1];
     expect(header).toContain('Baseline:net_worth');
     expect(header).toContain('Retire Early:net_worth');
     expect(header).toContain('At 65:net_worth');
     expect(csv).toContain('1000000');
     expect(csv).toContain('950000');
     expect(csv).toContain('980000');
+  });
+
+  test('includes balance validation note and new export columns', () => {
+    const csv = compareManyScenariosToCsv([
+      {
+        name: 'Retire at 62',
+        years: [
+          {
+            year: 2060,
+            p1_age_eoy: 98,
+            p2_age_eoy: 96,
+            p1_retired: true,
+            p2_retired: true,
+            financial_balance: 0,
+            net_worth: 0,
+            savings_added_total: 0,
+            income_from_savings_draw: 0,
+            retirement_funding_shortfall: 12000,
+            expenses: 72000,
+            income_ss_total: 60000,
+            rmd: 0,
+            income_wages: 0,
+            income_bonus: 0,
+          },
+        ],
+      },
+    ]);
+    expect(csv.startsWith(`# ${COMPARE_EXPORT_BALANCE_NOTE}`)).toBe(true);
+    expect(csv).toContain('Retire at 62:financial_balance_depleted');
+    expect(csv).toContain('Retire at 62:savings_added_total');
   });
 });
