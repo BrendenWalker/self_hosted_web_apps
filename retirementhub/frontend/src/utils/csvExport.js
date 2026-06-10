@@ -24,6 +24,10 @@ export const PROJECTION_CSV_COLUMNS = [
   'retirement_funding_shortfall',
 ];
 
+/** Shown in compare CSV header comment and on the compare page. */
+export const COMPARE_EXPORT_BALANCE_NOTE =
+  'Balance validation: use financial_balance, income_from_savings_draw, retirement_funding_shortfall, savings_added_total. Tax columns and savings are informational cash-flow fields.';
+
 /** Per-scenario milestone columns (retirement / Social Security start). */
 export const SCENARIO_COMPARE_INDICATOR_COLUMNS = [
   'p1_retired',
@@ -32,6 +36,7 @@ export const SCENARIO_COMPARE_INDICATOR_COLUMNS = [
   'p2_retirement_starts',
   'p1_ss_starts',
   'p2_ss_starts',
+  'financial_balance_depleted',
 ];
 
 /** Numeric projection fields exported for each scenario in a comparison. */
@@ -67,6 +72,7 @@ export const SCENARIO_COMPARE_VALUE_COLUMNS = [
   'expenses',
   'savings',
   'contributions_401k',
+  'savings_added_total',
 ];
 
 function escapeCsvCell(value) {
@@ -111,15 +117,24 @@ export function enrichScenarioYearRows(years) {
   let p2RetSeen = false;
   let p1SsSeen = false;
   let p2SsSeen = false;
+  let retirementPhaseSeen = false;
+  let depletedSeen = false;
   return years.map((row) => {
     const p1RetirementStarts = !p1RetSeen && row.p1_retired;
     const p2RetirementStarts = !p2RetSeen && row.p2_retired;
     const p1SsStarts = !p1SsSeen && (row.income_ss_p1 ?? 0) > 0;
     const p2SsStarts = !p2SsSeen && (row.income_ss_p2 ?? 0) > 0;
+    const inRetirementPhase = !!(row.p1_retired || row.p2_retired);
+    if (inRetirementPhase) retirementPhaseSeen = true;
+    const financialBalanceDepleted =
+      retirementPhaseSeen &&
+      !depletedSeen &&
+      (row.financial_balance ?? 0) === 0;
     if (row.p1_retired) p1RetSeen = true;
     if (row.p2_retired) p2RetSeen = true;
     if ((row.income_ss_p1 ?? 0) > 0) p1SsSeen = true;
     if ((row.income_ss_p2 ?? 0) > 0) p2SsSeen = true;
+    if (financialBalanceDepleted) depletedSeen = true;
     return {
       ...row,
       p1_retired: row.p1_retired ? 'Y' : '',
@@ -128,6 +143,7 @@ export function enrichScenarioYearRows(years) {
       p2_retirement_starts: p2RetirementStarts ? 'Y' : '',
       p1_ss_starts: p1SsStarts ? 'Y' : '',
       p2_ss_starts: p2SsStarts ? 'Y' : '',
+      financial_balance_depleted: financialBalanceDepleted ? 'Y' : '',
     };
   });
 }
@@ -183,8 +199,10 @@ export function compareManyScenariosToCsv(
     ]),
   ];
 
+  const noteLine = `# ${COMPARE_EXPORT_BALANCE_NOTE}`;
+
   if (!years.length) {
-    return `${headerCells.map((c) => escapeCsvCell(c)).join(',')}\n`;
+    return `${noteLine}\n${headerCells.map((c) => escapeCsvCell(c)).join(',')}\n`;
   }
 
   const body = years.map((year) => {
@@ -207,7 +225,7 @@ export function compareManyScenariosToCsv(
     return cells.map((v) => escapeCsvCell(v)).join(',');
   });
 
-  return `${headerCells.map((c) => escapeCsvCell(c)).join(',')}\n${body.join('\n')}\n`;
+  return `${noteLine}\n${headerCells.map((c) => escapeCsvCell(c)).join(',')}\n${body.join('\n')}\n`;
 }
 
 /**

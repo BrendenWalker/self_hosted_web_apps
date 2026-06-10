@@ -19,7 +19,7 @@ import ScenarioCompareGrid from '../components/scenarios/ScenarioCompareGrid';
 import ScenarioIncomeBreakdown from '../components/scenarios/ScenarioIncomeBreakdown';
 import ScenarioYearDiffDrawer from '../components/scenarios/ScenarioYearDiffDrawer';
 import { formatCurrency } from '../utils/formatCurrency';
-import { downloadManyScenariosCompareCsv } from '../utils/csvExport';
+import { COMPARE_EXPORT_BALANCE_NOTE, downloadManyScenariosCompareCsv } from '../utils/csvExport';
 import { scenarioChartKey } from '../utils/incomeBreakdown';
 import {
   mergeComparisonDrivers,
@@ -69,6 +69,28 @@ export default function ScenarioComparePage() {
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState(null);
 
+  const loadComparisonData = useCallback(
+    async (recompute = false) => {
+      const compareRes = await compareScenarios(ids, { recompute: !!recompute });
+      const scenarioRows = compareRes.data?.scenarios || [];
+
+      const explainRes = await explainScenarioComparison(ids, { recompute: !!recompute });
+      const comparisonsData = explainRes.data?.comparisons || [];
+
+      const yearlyResults = await Promise.all(
+        ids.map((id) => getScenarioYearly(id, { recompute: !!recompute }))
+      );
+      const yearlyById = {};
+      ids.forEach((id, index) => {
+        yearlyById[id] = yearlyResults[index].data?.by_year || [];
+      });
+
+      const series = buildScenarioSeries(scenarioRows, ids, yearlyById);
+      return { scenarioRows, comparisonsData, series };
+    },
+    [ids]
+  );
+
   const load = useCallback(
     async (recompute = false) => {
       if (ids.length < 2) {
@@ -80,30 +102,35 @@ export default function ScenarioComparePage() {
         setLoading(true);
         setMessage(null);
 
-        const compareRes = await compareScenarios(ids, { recompute: !!recompute });
-        const scenarioRows = compareRes.data?.scenarios || [];
+        const { scenarioRows, comparisonsData, series } = await loadComparisonData(recompute);
         setRows(scenarioRows);
-
-        const explainRes = await explainScenarioComparison(ids, { recompute: !!recompute });
-        setComparisons(explainRes.data?.comparisons || []);
-
-        const yearlyResults = await Promise.all(
-          ids.map((id) => getScenarioYearly(id, { recompute: !!recompute }))
-        );
-        const yearlyById = {};
-        ids.forEach((id, index) => {
-          yearlyById[id] = yearlyResults[index].data?.by_year || [];
-        });
-
-        setScenarioSeries(buildScenarioSeries(scenarioRows, ids, yearlyById));
+        setComparisons(comparisonsData);
+        setScenarioSeries(series);
       } catch (err) {
         setMessage(err.response?.data?.error || 'Failed to load comparison');
       } finally {
         setLoading(false);
       }
     },
-    [ids]
+    [ids, loadComparisonData]
   );
+
+  const handleExportCsv = useCallback(async () => {
+    if (ids.length < 2) return;
+    try {
+      setLoading(true);
+      setMessage(null);
+      const { scenarioRows, comparisonsData, series } = await loadComparisonData(true);
+      setRows(scenarioRows);
+      setComparisons(comparisonsData);
+      setScenarioSeries(series);
+      downloadManyScenariosCompareCsv(series.map((scenario) => ({ name: scenario.name, years: scenario.years })));
+    } catch (err) {
+      setMessage(err.response?.data?.error || 'Failed to export comparison');
+    } finally {
+      setLoading(false);
+    }
+  }, [ids.length, loadComparisonData]);
 
   useEffect(() => {
     load(false);
@@ -172,20 +199,19 @@ export default function ScenarioComparePage() {
         <button type="button" className="btn btn-secondary" onClick={() => load(true)} disabled={loading}>
           Recompute
         </button>
-        {!loading && scenarioSeries.length >= 2 && (
+        {scenarioSeries.length >= 2 && (
           <button
             type="button"
             className="btn btn-secondary"
-            onClick={() =>
-              downloadManyScenariosCompareCsv(
-                scenarioSeries.map((scenario) => ({ name: scenario.name, years: scenario.years }))
-              )
-            }
+            onClick={handleExportCsv}
+            disabled={loading}
           >
             Export CSV
           </button>
         )}
       </div>
+
+      <p className="projections-chart-intro">{COMPARE_EXPORT_BALANCE_NOTE}</p>
 
       {message && <div className="error-message">{message}</div>}
       {loading && <p className="loading-message">Loading comparison…</p>}
