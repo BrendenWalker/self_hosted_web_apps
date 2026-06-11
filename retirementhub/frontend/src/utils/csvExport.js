@@ -1,3 +1,5 @@
+import { drawFundingBreakdownFromRow } from './incomeBreakdown';
+
 /** Stable column order for projection year exports. */
 export const PROJECTION_CSV_COLUMNS = [
   'year',
@@ -28,6 +30,23 @@ export const PROJECTION_CSV_COLUMNS = [
 export const COMPARE_EXPORT_BALANCE_NOTE =
   'Balance validation: use financial_balance, income_from_savings_draw, retirement_funding_shortfall, savings_added_total. Tax columns and savings are informational cash-flow fields.';
 
+/** Header comments for compare CSV export and the compare page. */
+export const COMPARE_EXPORT_NOTES = [
+  COMPARE_EXPORT_BALANCE_NOTE,
+  'financial_balance is savings accounts only (401k, IRA, Roth, taxable, cash, HSA). hard_asset_balance is homes, vehicles, and other asset accounts tracked separately in net_worth.',
+  'Post-depletion funding: after financial_balance reaches 0, draw_asset_liquidation shows hard assets sold to cover spending; remaining gap appears as retirement_funding_shortfall when all assets are exhausted. RMD is separate from draw columns and income_from_savings_draw.',
+];
+
+/** Per-bucket draw columns (sum to income_from_savings_draw; excludes RMD). */
+export const SCENARIO_COMPARE_DRAW_COLUMNS = [
+  'draw_cash',
+  'draw_taxable',
+  'draw_pretax',
+  'draw_roth',
+  'draw_hsa',
+  'draw_asset_liquidation',
+];
+
 /** Per-scenario milestone columns (retirement / Social Security start). */
 export const SCENARIO_COMPARE_INDICATOR_COLUMNS = [
   'p1_retired',
@@ -37,6 +56,8 @@ export const SCENARIO_COMPARE_INDICATOR_COLUMNS = [
   'p1_ss_starts',
   'p2_ss_starts',
   'financial_balance_depleted',
+  'post_financial_depletion',
+  'portfolio_fully_depleted',
 ];
 
 /** Numeric projection fields exported for each scenario in a comparison. */
@@ -58,6 +79,7 @@ export const SCENARIO_COMPARE_VALUE_COLUMNS = [
   'rmd_p2',
   'roth_conversion',
   'income_from_savings_draw',
+  ...SCENARIO_COMPARE_DRAW_COLUMNS,
   'retirement_funding_shortfall',
   'taxable_income_before_deduction',
   'taxable_income_after_standard_deduction',
@@ -130,6 +152,11 @@ export function enrichScenarioYearRows(years) {
       retirementPhaseSeen &&
       !depletedSeen &&
       (row.financial_balance ?? 0) === 0;
+    const postFinancialDepletion = depletedSeen && inRetirementPhase;
+    const portfolioFullyDepleted =
+      inRetirementPhase &&
+      (row.financial_balance ?? 0) === 0 &&
+      (row.hard_asset_balance ?? 0) === 0;
     if (row.p1_retired) p1RetSeen = true;
     if (row.p2_retired) p2RetSeen = true;
     if ((row.income_ss_p1 ?? 0) > 0) p1SsSeen = true;
@@ -137,6 +164,7 @@ export function enrichScenarioYearRows(years) {
     if (financialBalanceDepleted) depletedSeen = true;
     return {
       ...row,
+      ...drawFundingBreakdownFromRow(row),
       p1_retired: row.p1_retired ? 'Y' : '',
       p2_retired: row.p2_retired ? 'Y' : '',
       p1_retirement_starts: p1RetirementStarts ? 'Y' : '',
@@ -144,6 +172,8 @@ export function enrichScenarioYearRows(years) {
       p1_ss_starts: p1SsStarts ? 'Y' : '',
       p2_ss_starts: p2SsStarts ? 'Y' : '',
       financial_balance_depleted: financialBalanceDepleted ? 'Y' : '',
+      post_financial_depletion: postFinancialDepletion ? 'Y' : '',
+      portfolio_fully_depleted: portfolioFullyDepleted ? 'Y' : '',
     };
   });
 }
@@ -199,10 +229,10 @@ export function compareManyScenariosToCsv(
     ]),
   ];
 
-  const noteLine = `# ${COMPARE_EXPORT_BALANCE_NOTE}`;
+  const noteLines = COMPARE_EXPORT_NOTES.map((note) => `# ${note}`).join('\n');
 
   if (!years.length) {
-    return `${noteLine}\n${headerCells.map((c) => escapeCsvCell(c)).join(',')}\n`;
+    return `${noteLines}\n${headerCells.map((c) => escapeCsvCell(c)).join(',')}\n`;
   }
 
   const body = years.map((year) => {
@@ -225,7 +255,7 @@ export function compareManyScenariosToCsv(
     return cells.map((v) => escapeCsvCell(v)).join(',');
   });
 
-  return `${noteLine}\n${headerCells.map((c) => escapeCsvCell(c)).join(',')}\n${body.join('\n')}\n`;
+  return `${noteLines}\n${headerCells.map((c) => escapeCsvCell(c)).join(',')}\n${body.join('\n')}\n`;
 }
 
 /**

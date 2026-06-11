@@ -53,6 +53,14 @@ function isMarriedFilingJointly(filingStatus) {
   return filingStatus === 'married_filing_jointly';
 }
 
+/** Per-person HSA cap used in projections: family limit for MFJ, individual otherwise. */
+function getHsaEffectivePerPersonLimit(birthYear, base, year, filingStatus, familyHsaLimit) {
+  if (isMarriedFilingJointly(filingStatus)) {
+    return familyHsaLimit;
+  }
+  return buildPartyContributionLimits(birthYear, base, year).hsa_individual_limit;
+}
+
 function capHsaHousehold(hsaP1, hsaP2, p1IndLimit, p2IndLimit, familyLimit, filingStatus) {
   const mfj = isMarriedFilingJointly(filingStatus);
   const p1Cap =
@@ -331,6 +339,7 @@ module.exports = {
   buildPartyContributionLimits,
   buildHsaFamilyHouseholdLimit,
   isMarriedFilingJointly,
+  getHsaEffectivePerPersonLimit,
   capIraCombined,
   capHsaHousehold,
   computeYearContributions,

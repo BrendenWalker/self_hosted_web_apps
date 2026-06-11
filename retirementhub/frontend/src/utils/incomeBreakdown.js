@@ -46,6 +46,51 @@ export function incomeBreakdownFromRow(row) {
   return { wages, bonus, ss, rmd, savings, total, expenses, shortfall };
 }
 
+/** Per-bucket savings draws (excludes RMD; sums to income_from_savings_draw). */
+export function drawFundingBreakdownFromRow(row) {
+  if (!row) {
+    return {
+      draw_cash: 0,
+      draw_taxable: 0,
+      draw_pretax: 0,
+      draw_roth: 0,
+      draw_hsa: 0,
+      draw_asset_liquidation: 0,
+    };
+  }
+  const rmd = row.rmd ?? 0;
+  if (row.withdrawals) {
+    const w = row.withdrawals;
+    return {
+      draw_cash: w.cashWithdrawals ?? 0,
+      draw_taxable: w.taxableWithdrawals ?? 0,
+      draw_pretax: w.preTaxWithdrawals ?? 0,
+      draw_roth: w.rothWithdrawals ?? 0,
+      draw_hsa: w.hsaWithdrawals ?? 0,
+      draw_asset_liquidation: w.assetLiquidations ?? 0,
+    };
+  }
+  if (row.spending_sources) {
+    const src = row.spending_sources;
+    return {
+      draw_cash: src.cash ?? 0,
+      draw_taxable: src.taxable ?? 0,
+      draw_pretax: Math.max(0, (src.traditional_ira ?? 0) - rmd),
+      draw_roth: src.roth ?? 0,
+      draw_hsa: src.hsa ?? 0,
+      draw_asset_liquidation: src.asset_liquidation ?? 0,
+    };
+  }
+  return {
+    draw_cash: 0,
+    draw_taxable: 0,
+    draw_pretax: 0,
+    draw_roth: 0,
+    draw_hsa: 0,
+    draw_asset_liquidation: 0,
+  };
+}
+
 /** @param {ReturnType<typeof incomeBreakdownFromRow>} breakdown */
 export function incomeComponentsTotal(breakdown) {
   return breakdown.wages + breakdown.bonus + breakdown.ss + breakdown.rmd + breakdown.savings;

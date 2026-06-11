@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'vitest';
 import {
+  drawFundingBreakdownFromRow,
   incomeBreakdownFromRow,
   incomeComponentsTotal,
   mergeMultiScenarioIncomeBreakdown,
@@ -22,6 +23,34 @@ describe('incomeBreakdownFromRow', () => {
     expect(incomeComponentsTotal(breakdown)).toBe(124000);
     expect(breakdown.total).toBe(124000);
     expect(breakdown.expenses).toBe(120000);
+  });
+
+  test('extracts per-bucket draw breakdown from spending_sources', () => {
+    const breakdown = drawFundingBreakdownFromRow({
+      rmd: 5000,
+      spending_sources: {
+        cash: 1000,
+        taxable: 2000,
+        traditional_ira: 8000,
+        roth: 3000,
+        hsa: 500,
+        asset_liquidation: 15000,
+      },
+    });
+    expect(breakdown.draw_cash).toBe(1000);
+    expect(breakdown.draw_taxable).toBe(2000);
+    expect(breakdown.draw_pretax).toBe(3000);
+    expect(breakdown.draw_roth).toBe(3000);
+    expect(breakdown.draw_hsa).toBe(500);
+    expect(breakdown.draw_asset_liquidation).toBe(15000);
+    expect(
+      breakdown.draw_cash +
+        breakdown.draw_taxable +
+        breakdown.draw_pretax +
+        breakdown.draw_roth +
+        breakdown.draw_hsa +
+        breakdown.draw_asset_liquidation
+    ).toBe(24500);
   });
 
   test('falls back to withdrawals object for savings draw', () => {

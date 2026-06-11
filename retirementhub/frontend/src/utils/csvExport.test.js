@@ -52,6 +52,39 @@ describe('enrichScenarioYearRows', () => {
     expect(rows[1].financial_balance_depleted).toBe('');
     expect(rows[2].financial_balance_depleted).toBe('Y');
     expect(rows[3].financial_balance_depleted).toBe('');
+    expect(rows[2].post_financial_depletion).toBe('');
+    expect(rows[3].post_financial_depletion).toBe('Y');
+  });
+
+  test('adds draw breakdown and portfolio depletion markers', () => {
+    const rows = enrichScenarioYearRows([
+      {
+        year: 2060,
+        p1_retired: true,
+        p2_retired: true,
+        financial_balance: 0,
+        hard_asset_balance: 50000,
+        spending_sources: {
+          cash: 0,
+          taxable: 0,
+          traditional_ira: 0,
+          roth: 0,
+          hsa: 0,
+          asset_liquidation: 12000,
+        },
+      },
+      {
+        year: 2061,
+        p1_retired: true,
+        p2_retired: true,
+        financial_balance: 0,
+        hard_asset_balance: 0,
+      },
+    ]);
+    expect(rows[0].draw_asset_liquidation).toBe(12000);
+    expect(rows[0].portfolio_fully_depleted).toBe('');
+    expect(rows[1].post_financial_depletion).toBe('Y');
+    expect(rows[1].portfolio_fully_depleted).toBe('Y');
   });
 });
 
@@ -70,16 +103,18 @@ describe('compareScenariosToCsv', () => {
     );
     const lines = csv.trim().split('\n');
     expect(lines[0]).toMatch(/^# Balance validation:/);
-    const header = lines[1];
+    const header = lines.find((line) => line.startsWith('year,'));
     expect(header).toContain('year,p1_age_eoy,p2_age_eoy');
     expect(header).toContain('Baseline:net_worth');
     expect(header).toContain('Retire Early:net_worth');
     expect(header).toContain('Baseline:p1_retirement_starts');
     expect(header).toContain('Retire Early:p1_ss_starts');
-    expect(lines.length).toBe(4);
-    expect(lines[2]).toMatch(/^2026,60,58,/);
-    expect(lines[2]).toContain('1000000');
-    expect(lines[2]).toContain('950000');
+    expect(lines.length).toBe(6);
+    const dataRows = lines.filter((line) => /^20\d{2},/.test(line));
+    expect(dataRows).toHaveLength(2);
+    expect(dataRows[0]).toMatch(/^2026,60,58,/);
+    expect(dataRows[0]).toContain('1000000');
+    expect(dataRows[0]).toContain('950000');
   });
 
   test('merges three or more scenarios with prefixed columns', () => {
@@ -88,7 +123,7 @@ describe('compareScenariosToCsv', () => {
       { name: 'Retire Early', years: [{ year: 2026, p1_age_eoy: 60, net_worth: 950000 }] },
       { name: 'At 65', years: [{ year: 2026, p1_age_eoy: 60, net_worth: 980000 }] },
     ]);
-    const header = csv.trim().split('\n')[1];
+    const header = csv.trim().split('\n').find((line) => line.startsWith('year,'));
     expect(header).toContain('Baseline:net_worth');
     expect(header).toContain('Retire Early:net_worth');
     expect(header).toContain('At 65:net_worth');
@@ -123,7 +158,11 @@ describe('compareScenariosToCsv', () => {
       },
     ]);
     expect(csv.startsWith(`# ${COMPARE_EXPORT_BALANCE_NOTE}`)).toBe(true);
+    expect(csv).toContain('# financial_balance is savings accounts only');
+    expect(csv).toContain('# Post-depletion funding:');
     expect(csv).toContain('Retire at 62:financial_balance_depleted');
+    expect(csv).toContain('Retire at 62:post_financial_depletion');
+    expect(csv).toContain('Retire at 62:draw_asset_liquidation');
     expect(csv).toContain('Retire at 62:savings_added_total');
   });
 });
