@@ -38,14 +38,8 @@ export function buildLimitKeys(filingStatus) {
   if (mfj) {
     keys.push({
       key: 'hsa_effective_limit',
-      label: 'HSA family coverage (MFJ cap per person)',
+      label: 'HSA family coverage (household cap)',
       plannedRole: 'person',
-    });
-    keys.push({
-      key: 'hsa_family_limit',
-      label: 'HSA household total (MFJ combined cap)',
-      plannedRole: 'household',
-      p1Only: true,
     });
   } else {
     keys.push({

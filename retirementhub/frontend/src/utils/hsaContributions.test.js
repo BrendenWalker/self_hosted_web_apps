@@ -20,10 +20,11 @@ describe('hsaContributions', () => {
     expect(capHsaHousehold(8500, 0, 4400, 4400, 8750, 'single')).toEqual({ p1: 4400, p2: 0 });
   });
 
-  it('buildLimitKeys uses family HSA rows for MFJ', () => {
+  it('buildLimitKeys uses one family HSA row for MFJ', () => {
     const mfjKeys = buildLimitKeys('married_filing_jointly');
+    expect(mfjKeys.filter((k) => k.key.startsWith('hsa_'))).toHaveLength(1);
     expect(mfjKeys.some((k) => k.key === 'hsa_effective_limit')).toBe(true);
-    expect(mfjKeys.some((k) => k.key === 'hsa_family_limit')).toBe(true);
+    expect(mfjKeys.some((k) => k.key === 'hsa_family_limit')).toBe(false);
     expect(mfjKeys.some((k) => k.key === 'hsa_individual_limit')).toBe(false);
   });
 
