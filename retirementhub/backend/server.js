@@ -11,19 +11,13 @@ const { captureHouseholdSnapshot, loadScenario } = require('./services/scenarioS
 const taxParams = require('./services/taxParameters');
 const { federalOrdinaryTaxWithBreakdown } = require('./services/yearTaxService');
 const seeds = require('./services/taxParametersSeeds');
+const {
+  limitsToBase,
+  buildHsaFamilyHouseholdLimit,
+  isMarriedFilingJointly,
+  getHsaEffectivePerPersonLimit,
+} = require('./services/contributionPlanner');
 require('dotenv').config();
-
-function contributionLimitsToBase(limits) {
-  return {
-    ira: limits.ira?.base ?? 0,
-    ira_catch_up: limits.ira?.catch_up ?? 0,
-    hsa_individual: limits.hsa_individual?.base ?? 0,
-    hsa_family: limits.hsa_family?.base ?? 0,
-    hsa_catch_up: limits.hsa_individual?.catch_up ?? 0,
-    '401k_elective': limits['401k_elective']?.base ?? 0,
-    '401k_catch_up': limits['401k_elective']?.catch_up ?? 0,
-  };
-}
 
 const app = express();
 const port = process.env.PORT || 80;
@@ -1246,7 +1240,9 @@ app.get('/api/savings-limits', async (req, res) => {
     const yearParam = req.query.year != null ? parseInt(String(req.query.year).trim(), 10) : null;
     let household = null;
     try {
-      const hResult = await pool.query('SELECT p1_display_name, p2_display_name, p1_birth_year, p2_birth_year FROM household ORDER BY id LIMIT 1');
+      const hResult = await pool.query(
+        'SELECT p1_display_name, p2_display_name, p1_birth_year, p2_birth_year, filing_status FROM household ORDER BY id LIMIT 1'
+      );
       if (hResult.rows.length > 0) household = hResult.rows[0];
     } catch (e) { /* ignore */ }
 
@@ -1275,25 +1271,44 @@ app.get('/api/savings-limits', async (req, res) => {
       };
     }
 
-    function buildHsaFamilyHouseholdLimit(base, p1BirthYear, p2BirthYear, year) {
-      const p1Age = ageAtEoy(p1BirthYear, year);
-      const p2Age = ageAtEoy(p2BirthYear, year);
-      const catchUp = base.hsa_catch_up || 0;
-      const p1CatchUp = p1Age != null && p1Age >= 55 ? catchUp : 0;
-      const p2CatchUp = p2Age != null && p2Age >= 55 ? catchUp : 0;
-      return (base.hsa_family || 0) + p1CatchUp + p2CatchUp;
+    const filingStatus = household?.filing_status || 'married_filing_jointly';
+    const mfj = isMarriedFilingJointly(filingStatus);
+
+    function enrichHsaLimits(p1, p2, base, year) {
+      const familyLimit = buildHsaFamilyHouseholdLimit(base, p1BirthYear, p2BirthYear, year);
+      p1.hsa_family_limit = mfj ? familyLimit : null;
+      p2.hsa_family_limit = null;
+      p1.hsa_effective_limit = getHsaEffectivePerPersonLimit(
+        p1BirthYear,
+        base,
+        year,
+        filingStatus,
+        familyLimit
+      );
+      p2.hsa_effective_limit = getHsaEffectivePerPersonLimit(
+        p2BirthYear,
+        base,
+        year,
+        filingStatus,
+        familyLimit
+      );
     }
 
     if (yearParam != null && Number.isInteger(yearParam) && yearParam >= 2020 && yearParam <= 2030) {
       const limits = await taxParams.getContributionLimits(pool, yearParam);
-      const base = contributionLimitsToBase(limits);
+      const base = limitsToBase(limits);
       const p1 = buildPartyLimits(p1BirthYear, base, yearParam);
       const p2 = buildPartyLimits(p2BirthYear, base, yearParam);
-      p1.hsa_family_limit = buildHsaFamilyHouseholdLimit(base, p1BirthYear, p2BirthYear, yearParam);
-      p2.hsa_family_limit = null;
+      enrichHsaLimits(p1, p2, base, yearParam);
       return res.json({
         year: yearParam,
-        household: household ? { p1_display_name: household.p1_display_name, p2_display_name: household.p2_display_name } : null,
+        household: household
+          ? {
+              p1_display_name: household.p1_display_name,
+              p2_display_name: household.p2_display_name,
+              filing_status: filingStatus,
+            }
+          : { filing_status: filingStatus },
         limits: base,
         p1,
         p2,
@@ -1308,15 +1323,20 @@ app.get('/api/savings-limits', async (req, res) => {
         : [2024, 2025, 2026];
     for (const y of yearList) {
       const limits = await taxParams.getContributionLimits(pool, y);
-      const base = contributionLimitsToBase(limits);
+      const base = limitsToBase(limits);
       const p1 = buildPartyLimits(p1BirthYear, base, y);
       const p2 = buildPartyLimits(p2BirthYear, base, y);
-      p1.hsa_family_limit = buildHsaFamilyHouseholdLimit(base, p1BirthYear, p2BirthYear, y);
-      p2.hsa_family_limit = null;
+      enrichHsaLimits(p1, p2, base, y);
       years[y] = { base, p1, p2 };
     }
     res.json({
-      household: household ? { p1_display_name: household.p1_display_name, p2_display_name: household.p2_display_name } : null,
+      household: household
+        ? {
+            p1_display_name: household.p1_display_name,
+            p2_display_name: household.p2_display_name,
+            filing_status: filingStatus,
+          }
+        : { filing_status: filingStatus },
       years,
     });
   } catch (error) {

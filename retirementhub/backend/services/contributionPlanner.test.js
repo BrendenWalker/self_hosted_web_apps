@@ -3,6 +3,7 @@ const {
   capHsaHousehold,
   computeYearContributions,
   limitsToBase,
+  getHsaEffectivePerPersonLimit,
   allocateSurplusAfterDirected,
   applyFederalTaxToSurplusTaxable,
 } = require('./contributionPlanner');
@@ -92,6 +93,12 @@ describe('contributionPlanner', () => {
     expect(c.hsaP1).toBe(8300);
     expect(c.hsaP2).toBe(0);
     expect(c.totalHsa).toBe(8300);
+  });
+
+  it('getHsaEffectivePerPersonLimit uses family cap for MFJ and individual otherwise', () => {
+    const familyLimit = 8750;
+    expect(getHsaEffectivePerPersonLimit(1980, base, 2026, 'married_filing_jointly', familyLimit)).toBe(8750);
+    expect(getHsaEffectivePerPersonLimit(1980, base, 2026, 'single', familyLimit)).toBe(4150);
   });
 
   it('routes surplus to taxable or discretionary by party checkbox', () => {

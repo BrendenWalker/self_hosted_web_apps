@@ -1,46 +1,97 @@
 import React, { useState, useEffect } from 'react';
 import { getSavingsLimits, getIncome } from '../api/api';
+import {
+  buildLimitKeys,
+  capHsaHousehold,
+  isMarriedFilingJointly,
+} from '../utils/hsaContributions';
 
-const LIMIT_KEYS = [
-  { key: 'ira_limit', label: 'IRA (traditional + Roth combined)' },
-  { key: '401k_elective_limit', label: '401(k) elective deferral (incl. catch-up if 50+ at EOY)' },
-  { key: 'hsa_individual_limit', label: 'HSA individual (incl. catch-up if 55+ at EOY)' },
-  { key: 'hsa_family_limit', label: 'HSA family (incl. catch-up if 55+ at EOY, household — P1 only)' },
-];
+function filingStatusLabel(filingStatus) {
+  switch (filingStatus) {
+    case 'married_filing_jointly':
+      return 'Married filing jointly';
+    case 'married_filing_separately':
+      return 'Married filing separately';
+    case 'head_of_household':
+      return 'Head of household';
+    case 'single':
+      return 'Single';
+    default:
+      return filingStatus?.replace(/_/g, ' ') || 'Unknown';
+  }
+}
 
-function PartyLimitsTable({ partyKey, displayName, yearsData, yearList, planned401k, plannedIra, plannedHsa }) {
+function PartyLimitsTable({
+  partyKey,
+  displayName,
+  yearsData,
+  yearList,
+  filingStatus,
+  planned401k,
+  plannedIra,
+  plannedHsa,
+  plannedHsaOther,
+  cappedHsa,
+}) {
   if (!yearsData || yearList.length === 0) return null;
+
+  const mfj = isMarriedFilingJointly(filingStatus);
 
   const getPartyForYear = (y) => {
     const data = yearsData[y];
     return partyKey === 'p1' ? data?.p1 : data?.p2;
   };
 
-  const limitRows = LIMIT_KEYS.filter(({ key }) => {
-    if (key === 'hsa_family_limit' && partyKey === 'p2') return false;
+  const limitRows = buildLimitKeys(filingStatus).filter(({ p1Only }) => {
+    if (p1Only && partyKey === 'p2') return false;
     return true;
   });
 
   const hasPlannedColumn = planned401k != null || plannedIra != null || plannedHsa != null;
 
-  const renderPlannedCell = (key, plannedVal) => {
+  const latestYear = yearList.length > 0 ? yearList[yearList.length - 1] : null;
+  const latestParty = latestYear != null ? getPartyForYear(latestYear) : null;
+
+  const renderPlannedCell = (limitKey, plannedRole) => {
     if (!hasPlannedColumn) return null;
-    if (plannedVal == null) return <td>—</td>;
-    if (yearList.length === 0) {
-      return (
-        <td>
-          ${plannedVal.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
-        </td>
-      );
+
+    if (limitKey === '401k_elective_limit') {
+      const limit = latestParty?.['401k_elective_limit'];
+      const raw = planned401k;
+      const display = limit != null && raw != null && raw > limit ? limit : raw;
+      return renderAmountCell(display, raw, limit);
     }
-    const limit = getPartyForYear(yearList[yearList.length - 1])?.[key];
-    const displayVal = limit != null && plannedVal > limit ? limit : plannedVal;
-    const isCapped = limit != null && plannedVal > limit;
+    if (limitKey === 'ira_limit') {
+      const limit = latestParty?.ira_limit;
+      const raw = plannedIra;
+      const display = limit != null && raw != null && raw > limit ? limit : raw;
+      return renderAmountCell(display, raw, limit);
+    }
+    if (plannedRole === 'person') {
+      const raw = plannedHsa;
+      if (raw == null) return <td>—</td>;
+      const display = cappedHsa?.[partyKey] ?? raw;
+      const limit = mfj ? latestParty?.hsa_effective_limit : latestParty?.hsa_individual_limit;
+      return renderAmountCell(display, raw, limit);
+    }
+    if (plannedRole === 'household') {
+      const raw = (plannedHsa ?? 0) + (plannedHsaOther ?? 0);
+      if (raw <= 0) return <td>—</td>;
+      const display = (cappedHsa?.p1 ?? 0) + (cappedHsa?.p2 ?? 0);
+      const limit = latestParty?.hsa_family_limit;
+      return renderAmountCell(display, raw, limit);
+    }
+    return <td>—</td>;
+  };
+
+  const renderAmountCell = (displayVal, rawVal, limit) => {
+    if (displayVal == null) return <td>—</td>;
+    const isCapped = rawVal != null && Math.abs(rawVal - displayVal) > 0.01;
     return (
       <td>
         ${displayVal.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
         {isCapped && (
-          <span className="over-limit" title="Capped at IRS max in projections">
+          <span className="over-limit" title={limit != null ? `Capped at IRS max ($${limit.toLocaleString('en-US')}) in projections` : 'Capped at IRS max in projections'}>
             {' '}
             (capped at max)
           </span>
@@ -74,7 +125,7 @@ function PartyLimitsTable({ partyKey, displayName, yearsData, yearList, planned4
             </tr>
           </thead>
           <tbody>
-            {limitRows.map(({ key, label }) => (
+            {limitRows.map(({ key, label, plannedRole }) => (
               <tr key={key}>
                 <td>{label}</td>
                 {yearList.map((y) => {
@@ -85,10 +136,10 @@ function PartyLimitsTable({ partyKey, displayName, yearsData, yearList, planned4
                     </td>
                   );
                 })}
-                {key === '401k_elective_limit' && renderPlannedCell(key, planned401k)}
-                {key === 'ira_limit' && renderPlannedCell(key, plannedIra)}
-                {key === 'hsa_individual_limit' && renderPlannedCell(key, plannedHsa)}
-                {key === 'hsa_family_limit' && hasPlannedColumn && <td>—</td>}
+                {key === '401k_elective_limit' && renderPlannedCell(key, plannedRole)}
+                {key === 'ira_limit' && renderPlannedCell(key, plannedRole)}
+                {(key === 'hsa_individual_limit' || key === 'hsa_effective_limit' || key === 'hsa_family_limit') &&
+                  renderPlannedCell(key, plannedRole)}
               </tr>
             ))}
           </tbody>
@@ -135,6 +186,9 @@ export default function SavingsLimitsPage() {
     }
   };
 
+  const filingStatus = apiData?.household?.filing_status || 'married_filing_jointly';
+  const mfj = isMarriedFilingJointly(filingStatus);
+
   const planned401kP1 = income
     ? (parseFloat(income.gross_salary) || 0) * ((parseFloat(income.four_o_one_k_pct) || 0) + (parseFloat(income.four_o_one_k_match_pct) || 0)) / 100
     : null;
@@ -157,17 +211,34 @@ export default function SavingsLimitsPage() {
     (plannedHsaP1 != null && plannedHsaP1 > 0) ||
     (plannedHsaP2 != null && plannedHsaP2 > 0);
 
+  const years = apiData?.years ? Object.keys(apiData.years).map(Number).sort((a, b) => a - b) : [];
+  const latestYear = years.length > 0 ? years[years.length - 1] : null;
+  const latestLimits = latestYear != null ? apiData?.years?.[latestYear] : null;
+
+  let cappedHsa = null;
+  if (latestLimits && (plannedHsaP1 != null || plannedHsaP2 != null)) {
+    cappedHsa = capHsaHousehold(
+      plannedHsaP1 ?? 0,
+      plannedHsaP2 ?? 0,
+      latestLimits.p1?.hsa_individual_limit ?? 0,
+      latestLimits.p2?.hsa_individual_limit ?? 0,
+      latestLimits.p1?.hsa_family_limit ?? latestLimits.p1?.hsa_effective_limit ?? 0,
+      filingStatus
+    );
+  }
+
   if (loading && !apiData) {
     return <p className="loading-message">Loading savings limits…</p>;
   }
-
-  const years = apiData?.years ? Object.keys(apiData.years).map(Number).sort((a, b) => a - b) : [];
 
   return (
     <div className="page-scroll">
       <h1 className="page-title">Savings limits</h1>
       <p style={{ marginBottom: '1rem', color: '#5a6b64', fontSize: '0.95rem' }}>
-        IRS tax-leveraged contribution maximums by year, broken down by party. Catch-up amounts are included when that person is 50+ (IRA, 401k) or 55+ (HSA) at the end of each year. Set birth years on the Household page for age-based limits.
+        IRS tax-leveraged contribution maximums by year, broken down by party. Catch-up amounts are included when that
+        person is 50+ (IRA, 401k) or 55+ (HSA) at the end of each year. Set birth years on the Household page for
+        age-based limits. Filing status ({filingStatusLabel(filingStatus)}) is from the Household page
+        {mfj ? ' — MFJ households use the HSA family coverage cap in projections.' : '.'}
       </p>
       {message && <div className="error-message">{message}</div>}
 
@@ -182,18 +253,24 @@ export default function SavingsLimitsPage() {
             displayName={apiData?.household?.p1_display_name ? `P1 (${apiData.household.p1_display_name})` : 'P1'}
             yearsData={years.length > 0 ? apiData.years : null}
             yearList={years}
+            filingStatus={filingStatus}
             planned401k={planned401kP1 != null && planned401kP1 > 0 ? planned401kP1 : null}
             plannedIra={plannedIraP1 != null && plannedIraP1 > 0 ? plannedIraP1 : null}
             plannedHsa={plannedHsaP1 != null && plannedHsaP1 > 0 ? plannedHsaP1 : null}
+            plannedHsaOther={plannedHsaP2}
+            cappedHsa={cappedHsa}
           />
           <PartyLimitsTable
             partyKey="p2"
             displayName={apiData?.household?.p2_display_name ? `P2 (${apiData.household.p2_display_name})` : 'P2'}
             yearsData={years.length > 0 ? apiData.years : null}
             yearList={years}
+            filingStatus={filingStatus}
             planned401k={planned401kP2 != null && planned401kP2 > 0 ? planned401kP2 : null}
             plannedIra={plannedIraP2 != null && plannedIraP2 > 0 ? plannedIraP2 : null}
             plannedHsa={plannedHsaP2 != null && plannedHsaP2 > 0 ? plannedHsaP2 : null}
+            plannedHsaOther={plannedHsaP1}
+            cappedHsa={cappedHsa}
           />
         </>
       )}
@@ -201,8 +278,10 @@ export default function SavingsLimitsPage() {
       {hasPlanned && (
         <p className="muted" style={{ marginTop: '0.75rem', fontSize: '0.9rem' }}>
           Your planned amounts are from the Income page. 401(k) uses (contribution % + match %) × gross salary.
-          IRA shows traditional + Roth combined (same IRS cap as projections). HSA shows each person&apos;s planned
-          annual amount; projections also cap total household HSA at the family limit.
+          IRA shows traditional + Roth combined (same IRS cap as projections).
+          {mfj
+            ? ' HSA uses the family coverage cap per person and caps the household total at the same family limit (matching projections).'
+            : ' HSA shows each person\'s planned annual amount capped at the individual limit.'}
         </p>
       )}
     </div>

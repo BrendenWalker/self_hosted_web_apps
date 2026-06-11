@@ -19,7 +19,7 @@ import ScenarioCompareGrid from '../components/scenarios/ScenarioCompareGrid';
 import ScenarioIncomeBreakdown from '../components/scenarios/ScenarioIncomeBreakdown';
 import ScenarioYearDiffDrawer from '../components/scenarios/ScenarioYearDiffDrawer';
 import { formatCurrency } from '../utils/formatCurrency';
-import { COMPARE_EXPORT_BALANCE_NOTE, downloadManyScenariosCompareCsv } from '../utils/csvExport';
+import { COMPARE_EXPORT_NOTES, downloadManyScenariosCompareCsv } from '../utils/csvExport';
 import { scenarioChartKey } from '../utils/incomeBreakdown';
 import {
   mergeComparisonDrivers,
@@ -211,7 +211,11 @@ export default function ScenarioComparePage() {
         )}
       </div>
 
-      <p className="projections-chart-intro">{COMPARE_EXPORT_BALANCE_NOTE}</p>
+      {COMPARE_EXPORT_NOTES.map((note) => (
+        <p key={note} className="projections-chart-intro">
+          {note}
+        </p>
+      ))}
 
       {message && <div className="error-message">{message}</div>}
       {loading && <p className="loading-message">Loading comparison…</p>}
