@@ -30,7 +30,6 @@ function PartyLimitsTable({
   planned401k,
   plannedIra,
   plannedHsa,
-  plannedHsaOther,
   cappedHsa,
 }) {
   if (!yearsData || yearList.length === 0) return null;
@@ -42,10 +41,7 @@ function PartyLimitsTable({
     return partyKey === 'p1' ? data?.p1 : data?.p2;
   };
 
-  const limitRows = buildLimitKeys(filingStatus).filter(({ p1Only }) => {
-    if (p1Only && partyKey === 'p2') return false;
-    return true;
-  });
+  const limitRows = buildLimitKeys(filingStatus);
 
   const hasPlannedColumn = planned401k != null || plannedIra != null || plannedHsa != null;
 
@@ -72,13 +68,6 @@ function PartyLimitsTable({
       if (raw == null) return <td>—</td>;
       const display = cappedHsa?.[partyKey] ?? raw;
       const limit = mfj ? latestParty?.hsa_effective_limit : latestParty?.hsa_individual_limit;
-      return renderAmountCell(display, raw, limit);
-    }
-    if (plannedRole === 'household') {
-      const raw = (plannedHsa ?? 0) + (plannedHsaOther ?? 0);
-      if (raw <= 0) return <td>—</td>;
-      const display = (cappedHsa?.p1 ?? 0) + (cappedHsa?.p2 ?? 0);
-      const limit = latestParty?.hsa_family_limit;
       return renderAmountCell(display, raw, limit);
     }
     return <td>—</td>;
@@ -238,7 +227,9 @@ export default function SavingsLimitsPage() {
         IRS tax-leveraged contribution maximums by year, broken down by party. Catch-up amounts are included when that
         person is 50+ (IRA, 401k) or 55+ (HSA) at the end of each year. Set birth years on the Household page for
         age-based limits. Filing status ({filingStatusLabel(filingStatus)}) is from the Household page
-        {mfj ? ' — MFJ households use the HSA family coverage cap in projections.' : '.'}
+        {mfj
+          ? ' — MFJ households share one HSA family coverage cap across both spouses (shown on each party; combined contributions cannot exceed this amount).'
+          : '.'}
       </p>
       {message && <div className="error-message">{message}</div>}
 
@@ -257,7 +248,6 @@ export default function SavingsLimitsPage() {
             planned401k={planned401kP1 != null && planned401kP1 > 0 ? planned401kP1 : null}
             plannedIra={plannedIraP1 != null && plannedIraP1 > 0 ? plannedIraP1 : null}
             plannedHsa={plannedHsaP1 != null && plannedHsaP1 > 0 ? plannedHsaP1 : null}
-            plannedHsaOther={plannedHsaP2}
             cappedHsa={cappedHsa}
           />
           <PartyLimitsTable
@@ -269,7 +259,6 @@ export default function SavingsLimitsPage() {
             planned401k={planned401kP2 != null && planned401kP2 > 0 ? planned401kP2 : null}
             plannedIra={plannedIraP2 != null && plannedIraP2 > 0 ? plannedIraP2 : null}
             plannedHsa={plannedHsaP2 != null && plannedHsaP2 > 0 ? plannedHsaP2 : null}
-            plannedHsaOther={plannedHsaP1}
             cappedHsa={cappedHsa}
           />
         </>
@@ -280,7 +269,7 @@ export default function SavingsLimitsPage() {
           Your planned amounts are from the Income page. 401(k) uses (contribution % + match %) × gross salary.
           IRA shows traditional + Roth combined (same IRS cap as projections).
           {mfj
-            ? ' HSA uses the family coverage cap per person and caps the household total at the same family limit (matching projections).'
+            ? ' HSA shows each person\'s planned amount; if both spouses contribute, the combined total is capped at the family coverage limit (matching projections).'
             : ' HSA shows each person\'s planned annual amount capped at the individual limit.'}
         </p>
       )}
