@@ -6,7 +6,7 @@ import VersionFooter from './VersionFooter';
 
 export default function Layout() {
   const { user, isAdmin, logout } = useAuth();
-  const { pendingCount, online } = useOfflineQueue();
+  const { pendingCount, online, syncing, syncMessage, syncPending } = useOfflineQueue();
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
 
@@ -54,10 +54,22 @@ export default function Layout() {
           <div className="offline-status" aria-live="polite">
             {!online ? <span className="offline-badge">Offline</span> : null}
             {pendingCount > 0 ? (
-              <span className={`pending-badge ${pendingCount > 0 ? 'has-pending' : ''}`}>
-                {pendingCount} activit{pendingCount === 1 ? 'y' : 'ies'} waiting to sync
-              </span>
+              <>
+                <span className={`pending-badge ${pendingCount > 0 ? 'has-pending' : ''}`}>
+                  {pendingCount} activit{pendingCount === 1 ? 'y' : 'ies'} waiting to sync
+                </span>
+                <button
+                  type="button"
+                  className="sync-pending-btn"
+                  disabled={syncing || !online}
+                  onClick={() => syncPending()}
+                  title={!online ? 'Connect to the internet to sync' : 'Send queued activities to the server'}
+                >
+                  {syncing ? 'Syncing…' : 'Sync now'}
+                </button>
+              </>
             ) : null}
+            {syncMessage ? <span className="sync-message">{syncMessage}</span> : null}
           </div>
           <nav className={`nav ${open ? 'nav-open' : ''}`}>
             <NavLink to="/" end className="nav-link" onClick={() => setOpen(false)}>

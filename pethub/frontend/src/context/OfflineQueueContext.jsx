@@ -25,6 +25,8 @@ async function postActivityPayload(payload, signal) {
 export function OfflineQueueProvider({ children }) {
   const { me } = useAuth();
   const [pendingCount, setPendingCount] = useState(() => getOfflineQueueCount());
+  const [syncing, setSyncing] = useState(false);
+  const [syncMessage, setSyncMessage] = useState('');
   const [online, setOnline] = useState(
     () => typeof navigator === 'undefined' || navigator.onLine
   );
@@ -60,19 +62,44 @@ export function OfflineQueueProvider({ children }) {
   }, []);
 
   const syncPending = useCallback(async () => {
-    const result = await syncPendingActivities(postActivityPayload);
-    refreshCount();
-    if (result.synced > 0) {
-      window.dispatchEvent(new CustomEvent('pethub-offline-queue-synced', { detail: result }));
+    if (!me?.authenticated) {
+      const msg = 'Sign in to sync pending activities.';
+      setSyncMessage(msg);
+      return { synced: 0, remaining: getOfflineQueueCount(), error: msg };
     }
-    return result;
-  }, [refreshCount]);
+    if (!online) {
+      const msg = 'You are offline. Sync when you have a connection.';
+      setSyncMessage(msg);
+      return { synced: 0, remaining: getOfflineQueueCount(), error: msg };
+    }
 
-  useEffect(() => {
-    if (!me?.authenticated || !online) return undefined;
-    syncPending().catch((e) => console.warn('Offline queue sync:', e));
-    return undefined;
-  }, [me?.authenticated, online, syncPending]);
+    setSyncing(true);
+    setSyncMessage('');
+    try {
+      const result = await syncPendingActivities(postActivityPayload);
+      refreshCount();
+      if (result.synced > 0) {
+        window.dispatchEvent(new CustomEvent('pethub-offline-queue-synced', { detail: result }));
+        setSyncMessage(
+          result.remaining > 0
+            ? `Synced ${result.synced}; ${result.remaining} still waiting.`
+            : `Synced ${result.synced} activit${result.synced === 1 ? 'y' : 'ies'}.`
+        );
+      } else if (result.remaining > 0) {
+        setSyncMessage(`${result.remaining} activit${result.remaining === 1 ? 'y' : 'ies'} could not be saved. Try again.`);
+      } else {
+        setSyncMessage('');
+      }
+      return result;
+    } catch (e) {
+      const msg = e.message || 'Sync failed';
+      setSyncMessage(msg);
+      console.warn('Offline queue sync:', e);
+      return { synced: 0, remaining: getOfflineQueueCount(), error: msg };
+    } finally {
+      setSyncing(false);
+    }
+  }, [me?.authenticated, online, refreshCount]);
 
   useEffect(() => {
     const onBeforeUnload = (e) => {
@@ -120,11 +147,13 @@ export function OfflineQueueProvider({ children }) {
     () => ({
       pendingCount,
       online,
+      syncing,
+      syncMessage,
       refreshCount,
       syncPending,
       postActivityResilient,
     }),
-    [pendingCount, online, refreshCount, syncPending, postActivityResilient]
+    [pendingCount, online, syncing, syncMessage, refreshCount, syncPending, postActivityResilient]
   );
 
   return (

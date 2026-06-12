@@ -40,6 +40,32 @@
 .pending-badge.has-pending {
   font-weight: 600;
 }
+.sync-pending-btn {
+  background: #fbbf24;
+  color: #111827;
+  border: none;
+  border-radius: 6px;
+  padding: 4px 10px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+.sync-pending-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+.sync-message {
+  color: #d1d5db;
+  font-size: 0.8rem;
+}
+.mini-card.has-pending-entry {
+  border-color: #fbbf24;
+}
+.pending-entry-note {
+  font-size: 0.75rem;
+  color: #b45309;
+  margin-top: 4px;
+}
 .brand {
   font-weight: 700;
   font-size: 1.15rem;

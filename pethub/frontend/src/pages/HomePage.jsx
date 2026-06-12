@@ -1,6 +1,10 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useOfflineQueue } from '../context/OfflineQueueContext';
-import { getOfflineQueueCount } from '../utils/offlineActivityQueue';
+import {
+  getOfflineQueueCount,
+  mergeLatestWithPending,
+  mergeSpeedWithPending,
+} from '../utils/offlineActivityQueue';
 import {
   fetchDashboard,
   fetchLatestByType,
@@ -216,7 +220,7 @@ function DualMethodMeter({ title, data }) {
 }
 
 export default function HomePage() {
-  const { postActivityResilient } = useOfflineQueue();
+  const { postActivityResilient, pendingCount } = useOfflineQueue();
   const [pets, setPets] = useState([]);
   const [petId, setPetId] = useState(() => localStorage.getItem(DEFAULT_PET_LS) || '');
   const [latest, setLatest] = useState(null);
@@ -275,6 +279,16 @@ export default function HomePage() {
 
   const selectedPet = useMemo(() => pets.find((p) => String(p.id) === String(petId)), [pets, petId]);
 
+  const displayLatest = useMemo(
+    () => mergeLatestWithPending(latest, petId),
+    [latest, petId, pendingCount]
+  );
+
+  const displaySpeed = useMemo(
+    () => mergeSpeedWithPending(speed, petId, latest),
+    [speed, petId, latest, pendingCount]
+  );
+
   const onPetChange = async (e) => {
     const v = e.target.value;
     setPetId(v);
@@ -295,8 +309,8 @@ export default function HomePage() {
       if (data.queued) {
         window.alert(
           navigator.onLine
-            ? `Unable to reach the server quickly. Activity saved locally and will sync when you are back online (${data.queueLength} pending).`
-            : `No network connection. Activity saved locally and will sync later (${data.queueLength} pending).`
+            ? `Unable to reach the server quickly. Activity saved locally and will sync when you use Sync now (${data.queueLength} pending).`
+            : `No network connection. Activity saved locally (${data.queueLength} pending). Use Sync now when you are back online.`
         );
         setWizard(null);
       } else {
@@ -328,11 +342,13 @@ export default function HomePage() {
         const total = getOfflineQueueCount();
         window.alert(
           navigator.onLine
-            ? `${nQueued} of 2 activities saved locally and will sync when the connection is stable (${total} pending).`
-            : `No network connection. ${nQueued} of 2 activities saved locally (${total} pending).`
+            ? `${nQueued} of 2 activities saved locally (${total} pending). Use Sync now when ready.`
+            : `No network connection. ${nQueued} of 2 activities saved locally (${total} pending). Use Sync now when you are back online.`
         );
       }
-      await refreshSummaries();
+      if (nQueued === 0) {
+        await refreshSummaries();
+      }
     } catch (e) {
       setErr(e.message || 'Save failed');
     } finally {
@@ -388,30 +404,18 @@ export default function HomePage() {
       <section className="card">
         <h2>Potty status</h2>
         <div className="meter-row">
-          <DualMethodMeter title="Pee" data={speed} />
-          <DualMethodMeter title="Poop" data={speed} />
+          <DualMethodMeter title="Pee" data={displaySpeed} />
+          <DualMethodMeter title="Poop" data={displaySpeed} />
         </div>
       </section>
 
       <section className="card">
         <h2>Recent by type</h2>
         <div className="grid-4">
-          <div className="mini-card">
-            <div className="muted">Pee</div>
-            <div>{fmtTime(latest?.pee?.created_at)}</div>
-          </div>
-          <div className="mini-card">
-            <div className="muted">Poop</div>
-            <div>{fmtTime(latest?.poop?.created_at)}</div>
-          </div>
-          <div className="mini-card">
-            <div className="muted">Water</div>
-            <div>{fmtTime(latest?.water?.created_at)}</div>
-          </div>
-          <div className="mini-card">
-            <div className="muted">Food</div>
-            <div>{fmtTime(latest?.food?.created_at)}</div>
-          </div>
+          <RecentTypeCard label="Pee" entry={displayLatest?.pee} />
+          <RecentTypeCard label="Poop" entry={displayLatest?.poop} />
+          <RecentTypeCard label="Water" entry={displayLatest?.water} />
+          <RecentTypeCard label="Food" entry={displayLatest?.food} />
         </div>
       </section>
 
@@ -433,6 +437,16 @@ export default function HomePage() {
           </div>
         </div>
       ) : null}
+    </div>
+  );
+}
+
+function RecentTypeCard({ label, entry }) {
+  return (
+    <div className={`mini-card${entry?.pending ? ' has-pending-entry' : ''}`}>
+      <div className="muted">{label}</div>
+      <div>{fmtTime(entry?.created_at)}</div>
+      {entry?.pending ? <div className="pending-entry-note">Not synced yet</div> : null}
     </div>
   );
 }
