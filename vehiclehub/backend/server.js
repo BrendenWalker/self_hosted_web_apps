@@ -21,6 +21,21 @@ const pool = createDbPool({
 // Test database connection (non-blocking, doesn't affect readiness)
 testConnection(pool);
 
+async function recalculateServiceInterval(vehicleId, serviceId) {
+  await pool.query('SELECT recalculate_service_interval($1, $2)', [vehicleId, serviceId]);
+}
+
+async function fetchServiceInterval(vehicleId, serviceId) {
+  const result = await pool.query(
+    `SELECT si.*, st.name as service_name
+     FROM service_intervals si
+     JOIN servicetype st ON si.serviceid = st.id
+     WHERE si.vehicleid = $1 AND si.serviceid = $2`,
+    [vehicleId, serviceId]
+  );
+  return result.rows[0] || null;
+}
+
 // ==================== VEHICLES ====================
 
 // Get all vehicles
@@ -260,7 +275,9 @@ app.post('/api/vehicles/:vehicleId/service-intervals', async (req, res) => {
        RETURNING *`,
       [req.params.vehicleId, serviceid, months || null, miles || null, notes || null]
     );
-    res.status(201).json(result.rows[0]);
+    await recalculateServiceInterval(req.params.vehicleId, serviceid);
+    const interval = await fetchServiceInterval(req.params.vehicleId, serviceid);
+    res.status(201).json(interval || result.rows[0]);
   } catch (error) {
     console.error('Error creating service interval:', error);
     res.status(500).json({ error: 'Failed to create service interval' });
@@ -270,18 +287,20 @@ app.post('/api/vehicles/:vehicleId/service-intervals', async (req, res) => {
 // Update service interval
 app.put('/api/vehicles/:vehicleId/service-intervals/:serviceId', async (req, res) => {
   try {
-    const { months, miles, notes, nextdate, nextmiles } = req.body;
+    const { months, miles, notes } = req.body;
     const result = await pool.query(
       `UPDATE service_intervals
-       SET months = $1, miles = $2, notes = $3, nextdate = $4, nextmiles = $5, modified = CURRENT_TIMESTAMP
-       WHERE vehicleid = $6 AND serviceid = $7
+       SET months = $1, miles = $2, notes = $3, modified = CURRENT_TIMESTAMP
+       WHERE vehicleid = $4 AND serviceid = $5
        RETURNING *`,
-      [months || null, miles || null, notes || null, nextdate || null, nextmiles || null, req.params.vehicleId, req.params.serviceId]
+      [months || null, miles || null, notes || null, req.params.vehicleId, req.params.serviceId]
     );
     if (result.rows.length === 0) {
       return res.status(404).json({ error: 'Service interval not found' });
     }
-    res.json(result.rows[0]);
+    await recalculateServiceInterval(req.params.vehicleId, req.params.serviceId);
+    const interval = await fetchServiceInterval(req.params.vehicleId, req.params.serviceId);
+    res.json(interval);
   } catch (error) {
     console.error('Error updating service interval:', error);
     res.status(500).json({ error: 'Failed to update service interval' });
@@ -391,6 +410,7 @@ app.post('/api/service-log', async (req, res) => {
        RETURNING *`,
       [vehicleId, serviceId, serviceDate, servicemilesVal, notesTruncated, qtyVal]
     );
+    await recalculateServiceInterval(vehicleId, serviceId);
     res.status(201).json(result.rows[0]);
   } catch (error) {
     const detail = error.detail || error.message;
@@ -416,6 +436,8 @@ app.put('/api/service-log/:id', async (req, res) => {
     if (result.rows.length === 0) {
       return res.status(404).json({ error: 'Service log entry not found' });
     }
+    const { vehicleid, serviceid } = result.rows[0];
+    await recalculateServiceInterval(vehicleid, serviceid);
     res.json(result.rows[0]);
   } catch (error) {
     console.error('Error updating service log entry:', error);
@@ -454,21 +476,28 @@ app.post('/api/recalculate-intervals', async (req, res) => {
   }
 });
 
-// Get upcoming services (services due soon)
+// Get upcoming services (overdue, or due within a window scaled to interval)
 app.get('/api/upcoming-services', async (req, res) => {
   try {
     const { days = 30 } = req.query;
-    const futureDate = new Date();
-    futureDate.setDate(futureDate.getDate() + parseInt(days));
-    
+    const daysNum = parseInt(days, 10);
+    const windowDays = Number.isFinite(daysNum) && daysNum > 0 ? daysNum : 30;
+
     const result = await pool.query(
       `SELECT si.*, st.name as service_name, v.name as vehicle_name, v.id as vehicle_id
        FROM service_intervals si
        JOIN servicetype st ON si.serviceid = st.id
        JOIN vehicle v ON si.vehicleid = v.id
-       WHERE si.nextdate IS NOT NULL AND si.nextdate <= $1
+       WHERE si.nextdate IS NOT NULL
+         AND (
+           si.nextdate < CURRENT_DATE
+           OR si.nextdate <= CURRENT_DATE + LEAST(
+             $1::integer,
+             GREATEST(7, COALESCE(NULLIF(si.months, 0), 0) * 7)
+           )
+         )
        ORDER BY si.nextdate ASC, si.nextmiles ASC`,
-      [futureDate.toISOString().split('T')[0]]
+      [windowDays]
     );
     res.json(result.rows);
   } catch (error) {

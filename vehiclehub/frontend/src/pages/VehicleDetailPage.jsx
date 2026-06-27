@@ -97,9 +97,7 @@ function VehicleDetailPage() {
       const response = await updateServiceInterval(id, interval.serviceid, {
         months: interval.months,
         miles: interval.miles,
-        notes: interval.notes,
-        nextdate: interval.nextdate,
-        nextmiles: interval.nextmiles
+        notes: interval.notes
       });
       const updated = { ...response.data, service_name: interval.service_name };
       setIntervals(intervals.map(i => 

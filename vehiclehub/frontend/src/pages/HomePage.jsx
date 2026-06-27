@@ -98,7 +98,7 @@ function HomePage() {
 
       <section className="home-upcoming-services">
         <div className="home-upcoming-services-header">
-          <h2>Upcoming Services (Next 30 Days)</h2>
+          <h2>Overdue &amp; Due Soon</h2>
           <button
             type="button"
             className="btn btn-secondary btn-sm"

@@ -48,52 +48,9 @@ CREATE INDEX IF NOT EXISTS idx_service_log_vehicleid ON service_log(vehicleid);
 CREATE INDEX IF NOT EXISTS idx_service_log_serviceid ON service_log(serviceid);
 CREATE INDEX IF NOT EXISTS idx_service_log_servicedate ON service_log(servicedate);
 
--- Function to update next service date/miles after a service is logged
-CREATE OR REPLACE FUNCTION update_next_service()
-RETURNS TRIGGER AS $$
-DECLARE
-    v_months INTEGER;
-    v_miles INTEGER;
-    v_nextdate DATE;
-    v_nextmiles INTEGER;
-BEGIN
-    -- Get the service interval settings for this vehicle/service
-    SELECT months, miles INTO v_months, v_miles
-    FROM service_intervals
-    WHERE vehicleid = NEW.vehicleid AND serviceid = NEW.serviceid;
-    
-    -- Only update if interval settings exist
-    IF v_months IS NOT NULL OR v_miles IS NOT NULL THEN
-        -- Calculate next service date and miles based on the logged service
-        -- If months is 0 or NULL, nextdate should be NULL (mileage-only service)
-        IF v_months IS NOT NULL AND v_months > 0 THEN
-            v_nextdate := NEW.servicedate + (v_months || ' months')::INTERVAL;
-        ELSE
-            v_nextdate := NULL;
-        END IF;
-        
-        -- If miles is 0 or NULL, nextmiles should be NULL (date-only service)
-        IF v_miles IS NOT NULL AND v_miles > 0 AND NEW.servicemiles IS NOT NULL THEN
-            v_nextmiles := NEW.servicemiles + v_miles;
-        ELSE
-            v_nextmiles := NULL;
-        END IF;
-        
-        -- Update the service_intervals table
-        UPDATE service_intervals
-        SET nextdate = v_nextdate,
-            nextmiles = v_nextmiles,
-            modified = CURRENT_TIMESTAMP
-        WHERE vehicleid = NEW.vehicleid AND serviceid = NEW.serviceid;
-    END IF;
-    
-    RETURN NEW;
-END;
-$$ LANGUAGE plpgsql;
-
--- Function to recalculate next service from most recent log entry (for deletions)
-CREATE OR REPLACE FUNCTION recalculate_next_service_after_delete()
-RETURNS TRIGGER AS $$
+-- Recalculate next due date/miles for one vehicle/service from the latest log entry
+CREATE OR REPLACE FUNCTION recalculate_service_interval(p_vehicleid INTEGER, p_serviceid INTEGER)
+RETURNS void AS $$
 DECLARE
     v_months INTEGER;
     v_miles INTEGER;
@@ -101,52 +58,55 @@ DECLARE
     v_nextmiles INTEGER;
     v_latest_log RECORD;
 BEGIN
-    -- Get the service interval settings for this vehicle/service
     SELECT months, miles INTO v_months, v_miles
     FROM service_intervals
-    WHERE vehicleid = OLD.vehicleid AND serviceid = OLD.serviceid;
-    
-    -- Only recalculate if interval settings exist
-    IF v_months IS NOT NULL OR v_miles IS NOT NULL THEN
-        v_nextdate := NULL;
-        v_nextmiles := NULL;
+    WHERE vehicleid = p_vehicleid AND serviceid = p_serviceid;
 
-        -- Find the most recent service log entry for this vehicle/service
-        SELECT servicedate, servicemiles INTO v_latest_log
-        FROM service_log
-        WHERE vehicleid = OLD.vehicleid AND serviceid = OLD.serviceid
-        ORDER BY servicedate DESC, servicemiles DESC NULLS LAST
-        LIMIT 1;
-
-        -- If there's a previous log entry, calculate from it (FOUND = row was returned)
-        IF FOUND AND v_latest_log.servicedate IS NOT NULL THEN
-            -- If months is 0 or NULL, nextdate should be NULL (mileage-only service)
-            IF v_months IS NOT NULL AND v_months > 0 THEN
-                v_nextdate := v_latest_log.servicedate + (v_months || ' months')::INTERVAL;
-            ELSE
-                v_nextdate := NULL;
-            END IF;
-            
-            -- If miles is 0 or NULL, nextmiles should be NULL (date-only service)
-            IF v_miles IS NOT NULL AND v_miles > 0 AND v_latest_log.servicemiles IS NOT NULL THEN
-                v_nextmiles := v_latest_log.servicemiles + v_miles;
-            ELSE
-                v_nextmiles := NULL;
-            END IF;
-        ELSE
-            -- No previous log entries, clear nextdate and nextmiles
-            v_nextdate := NULL;
-            v_nextmiles := NULL;
-        END IF;
-        
-        -- Update the service_intervals table
-        UPDATE service_intervals
-        SET nextdate = v_nextdate,
-            nextmiles = v_nextmiles,
-            modified = CURRENT_TIMESTAMP
-        WHERE vehicleid = OLD.vehicleid AND serviceid = OLD.serviceid;
+    IF NOT FOUND OR (v_months IS NULL AND v_miles IS NULL) THEN
+        RETURN;
     END IF;
-    
+
+    v_nextdate := NULL;
+    v_nextmiles := NULL;
+
+    SELECT servicedate, servicemiles INTO v_latest_log
+    FROM service_log
+    WHERE vehicleid = p_vehicleid AND serviceid = p_serviceid
+    ORDER BY servicedate DESC, servicemiles DESC NULLS LAST, id DESC
+    LIMIT 1;
+
+    IF FOUND AND v_latest_log.servicedate IS NOT NULL THEN
+        IF v_months IS NOT NULL AND v_months > 0 THEN
+            v_nextdate := v_latest_log.servicedate + (v_months || ' months')::INTERVAL;
+        END IF;
+
+        IF v_miles IS NOT NULL AND v_miles > 0 AND v_latest_log.servicemiles IS NOT NULL THEN
+            v_nextmiles := v_latest_log.servicemiles + v_miles;
+        END IF;
+    END IF;
+
+    UPDATE service_intervals
+    SET nextdate = v_nextdate,
+        nextmiles = v_nextmiles,
+        modified = CURRENT_TIMESTAMP
+    WHERE vehicleid = p_vehicleid AND serviceid = p_serviceid;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Function to update next service date/miles after a service is logged
+CREATE OR REPLACE FUNCTION update_next_service()
+RETURNS TRIGGER AS $$
+BEGIN
+    PERFORM recalculate_service_interval(NEW.vehicleid, NEW.serviceid);
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Function to recalculate next service from most recent log entry (for deletions)
+CREATE OR REPLACE FUNCTION recalculate_next_service_after_delete()
+RETURNS TRIGGER AS $$
+BEGIN
+    PERFORM recalculate_service_interval(OLD.vehicleid, OLD.serviceid);
     RETURN OLD;
 END;
 $$ LANGUAGE plpgsql;
@@ -168,45 +128,11 @@ CREATE OR REPLACE FUNCTION recalculate_all_service_intervals()
 RETURNS void AS $$
 DECLARE
     v_interval RECORD;
-    v_latest_log RECORD;
-    v_nextdate DATE;
-    v_nextmiles INTEGER;
 BEGIN
-    -- Loop through all service intervals
-    FOR v_interval IN 
-        SELECT vehicleid, serviceid, months, miles
-        FROM service_intervals
+    FOR v_interval IN
+        SELECT vehicleid, serviceid FROM service_intervals
     LOOP
-        -- Start with no next due (in case SELECT finds no row, we don't use stale values)
-        v_nextdate := NULL;
-        v_nextmiles := NULL;
-
-        -- Find the most recent service log entry for this vehicle/service
-        SELECT servicedate, servicemiles INTO v_latest_log
-        FROM service_log
-        WHERE vehicleid = v_interval.vehicleid AND serviceid = v_interval.serviceid
-        ORDER BY servicedate DESC, servicemiles DESC NULLS LAST
-        LIMIT 1;
-
-        -- Only compute from log when a row was actually found (FOUND set by SELECT INTO)
-        IF FOUND AND v_latest_log.servicedate IS NOT NULL THEN
-            -- If months is 0 or NULL, nextdate should be NULL (mileage-only service)
-            IF v_interval.months IS NOT NULL AND v_interval.months > 0 THEN
-                v_nextdate := v_latest_log.servicedate + (v_interval.months || ' months')::INTERVAL;
-            END IF;
-
-            -- If miles is 0 or NULL, nextmiles should be NULL (date-only service)
-            IF v_interval.miles IS NOT NULL AND v_interval.miles > 0 AND v_latest_log.servicemiles IS NOT NULL THEN
-                v_nextmiles := v_latest_log.servicemiles + v_interval.miles;
-            END IF;
-        END IF;
-
-        -- Update the service_intervals table
-        UPDATE service_intervals
-        SET nextdate = v_nextdate,
-            nextmiles = v_nextmiles,
-            modified = CURRENT_TIMESTAMP
-        WHERE vehicleid = v_interval.vehicleid AND serviceid = v_interval.serviceid;
+        PERFORM recalculate_service_interval(v_interval.vehicleid, v_interval.serviceid);
     END LOOP;
 END;
 $$ LANGUAGE plpgsql;
