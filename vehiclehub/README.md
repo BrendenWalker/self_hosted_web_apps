@@ -25,6 +25,10 @@ A modern, dockerized web application for tracking and managing vehicle service i
 - **Database**: PostgreSQL
 - **Deployment**: Docker containers
 
+### Pre-built images
+
+Public images on Docker Hub: [derpmhichurp](https://hub.docker.com/repositories/derpmhichurp) — `derpmhichurp/vehiclehub-backend`, `derpmhichurp/vehiclehub-frontend`. Use [portainer-stack.yml](portainer-stack.yml) with `IMAGE_TAG=latest` or pull directly. See [DEPLOYMENT.md](DEPLOYMENT.md).
+
 ## Setup
 
 ### Prerequisites

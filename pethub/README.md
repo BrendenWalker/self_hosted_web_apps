@@ -20,6 +20,10 @@ Pet activity tracking (toilet visits, water, reports, multi-user pets). Migrated
 
 The hub layout matches other services: `backend/`, `frontend/`, `database/`, `docker-compose.yml`, `portainer-stack.yml`, and `env.example`.
 
+### Pre-built images
+
+Public images on Docker Hub: [derpmhichurp](https://hub.docker.com/repositories/derpmhichurp) — `derpmhichurp/pethub-backend`, `derpmhichurp/pethub-frontend`. See [DEPLOYMENT.md](DEPLOYMENT.md) and [portainer-stack.yml](portainer-stack.yml).
+
 Ports follow the monorepo convention after RetirementHub (8100/8110): **backend 8120**, **frontend 8130** (host maps to container port 80).
 
 ### HAProxy / health checks
