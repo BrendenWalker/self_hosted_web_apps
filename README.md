@@ -16,6 +16,25 @@ Screenshots use demo-style data. Click a thumbnail to open that hub’s README.
 
 Each app has its own API, UI, and database schema. They are intended to run on a Docker host with a reverse proxy and TLS in front (details are up to your environment).
 
+## Pre-built Docker images
+
+Hub images are **public** on Docker Hub: [derpmhichurp repositories](https://hub.docker.com/repositories/derpmhichurp). You can deploy with each service’s `portainer-stack.yml` without building locally.
+
+| Service | Backend image | Frontend image |
+|---------|---------------|----------------|
+| KitchenHub | `derpmhichurp/kitchenhub-backend` | `derpmhichurp/kitchenhub-frontend` |
+| VehicleHub | `derpmhichurp/vehiclehub-backend` | `derpmhichurp/vehiclehub-frontend` |
+| RetirementHub | `derpmhichurp/retirementhub-backend` | `derpmhichurp/retirementhub-frontend` |
+| PetHub | `derpmhichurp/pethub-backend` | `derpmhichurp/pethub-frontend` |
+| MailHub | `derpmhichurp/mailhub-postfix`, `mailhub-amavisd`, `mailhub-dovecot` | — |
+
+```bash
+docker pull derpmhichurp/kitchenhub-backend:latest
+docker pull derpmhichurp/kitchenhub-frontend:latest
+```
+
+Tags follow the same convention as CI: `latest` (stable release on `main`), `beta` (pre-release from other branches), or a pinned semver (e.g. `1.2.3`). See each hub’s `DEPLOYMENT.md` where present, or `portainer-stack.yml` + GitHub Actions at the repo root.
+
 ## Services
 
 - **KitchenHub** — Shopping lists with optional store layout ordering, recipes, and related data
@@ -57,8 +76,9 @@ Each service directory includes `docker-compose.yml`, optional `portainer-stack.
 1. `cd <service>`  
 2. `cp env.example .env` and set database (and other) variables  
 3. Apply `database/schema.sql` (and migrations if upgrading) with `psql`  
-4. `docker compose up -d --build`  
-5. Point your proxy at the published ports and add DNS names as needed  
+4. **Option A — pull pre-built images:** deploy `portainer-stack.yml` with `DOCKER_HUB_REGISTRY_USERNAME=derpmhichurp` and `IMAGE_TAG=latest` (or a pinned version)  
+5. **Option B — build locally:** `docker compose up -d --build`  
+6. Point your proxy at the published ports and add DNS names as needed  
 
 Backends expose `/api/health` for readiness checks.
 

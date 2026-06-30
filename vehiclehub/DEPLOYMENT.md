@@ -2,6 +2,22 @@
 
 This guide covers setting up CI/CD with GitHub Actions and deploying with Portainer.
 
+## Pre-built Docker images
+
+Images are **public** on Docker Hub: [derpmhichurp repositories](https://hub.docker.com/repositories/derpmhichurp).
+
+| Image | Description |
+|-------|-------------|
+| `derpmhichurp/vehiclehub-backend` | Express API |
+| `derpmhichurp/vehiclehub-frontend` | React SPA (nginx) |
+
+```bash
+docker pull derpmhichurp/vehiclehub-backend:latest
+docker pull derpmhichurp/vehiclehub-frontend:latest
+```
+
+Use `latest` for stable main releases, `beta` for pre-releases, or pin a semver tag in production.
+
 ## Project Structure
 
 This project is organized as a monorepo with the VehicleHub application in the `vehiclehub/` subfolder. The workflow is configured to only trigger builds when files in the `vehiclehub/` directory are modified.
@@ -68,7 +84,7 @@ Example image names:
 
 ```env
 # Docker Hub Configuration
-DOCKER_HUB_REGISTRY_USERNAME=your-dockerhub-username
+DOCKER_HUB_REGISTRY_USERNAME=derpmhichurp
 DOCKER_HUB_BACKEND_IMAGE_NAME=vehiclehub-backend
 DOCKER_HUB_FRONTEND_IMAGE_NAME=vehiclehub-frontend
 IMAGE_TAG=latest

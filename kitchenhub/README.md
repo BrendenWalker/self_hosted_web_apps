@@ -24,6 +24,10 @@ A modern, dockerized web application for managing shopping lists with store layo
 - **Database**: PostgreSQL
 - **Deployment**: Docker containers
 
+### Pre-built images
+
+Public images on Docker Hub: [derpmhichurp](https://hub.docker.com/repositories/derpmhichurp) — `derpmhichurp/kitchenhub-backend`, `derpmhichurp/kitchenhub-frontend`. Use [portainer-stack.yml](portainer-stack.yml) with `IMAGE_TAG=latest` or pull directly. See [DEPLOYMENT.md](DEPLOYMENT.md).
+
 ## Setup
 
 ### Prerequisites

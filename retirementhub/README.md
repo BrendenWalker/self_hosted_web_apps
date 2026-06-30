@@ -12,6 +12,10 @@ Retirement-oriented budgeting and projections: household settings, income, expen
 
 ![Projections](../images/retirementhub_projections.png)
 
+### Pre-built images
+
+Public images on Docker Hub: [derpmhichurp](https://hub.docker.com/repositories/derpmhichurp) — `derpmhichurp/retirementhub-backend`, `derpmhichurp/retirementhub-frontend`. See [DEPLOYMENT.md](DEPLOYMENT.md) and [portainer-stack.yml](portainer-stack.yml).
+
 ## Setup
 
 ### Prerequisites
