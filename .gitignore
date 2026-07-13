@@ -23,6 +23,6 @@ Thumbs.db
 # Test and coverage output
 test-results/
 coverage/
+junit.xml
 /retirementhub/backend/package-lock.json
 *.tar
-*.xml
