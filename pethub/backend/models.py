@@ -1,7 +1,8 @@
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
-from sqlalchemy import String, Integer, Text, TIMESTAMP, func, ForeignKey, Boolean, TypeDecorator, Date, Float
+from sqlalchemy import String, Integer, Text, TIMESTAMP, func, ForeignKey, Boolean, TypeDecorator, Date, Float, Numeric
 from sqlalchemy.dialects.postgresql import TIMESTAMP as PG_TIMESTAMP
-from datetime import datetime, timezone
+from datetime import datetime, date, timezone
+from decimal import Decimal
 from typing import List, Optional
 
 class Base(DeclarativeBase):
@@ -53,7 +54,9 @@ class Pet(Base):
     __tablename__ = "pets"
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     name: Mapped[str] = mapped_column(String(50), nullable=False)
-    birthdate: Mapped[Optional[datetime]] = mapped_column(Date, nullable=True)
+    birthdate: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    adult_food_transition_start: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    daily_food_cups: Mapped[Optional[Decimal]] = mapped_column(Numeric(5, 2), nullable=True)
 
     activities: Mapped[List["Activity"]] = relationship(back_populates="pet", cascade="all, delete-orphan", lazy="selectin")
     # users associated with this pet (access control)
