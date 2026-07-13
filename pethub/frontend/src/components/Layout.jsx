@@ -81,6 +81,9 @@ export default function Layout() {
             <NavLink to="/pets" className="nav-link" onClick={() => setOpen(false)}>
               Pets
             </NavLink>
+            <NavLink to="/food-transition" className="nav-link" onClick={() => setOpen(false)}>
+              Food transition
+            </NavLink>
             {isAdmin ? (
               <NavLink to="/admin" className="nav-link" onClick={() => setOpen(false)}>
                 Admin
