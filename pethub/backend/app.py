@@ -1,6 +1,7 @@
 import os
 from collections import defaultdict
 from datetime import datetime, timezone, date
+from decimal import Decimal, InvalidOperation
 from io import StringIO
 import csv
 from flask import Flask, render_template, request, redirect, url_for, flash, jsonify, Response
@@ -67,6 +68,8 @@ if auto_sync:
     safe_exec("ALTER TABLE users ADD COLUMN IF NOT EXISTS default_pet_id INTEGER NULL REFERENCES pets(id) ON DELETE SET NULL;")
     safe_exec("ALTER TABLE users ADD COLUMN IF NOT EXISTS is_admin BOOLEAN DEFAULT FALSE;")
     safe_exec("ALTER TABLE pets ADD COLUMN IF NOT EXISTS birthdate DATE NULL;")
+    safe_exec("ALTER TABLE pets ADD COLUMN IF NOT EXISTS adult_food_transition_start DATE NULL;")
+    safe_exec("ALTER TABLE pets ADD COLUMN IF NOT EXISTS daily_food_cups NUMERIC(5, 2) NULL;")
     safe_exec("ALTER TABLE activities ADD COLUMN IF NOT EXISTS trend DOUBLE PRECISION NULL;")
     safe_exec("ALTER TABLE activities ADD COLUMN IF NOT EXISTS variance DOUBLE PRECISION NULL;")
 
@@ -261,7 +264,17 @@ def api_dashboard():
         return jsonify(
             {
                 "pets": [
-                    {"id": p.id, "name": p.name, "birthdate": p.birthdate.isoformat() if p.birthdate else None}
+                    {
+                        "id": p.id,
+                        "name": p.name,
+                        "birthdate": p.birthdate.isoformat() if p.birthdate else None,
+                        "adult_food_transition_start": (
+                            p.adult_food_transition_start.isoformat()
+                            if p.adult_food_transition_start
+                            else None
+                        ),
+                        "daily_food_cups": float(p.daily_food_cups) if p.daily_food_cups is not None else None,
+                    }
                     for p in pets
                 ],
                 "activities": [
@@ -333,6 +346,12 @@ def api_pets_manage():
                     "id": p.id,
                     "name": p.name,
                     "birthdate": p.birthdate.isoformat() if p.birthdate else None,
+                    "adult_food_transition_start": (
+                        p.adult_food_transition_start.isoformat()
+                        if p.adult_food_transition_start
+                        else None
+                    ),
+                    "daily_food_cups": float(p.daily_food_cups) if p.daily_food_cups is not None else None,
                     "members": members,
                     "invites": [
                         {
@@ -903,17 +922,50 @@ def update_pet(pid: int):
         if not pet:
             return jsonify({"ok": False, "error": "pet not found"}), 404
         data = request.get_json() if request.is_json else request.form
-        birthdate_raw = (data.get("birthdate") or "").strip() if data else ""
-        if birthdate_raw:
-            try:
-                pet.birthdate = date.fromisoformat(birthdate_raw)
-            except ValueError:
-                return jsonify({"ok": False, "error": "invalid birthdate"}), 400
-        else:
-            pet.birthdate = None
+        if data and "birthdate" in data:
+            birthdate_raw = (data.get("birthdate") or "").strip()
+            if birthdate_raw:
+                try:
+                    pet.birthdate = date.fromisoformat(birthdate_raw)
+                except ValueError:
+                    return jsonify({"ok": False, "error": "invalid birthdate"}), 400
+            else:
+                pet.birthdate = None
+        if data and "adult_food_transition_start" in data:
+            start_raw = (data.get("adult_food_transition_start") or "").strip()
+            if start_raw:
+                try:
+                    pet.adult_food_transition_start = date.fromisoformat(start_raw)
+                except ValueError:
+                    return jsonify({"ok": False, "error": "invalid adult_food_transition_start"}), 400
+            else:
+                pet.adult_food_transition_start = None
+        if data and "daily_food_cups" in data:
+            cups_raw = data.get("daily_food_cups")
+            if cups_raw is None or cups_raw == "":
+                pet.daily_food_cups = None
+            else:
+                try:
+                    cups = Decimal(str(cups_raw))
+                except (InvalidOperation, ValueError):
+                    return jsonify({"ok": False, "error": "invalid daily_food_cups"}), 400
+                if cups <= 0:
+                    return jsonify({"ok": False, "error": "daily_food_cups must be greater than 0"}), 400
+                pet.daily_food_cups = cups
         session.add(pet)
         session.commit()
-        return jsonify({"ok": True, "birthdate": pet.birthdate.isoformat() if pet.birthdate else None})
+        return jsonify(
+            {
+                "ok": True,
+                "birthdate": pet.birthdate.isoformat() if pet.birthdate else None,
+                "adult_food_transition_start": (
+                    pet.adult_food_transition_start.isoformat()
+                    if pet.adult_food_transition_start
+                    else None
+                ),
+                "daily_food_cups": float(pet.daily_food_cups) if pet.daily_food_cups is not None else None,
+            }
+        )
     finally:
         session.close()
 

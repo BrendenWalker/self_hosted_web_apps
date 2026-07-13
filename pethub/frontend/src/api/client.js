@@ -49,6 +49,11 @@ export const createPet = (name) => api.post('/pets', { name }).then((r) => r.dat
 export const updatePetBirthdate = (petId, birthdate) =>
   api.post(`/pets/${petId}/update`, { birthdate }).then((r) => r.data);
 
+export const updatePetFoodTransition = (petId, { adult_food_transition_start, daily_food_cups }) =>
+  api
+    .post(`/pets/${petId}/update`, { adult_food_transition_start, daily_food_cups })
+    .then((r) => r.data);
+
 export const getDefaultPet = () => api.get('/users/default_pet').then((r) => r.data);
 
 export const setDefaultPet = (petId) =>

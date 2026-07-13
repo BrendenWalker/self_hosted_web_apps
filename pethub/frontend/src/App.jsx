@@ -14,6 +14,7 @@ import LoginPage from './pages/LoginPage';
 import SignupPage from './pages/SignupPage';
 import ReportsPage from './pages/ReportsPage';
 import PetsManagePage from './pages/PetsManagePage';
+import FoodTransitionPage from './pages/FoodTransitionPage';
 import AdminPage from './pages/AdminPage';
 import InviteAcceptPage from './pages/InviteAcceptPage';
 import './App.css';
@@ -46,6 +47,7 @@ const router = createBrowserRouter([
           { index: true, element: <HomePage /> },
           { path: 'reports/*', element: <ReportsPage /> },
           { path: 'pets', element: <PetsManagePage /> },
+          { path: 'food-transition', element: <FoodTransitionPage /> },
           { path: 'admin', element: <AdminPage /> },
         ],
       },

@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import {
   addPetMember,
   createPet,
@@ -8,6 +9,7 @@ import {
   removePetMember,
   revokeInvite,
   updatePetBirthdate,
+  updatePetFoodTransition,
 } from '../api/client';
 
 export default function PetsManagePage() {
@@ -70,7 +72,17 @@ function PetCard({ pet, onReload, onError }) {
   const [email, setEmail] = useState('');
   const [inviteEmail, setInviteEmail] = useState('');
   const [birth, setBirth] = useState(pet.birthdate || '');
+  const [transitionStart, setTransitionStart] = useState(pet.adult_food_transition_start || '');
+  const [dailyCups, setDailyCups] = useState(
+    pet.daily_food_cups != null ? String(pet.daily_food_cups) : ''
+  );
   const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    setBirth(pet.birthdate || '');
+    setTransitionStart(pet.adult_food_transition_start || '');
+    setDailyCups(pet.daily_food_cups != null ? String(pet.daily_food_cups) : '');
+  }, [pet.birthdate, pet.adult_food_transition_start, pet.daily_food_cups]);
 
   const addMember = async (e) => {
     e.preventDefault();
@@ -115,6 +127,30 @@ function PetCard({ pet, onReload, onError }) {
     }
   };
 
+  const saveFoodSettings = async () => {
+    setBusy(true);
+    onError('');
+    try {
+      const cupsValue = dailyCups.trim() === '' ? null : Number(dailyCups);
+      if (cupsValue != null && (!Number.isFinite(cupsValue) || cupsValue <= 0)) {
+        onError('Daily food cups must be a number greater than 0');
+        return;
+      }
+      await updatePetFoodTransition(pet.id, {
+        adult_food_transition_start: transitionStart || null,
+        daily_food_cups: cupsValue,
+      });
+      await onReload();
+    } catch (err) {
+      onError(err.response?.data?.error || err.message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const hasSchedule =
+    Boolean(pet.adult_food_transition_start) && pet.daily_food_cups != null && pet.daily_food_cups > 0;
+
   return (
     <section className="card">
       <h2>{pet.name}</h2>
@@ -128,6 +164,36 @@ function PetCard({ pet, onReload, onError }) {
             </button>
           </div>
         </label>
+        <h3>Food transition</h3>
+        <label>
+          Adult food transition start
+          <input
+            type="date"
+            value={transitionStart || ''}
+            onChange={(e) => setTransitionStart(e.target.value)}
+          />
+        </label>
+        <label>
+          Daily food intake (cups)
+          <input
+            type="number"
+            min="0"
+            step="0.25"
+            value={dailyCups}
+            onChange={(e) => setDailyCups(e.target.value)}
+            placeholder="e.g. 1.5"
+          />
+        </label>
+        <div className="row gap">
+          <button type="button" className="secondary" disabled={busy} onClick={saveFoodSettings}>
+            Save food settings
+          </button>
+          {hasSchedule ? (
+            <Link className="inline-link" to={`/food-transition?pet_id=${pet.id}`}>
+              View transition schedule →
+            </Link>
+          ) : null}
+        </div>
         <h3>Members</h3>
         <ul className="plain-list">
           {pet.members?.map((m) => (

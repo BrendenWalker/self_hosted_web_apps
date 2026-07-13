@@ -4,7 +4,9 @@
 CREATE TABLE IF NOT EXISTS pets (
     id SERIAL PRIMARY KEY,
     name VARCHAR(50) NOT NULL,
-    birthdate DATE
+    birthdate DATE,
+    adult_food_transition_start DATE,
+    daily_food_cups NUMERIC(5, 2)
 );
 
 CREATE TABLE IF NOT EXISTS users (
