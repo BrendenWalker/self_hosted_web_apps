@@ -7,6 +7,10 @@ function roundCups(n) {
   return Math.round(n * 100) / 100;
 }
 
+function roundGrams(n) {
+  return Math.round(n * 10) / 10;
+}
+
 function parseLocalDate(isoDate) {
   if (!isoDate) return null;
   const [y, m, d] = isoDate.split('-').map(Number);
@@ -27,16 +31,23 @@ function addDays(date, days) {
   return next;
 }
 
+function positiveNumber(value) {
+  const n = Number(value);
+  return Number.isFinite(n) && n > 0 ? n : null;
+}
+
 /**
  * Build the 14-day puppy → adult food transition schedule.
  * @param {string} startDate ISO date (YYYY-MM-DD)
- * @param {number} dailyCups total daily food intake in cups
- * @returns {Array<{day:number,date:string,oldPct:number,newPct:number,puppyCups:number,adultCups:number}>}
+ * @param {number|null|undefined} dailyCups total daily food intake in cups
+ * @param {number|null|undefined} dailyGrams total daily food intake in grams
+ * @returns {Array<{day:number,date:string,oldPct:number,newPct:number,puppyCups:number|null,adultCups:number|null,puppyGrams:number|null,adultGrams:number|null}>}
  */
-export function buildTransitionSchedule(startDate, dailyCups) {
+export function buildTransitionSchedule(startDate, dailyCups, dailyGrams) {
   const start = parseLocalDate(startDate);
-  const cups = Number(dailyCups);
-  if (!start || !Number.isFinite(cups) || cups <= 0) return [];
+  const cups = positiveNumber(dailyCups);
+  const grams = positiveNumber(dailyGrams);
+  if (!start || (cups == null && grams == null)) return [];
 
   return OLD_FOOD_FRACTIONS.map((oldFrac, i) => {
     const day = i + 1;
@@ -47,8 +58,10 @@ export function buildTransitionSchedule(startDate, dailyCups) {
       date: formatLocalDate(date),
       oldPct: Math.round(oldFrac * 100),
       newPct: Math.round(newFrac * 100),
-      puppyCups: roundCups(cups * oldFrac),
-      adultCups: roundCups(cups * newFrac),
+      puppyCups: cups == null ? null : roundCups(cups * oldFrac),
+      adultCups: cups == null ? null : roundCups(cups * newFrac),
+      puppyGrams: grams == null ? null : roundGrams(grams * oldFrac),
+      adultGrams: grams == null ? null : roundGrams(grams * newFrac),
     };
   });
 }
@@ -79,6 +92,11 @@ export function getTransitionDayNumber(startDate, todayIso = formatLocalDate(new
 }
 
 export function formatCups(n) {
-  if (!Number.isFinite(n)) return '—';
+  if (n == null || !Number.isFinite(Number(n))) return '—';
   return Number(n).toFixed(2).replace(/\.?0+$/, '') || '0';
+}
+
+export function formatGrams(n) {
+  if (n == null || !Number.isFinite(Number(n))) return '—';
+  return Number(n).toFixed(1).replace(/\.0$/, '');
 }

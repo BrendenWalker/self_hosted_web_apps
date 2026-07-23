@@ -70,6 +70,7 @@ if auto_sync:
     safe_exec("ALTER TABLE pets ADD COLUMN IF NOT EXISTS birthdate DATE NULL;")
     safe_exec("ALTER TABLE pets ADD COLUMN IF NOT EXISTS adult_food_transition_start DATE NULL;")
     safe_exec("ALTER TABLE pets ADD COLUMN IF NOT EXISTS daily_food_cups NUMERIC(5, 2) NULL;")
+    safe_exec("ALTER TABLE pets ADD COLUMN IF NOT EXISTS daily_food_grams NUMERIC(7, 1) NULL;")
     safe_exec("ALTER TABLE activities ADD COLUMN IF NOT EXISTS trend DOUBLE PRECISION NULL;")
     safe_exec("ALTER TABLE activities ADD COLUMN IF NOT EXISTS variance DOUBLE PRECISION NULL;")
 
@@ -274,6 +275,7 @@ def api_dashboard():
                             else None
                         ),
                         "daily_food_cups": float(p.daily_food_cups) if p.daily_food_cups is not None else None,
+                        "daily_food_grams": float(p.daily_food_grams) if p.daily_food_grams is not None else None,
                     }
                     for p in pets
                 ],
@@ -352,6 +354,7 @@ def api_pets_manage():
                         else None
                     ),
                     "daily_food_cups": float(p.daily_food_cups) if p.daily_food_cups is not None else None,
+                    "daily_food_grams": float(p.daily_food_grams) if p.daily_food_grams is not None else None,
                     "members": members,
                     "invites": [
                         {
@@ -952,6 +955,18 @@ def update_pet(pid: int):
                 if cups <= 0:
                     return jsonify({"ok": False, "error": "daily_food_cups must be greater than 0"}), 400
                 pet.daily_food_cups = cups
+        if data and "daily_food_grams" in data:
+            grams_raw = data.get("daily_food_grams")
+            if grams_raw is None or grams_raw == "":
+                pet.daily_food_grams = None
+            else:
+                try:
+                    grams = Decimal(str(grams_raw))
+                except (InvalidOperation, ValueError):
+                    return jsonify({"ok": False, "error": "invalid daily_food_grams"}), 400
+                if grams <= 0:
+                    return jsonify({"ok": False, "error": "daily_food_grams must be greater than 0"}), 400
+                pet.daily_food_grams = grams
         session.add(pet)
         session.commit()
         return jsonify(
@@ -964,6 +979,7 @@ def update_pet(pid: int):
                     else None
                 ),
                 "daily_food_cups": float(pet.daily_food_cups) if pet.daily_food_cups is not None else None,
+                "daily_food_grams": float(pet.daily_food_grams) if pet.daily_food_grams is not None else None,
             }
         )
     finally:

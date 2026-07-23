@@ -57,6 +57,7 @@ class Pet(Base):
     birthdate: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
     adult_food_transition_start: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
     daily_food_cups: Mapped[Optional[Decimal]] = mapped_column(Numeric(5, 2), nullable=True)
+    daily_food_grams: Mapped[Optional[Decimal]] = mapped_column(Numeric(7, 1), nullable=True)
 
     activities: Mapped[List["Activity"]] = relationship(back_populates="pet", cascade="all, delete-orphan", lazy="selectin")
     # users associated with this pet (access control)
