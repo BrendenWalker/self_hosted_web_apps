@@ -6,7 +6,8 @@ CREATE TABLE IF NOT EXISTS pets (
     name VARCHAR(50) NOT NULL,
     birthdate DATE,
     adult_food_transition_start DATE,
-    daily_food_cups NUMERIC(5, 2)
+    daily_food_cups NUMERIC(5, 2),
+    daily_food_grams NUMERIC(7, 1)
 );
 
 CREATE TABLE IF NOT EXISTS users (

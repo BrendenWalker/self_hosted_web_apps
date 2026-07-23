@@ -76,13 +76,17 @@ function PetCard({ pet, onReload, onError }) {
   const [dailyCups, setDailyCups] = useState(
     pet.daily_food_cups != null ? String(pet.daily_food_cups) : ''
   );
+  const [dailyGrams, setDailyGrams] = useState(
+    pet.daily_food_grams != null ? String(pet.daily_food_grams) : ''
+  );
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
     setBirth(pet.birthdate || '');
     setTransitionStart(pet.adult_food_transition_start || '');
     setDailyCups(pet.daily_food_cups != null ? String(pet.daily_food_cups) : '');
-  }, [pet.birthdate, pet.adult_food_transition_start, pet.daily_food_cups]);
+    setDailyGrams(pet.daily_food_grams != null ? String(pet.daily_food_grams) : '');
+  }, [pet.birthdate, pet.adult_food_transition_start, pet.daily_food_cups, pet.daily_food_grams]);
 
   const addMember = async (e) => {
     e.preventDefault();
@@ -136,9 +140,15 @@ function PetCard({ pet, onReload, onError }) {
         onError('Daily food cups must be a number greater than 0');
         return;
       }
+      const gramsValue = dailyGrams.trim() === '' ? null : Number(dailyGrams);
+      if (gramsValue != null && (!Number.isFinite(gramsValue) || gramsValue <= 0)) {
+        onError('Daily food grams must be a number greater than 0');
+        return;
+      }
       await updatePetFoodTransition(pet.id, {
         adult_food_transition_start: transitionStart || null,
         daily_food_cups: cupsValue,
+        daily_food_grams: gramsValue,
       });
       await onReload();
     } catch (err) {
@@ -149,7 +159,9 @@ function PetCard({ pet, onReload, onError }) {
   };
 
   const hasSchedule =
-    Boolean(pet.adult_food_transition_start) && pet.daily_food_cups != null && pet.daily_food_cups > 0;
+    Boolean(pet.adult_food_transition_start) &&
+    ((pet.daily_food_cups != null && pet.daily_food_cups > 0) ||
+      (pet.daily_food_grams != null && pet.daily_food_grams > 0));
 
   return (
     <section className="card">
@@ -182,6 +194,17 @@ function PetCard({ pet, onReload, onError }) {
             value={dailyCups}
             onChange={(e) => setDailyCups(e.target.value)}
             placeholder="e.g. 1.5"
+          />
+        </label>
+        <label>
+          Daily food intake (grams)
+          <input
+            type="number"
+            min="0"
+            step="1"
+            value={dailyGrams}
+            onChange={(e) => setDailyGrams(e.target.value)}
+            placeholder="e.g. 250"
           />
         </label>
         <div className="row gap">

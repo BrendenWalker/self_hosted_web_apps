@@ -4,6 +4,7 @@ import { fetchPetsManage } from '../api/client';
 import {
   buildTransitionSchedule,
   formatCups,
+  formatGrams,
   getTransitionDayNumber,
   getTransitionStatus,
 } from '../utils/foodTransition';
@@ -35,6 +36,17 @@ function statusLabel(status, dayNumber) {
   if (status === 'complete') return 'Complete';
   if (status === 'in_progress' && dayNumber) return `Day ${dayNumber} of 14`;
   return 'Not configured';
+}
+
+function dailyIntakeSummary(pet) {
+  const parts = [];
+  if (pet.daily_food_cups != null && pet.daily_food_cups > 0) {
+    parts.push(`${formatCups(Number(pet.daily_food_cups))} cups/day`);
+  }
+  if (pet.daily_food_grams != null && pet.daily_food_grams > 0) {
+    parts.push(`${formatGrams(Number(pet.daily_food_grams))} g/day`);
+  }
+  return parts.join(' · ');
 }
 
 export default function FoodTransitionPage() {
@@ -78,9 +90,16 @@ export default function FoodTransitionPage() {
   );
 
   const schedule = useMemo(() => {
-    if (!pet?.adult_food_transition_start || pet.daily_food_cups == null) return [];
-    return buildTransitionSchedule(pet.adult_food_transition_start, pet.daily_food_cups);
+    if (!pet?.adult_food_transition_start) return [];
+    return buildTransitionSchedule(
+      pet.adult_food_transition_start,
+      pet.daily_food_cups,
+      pet.daily_food_grams
+    );
   }, [pet]);
+
+  const showCups = schedule.some((row) => row.puppyCups != null);
+  const showGrams = schedule.some((row) => row.puppyGrams != null);
 
   const status = pet?.adult_food_transition_start
     ? getTransitionStatus(pet.adult_food_transition_start)
@@ -91,6 +110,7 @@ export default function FoodTransitionPage() {
 
   const endDate = schedule.length ? schedule[schedule.length - 1].date : null;
   const age = pet ? ageLabel(pet.birthdate) : '';
+  const intakeSummary = pet ? dailyIntakeSummary(pet) : '';
 
   return (
     <div className="page">
@@ -118,8 +138,8 @@ export default function FoodTransitionPage() {
       {pet && schedule.length === 0 ? (
         <section className="card stack small-gap">
           <p className="muted">
-            Set the adult food transition start date and daily food cups for {pet.name} on the Pets
-            page to see the 14-day schedule.
+            Set the adult food transition start date and daily food amounts (cups and/or grams) for{' '}
+            {pet.name} on the Pets page to see the 14-day schedule.
           </p>
           <Link to="/pets" className="inline-link">
             Configure on Pets page →
@@ -138,8 +158,8 @@ export default function FoodTransitionPage() {
               </div>
             </div>
             <p className="muted small">
-              {formatCups(Number(pet.daily_food_cups))} cups/day · {formatDisplayDate(pet.adult_food_transition_start)}{' '}
-              → {formatDisplayDate(endDate)}
+              {intakeSummary ? `${intakeSummary} · ` : null}
+              {formatDisplayDate(pet.adult_food_transition_start)} → {formatDisplayDate(endDate)}
             </p>
           </section>
 
@@ -152,8 +172,18 @@ export default function FoodTransitionPage() {
                     <th>Date</th>
                     <th>Puppy %</th>
                     <th>Adult %</th>
-                    <th>Puppy cups</th>
-                    <th>Adult cups</th>
+                    {showCups ? (
+                      <>
+                        <th>Puppy cups</th>
+                        <th>Adult cups</th>
+                      </>
+                    ) : null}
+                    {showGrams ? (
+                      <>
+                        <th>Puppy g</th>
+                        <th>Adult g</th>
+                      </>
+                    ) : null}
                   </tr>
                 </thead>
                 <tbody>
@@ -166,8 +196,18 @@ export default function FoodTransitionPage() {
                       <td>{formatDisplayDate(row.date)}</td>
                       <td>{row.oldPct}%</td>
                       <td>{row.newPct}%</td>
-                      <td>{formatCups(row.puppyCups)}</td>
-                      <td>{formatCups(row.adultCups)}</td>
+                      {showCups ? (
+                        <>
+                          <td>{formatCups(row.puppyCups)}</td>
+                          <td>{formatCups(row.adultCups)}</td>
+                        </>
+                      ) : null}
+                      {showGrams ? (
+                        <>
+                          <td>{formatGrams(row.puppyGrams)}</td>
+                          <td>{formatGrams(row.adultGrams)}</td>
+                        </>
+                      ) : null}
                     </tr>
                   ))}
                 </tbody>
