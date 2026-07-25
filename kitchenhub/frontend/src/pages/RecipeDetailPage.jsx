@@ -31,6 +31,7 @@ import {
   sumRecipeLineKcal,
 } from '../utils/recipeIngredientNutrition';
 import { RecipeMakeItOverlay } from '../components/RecipeMakeItOverlay';
+import { IngredientPickerModal } from '../components/IngredientPickerModal';
 import './RecipeDetailPage.css';
 
 const RECIPE_SCALE_OPTIONS = [
@@ -56,6 +57,7 @@ function RecipeDetailPage() {
   const [editing, setEditing] = useState(false);
   const [form, setForm] = useState({ name: '', servings: 1, category_ids: [], instructions: '' });
   const [addIngredientId, setAddIngredientId] = useState('');
+  const [ingredientPickerOpen, setIngredientPickerOpen] = useState(false);
   const [addIngredientQty, setAddIngredientQty] = useState('');
   const [addIngredientMeasureId, setAddIngredientMeasureId] = useState('');
   const [addIngredientComment, setAddIngredientComment] = useState('');
@@ -86,10 +88,27 @@ function RecipeDetailPage() {
     }
   }, [isNew, categories, form.category_ids.length]);
 
+  useEffect(() => {
+    if (!editing) setIngredientPickerOpen(false);
+  }, [editing]);
+
   const recipeMeasurementsSorted = useMemo(
     () => sortMeasurementsForRecipeEditor(measurements),
     [measurements]
   );
+
+  const availableIngredients = useMemo(
+    () =>
+      ingredientsCatalog.filter(
+        (i) => !recipe?.ingredients?.some((ri) => ri.ingredient_id === i.id)
+      ),
+    [ingredientsCatalog, recipe?.ingredients]
+  );
+
+  const selectedAddIngredient = useMemo(() => {
+    if (!addIngredientId) return null;
+    return ingredientsCatalog.find((i) => i.id === Number(addIngredientId)) || null;
+  }, [ingredientsCatalog, addIngredientId]);
 
   const recipeKcalPerServingDisplay = useMemo(() => {
     if (!recipe) return null;
@@ -256,8 +275,11 @@ function RecipeDetailPage() {
 
   const handleAddIngredient = async (e) => {
     e?.preventDefault?.();
-    if (!addIngredientId) return;
     setError(null);
+    if (!addIngredientId) {
+      setError('Select an ingredient.');
+      return;
+    }
     const measureIdRaw = String(addIngredientMeasureId ?? '').trim();
     if (!measureIdRaw) {
       setError('Select a unit for the ingredient.');
@@ -679,24 +701,21 @@ function RecipeDetailPage() {
                       className="add-ingredient-fields"
                       onKeyDown={(ev) => {
                         if (ev.key !== 'Enter' || ev.target.tagName === 'TEXTAREA') return;
+                        // Let Enter open the picker rather than submitting the row.
+                        if (ev.target.closest('.ingredient-picker-trigger')) return;
                         ev.preventDefault();
                         handleAddIngredient(ev);
                       }}
                     >
-                      <select
-                        value={addIngredientId}
-                        onChange={(e) => setAddIngredientId(e.target.value)}
-                        required
+                      <button
+                        type="button"
+                        className={`ingredient-picker-trigger${selectedAddIngredient ? '' : ' ingredient-picker-trigger--empty'}`}
+                        onClick={() => setIngredientPickerOpen(true)}
                       >
-                        <option value="">Select ingredient…</option>
-                        {ingredientsCatalog
-                          .filter((i) => !recipe.ingredients?.some((ri) => ri.ingredient_id === i.id))
-                          .map((i) => (
-                            <option key={i.id} value={i.id}>
-                              {formatCatalogIngredientLabel(i)}
-                            </option>
-                          ))}
-                      </select>
+                        {selectedAddIngredient
+                          ? formatCatalogIngredientLabel(selectedAddIngredient)
+                          : 'Select ingredient…'}
+                      </button>
                       <input
                         type="text"
                         placeholder="Qty"
@@ -790,6 +809,19 @@ function RecipeDetailPage() {
           </>
         )}
       </section>
+
+      {ingredientPickerOpen && (
+        <IngredientPickerModal
+          ingredients={availableIngredients}
+          selectedId={addIngredientId}
+          formatLabel={formatCatalogIngredientLabel}
+          onCancel={() => setIngredientPickerOpen(false)}
+          onConfirm={(ingredientId) => {
+            setAddIngredientId(String(ingredientId));
+            setIngredientPickerOpen(false);
+          }}
+        />
+      )}
 
       {makeItOpen && recipe && (
         <RecipeMakeItOverlay
