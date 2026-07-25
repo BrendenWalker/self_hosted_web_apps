@@ -424,8 +424,29 @@
   font-size: 0.9rem;
 }
 
-.add-ingredient-fields select:first-child {
+.ingredient-picker-trigger {
   min-width: 180px;
+  max-width: 320px;
+  padding: 0.4rem 0.5rem;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  background: white;
+  font-size: 0.9rem;
+  font-family: inherit;
+  color: #2c3e50;
+  text-align: left;
+  cursor: pointer;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ingredient-picker-trigger:hover {
+  border-color: #3498db;
+}
+
+.ingredient-picker-trigger--empty {
+  color: #7f8c8d;
 }
 
 .qty-input {
@@ -491,10 +512,11 @@
     align-items: stretch;
   }
 
-  .add-ingredient-fields select:first-child,
+  .ingredient-picker-trigger,
   .qty-input,
   .comment-input {
     width: 100%;
     min-width: 0;
+    max-width: none;
   }
 }

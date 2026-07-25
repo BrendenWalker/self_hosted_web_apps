@@ -1,0 +1,129 @@
+.ingredient-picker-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 1rem;
+}
+
+.ingredient-picker-modal {
+  display: flex;
+  flex-direction: column;
+  background: white;
+  border-radius: 8px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+  padding: 1.5rem 2rem;
+  max-width: 520px;
+  width: 100%;
+  max-height: 85vh;
+}
+
+.ingredient-picker-title {
+  margin: 0 0 0.75rem 0;
+  font-size: 1.15rem;
+  font-weight: 600;
+  color: #2c3e50;
+}
+
+.ingredient-picker-search {
+  margin-bottom: 0.75rem;
+}
+
+.ingredient-picker-search-input {
+  width: 100%;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  font-size: 0.95rem;
+  box-sizing: border-box;
+}
+
+.ingredient-picker-search-input:focus {
+  outline: none;
+  border-color: #3498db;
+}
+
+.ingredient-picker-search-info {
+  margin-top: 0.35rem;
+  color: #666;
+  font-size: 0.9rem;
+}
+
+.ingredient-picker-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  flex: 1 1 auto;
+  border: 1px solid #eee;
+  border-radius: 4px;
+}
+
+.ingredient-picker-option {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.75rem;
+  width: 100%;
+  padding: 0.5rem 0.75rem;
+  background: none;
+  border: none;
+  border-bottom: 1px solid #eee;
+  font-size: 0.95rem;
+  font-family: inherit;
+  color: #2c3e50;
+  text-align: left;
+  cursor: pointer;
+}
+
+.ingredient-picker-option:hover {
+  background: #f5f5f5;
+}
+
+.ingredient-picker-option--selected,
+.ingredient-picker-option--selected:hover {
+  background: #3498db;
+  color: white;
+}
+
+.ingredient-picker-option-name {
+  flex: 1 1 auto;
+}
+
+.ingredient-picker-option-meta {
+  flex: 0 0 auto;
+  font-size: 0.85rem;
+  color: #7f8c8d;
+}
+
+.ingredient-picker-option--selected .ingredient-picker-option-meta {
+  color: #ecf0f1;
+}
+
+.ingredient-picker-empty {
+  margin: 0;
+  padding: 0.75rem 0;
+  color: #666;
+  font-style: italic;
+}
+
+.ingredient-picker-hint {
+  margin: 0.5rem 0 0 0;
+  color: #7f8c8d;
+  font-size: 0.85rem;
+}
+
+.ingredient-picker-actions {
+  display: flex;
+  gap: 0.75rem;
+  justify-content: flex-end;
+  margin-top: 1.25rem;
+}
+
+.ingredient-picker-actions .btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
