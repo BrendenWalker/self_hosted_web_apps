@@ -487,7 +487,7 @@ function WizardBody({ wizard, setWizard, petId, saving, onSave }) {
           value={subType}
           onChange={(v) => {
             setSubType(v);
-            setRating(v === 'pee' ? 7 : 4);
+            setRating(v === 'pee' ? 7 : 2);
           }}
           options={[
             { value: 'pee', label: 'Pee', icon: '💦' },
