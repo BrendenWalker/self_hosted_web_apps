@@ -23,6 +23,7 @@ export const getIncome = () => api.get('/income');
 export const updateIncome = (data) => api.put('/income', data);
 
 export const getExpenseCategories = () => api.get('/expense-categories');
+export const createExpenseCategory = (data) => api.post('/expense-categories', data);
 export const getExpenseLines = () => api.get('/expense-lines');
 export const createExpenseLine = (data) => api.post('/expense-lines', data);
 export const updateExpenseLine = (id, data) => api.put(`/expense-lines/${id}`, data);
