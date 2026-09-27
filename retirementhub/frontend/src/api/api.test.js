@@ -9,6 +9,7 @@ import {
   computeScenario,
   getSavingsLimits,
   getExpenseCategories,
+  createExpenseCategory,
   getExpenseLines,
 } from './api';
 
@@ -95,6 +96,12 @@ describe('api', () => {
   it('getExpenseCategories calls GET /expense-categories', async () => {
     await getExpenseCategories();
     expect(mockInstance.get).toHaveBeenCalledWith('/expense-categories');
+  });
+
+  it('createExpenseCategory POSTs /expense-categories', async () => {
+    const body = { name: 'Pets', category_group: 'personal' };
+    await createExpenseCategory(body);
+    expect(mockInstance.post).toHaveBeenCalledWith('/expense-categories', body);
   });
 
   it('getExpenseLines calls GET /expense-lines', async () => {

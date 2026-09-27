@@ -753,7 +753,19 @@ app.delete('/api/account-balances/:id', async (req, res) => {
   }
 });
 
-// ==================== EXPENSE CATEGORIES (read-only) ====================
+// ==================== EXPENSE CATEGORIES ====================
+
+const ALLOWED_GROUPS = ['discretionary', 'fixed', 'insurance', 'utilities', 'tax', 'personal'];
+
+function expenseCategorySchemaError(res, error) {
+  if (error && error.code === '42703') {
+    res.status(503).json({
+      error: 'Expense categories need a database update. Run migration 021_expense_category_keep_visible.sql.',
+    });
+    return true;
+  }
+  return false;
+}
 
 app.get('/api/expense-categories', async (req, res) => {
   try {
@@ -762,6 +774,63 @@ app.get('/api/expense-categories', async (req, res) => {
   } catch (error) {
     console.error('Error fetching expense categories:', error);
     res.status(500).json({ error: error.message || 'Failed to fetch expense categories' });
+  }
+});
+
+app.post('/api/expense-categories', async (req, res) => {
+  const name = String(req.body?.name || '').trim().replace(/\s+/g, ' ');
+  const group = String(req.body?.category_group || '').trim();
+  if (!name) {
+    return res.status(400).json({ error: 'Category name is required' });
+  }
+  if (name.length > 120) {
+    return res.status(400).json({ error: 'Category name must be 120 characters or fewer' });
+  }
+  if (!ALLOWED_GROUPS.includes(group)) {
+    return res.status(400).json({ error: 'category_group must be one of: ' + ALLOWED_GROUPS.join(', ') });
+  }
+
+  const client = await pool.connect();
+  try {
+    const existing = await client.query(
+      'SELECT id FROM expense_category WHERE LOWER(name) = LOWER($1)',
+      [name]
+    );
+    if (existing.rows.length > 0) {
+      return res.status(409).json({ error: 'An expense category with that name already exists' });
+    }
+
+    await client.query('BEGIN');
+    const maxOrder = await client.query(
+      'SELECT COALESCE(MAX(sort_order), 0) + 10 AS next_order FROM expense_category'
+    );
+    const inserted = await client.query(
+      `INSERT INTO expense_category (name, category_group, sort_order, keep_visible)
+       VALUES ($1, $2, $3, TRUE)
+       RETURNING *`,
+      [name, group, maxOrder.rows[0].next_order]
+    );
+    await client.query(
+      `INSERT INTO expense_line (expense_category_id, as_of, current_monthly, retirement_monthly)
+       VALUES ($1, CURRENT_DATE, 0, NULL)`,
+      [inserted.rows[0].id]
+    );
+    await client.query('COMMIT');
+    res.status(201).json(inserted.rows[0]);
+  } catch (error) {
+    try {
+      await client.query('ROLLBACK');
+    } catch (rollbackError) {
+      console.error('Error rolling back expense category create:', rollbackError);
+    }
+    if (error && error.code === '23505') {
+      return res.status(409).json({ error: 'An expense category with that name already exists' });
+    }
+    console.error('Error creating expense category:', error);
+    if (expenseCategorySchemaError(res, error)) return;
+    res.status(500).json({ error: error.message || 'Failed to create expense category' });
+  } finally {
+    client.release();
   }
 });
 
@@ -791,22 +860,46 @@ app.patch('/api/expense-categories/:id', async (req, res) => {
   }
 });
 
-// Returns latest as_of per category; only rows with actual_annual or positive current/mo or retirement/mo.
+const EXPENSE_LINES_SQL = `
+  SELECT * FROM (
+    SELECT DISTINCT ON (el.expense_category_id)
+      el.*, ec.name AS category_name, ec.category_group, ec.category_type, ec.sort_order, ec.keep_visible
+    FROM expense_line el
+    JOIN expense_category ec ON el.expense_category_id = ec.id
+    ORDER BY el.expense_category_id, el.as_of DESC, el.id DESC
+  ) sub
+  WHERE (sub.actual_annual IS NOT NULL AND sub.actual_annual > 0)
+     OR (sub.current_monthly > 0)
+     OR (sub.retirement_monthly IS NOT NULL AND sub.retirement_monthly > 0)
+     OR sub.keep_visible
+  ORDER BY sub.category_group, sub.sort_order, sub.category_name`;
+
+const EXPENSE_LINES_SQL_LEGACY = `
+  SELECT * FROM (
+    SELECT DISTINCT ON (el.expense_category_id) el.*, ec.name AS category_name, ec.category_group, ec.category_type
+    FROM expense_line el
+    JOIN expense_category ec ON el.expense_category_id = ec.id
+    ORDER BY el.expense_category_id, el.as_of DESC, el.id DESC
+  ) sub
+  WHERE (sub.actual_annual IS NOT NULL AND sub.actual_annual > 0)
+     OR (sub.current_monthly > 0)
+     OR (sub.retirement_monthly IS NOT NULL AND sub.retirement_monthly > 0)`;
+
+// Latest as_of per category. Seeded zeros stay hidden. User-added categories stay listed via keep_visible.
 app.get('/api/expense-lines', async (req, res) => {
   try {
-    const result = await pool.query(
-      `SELECT * FROM (
-        SELECT DISTINCT ON (el.expense_category_id) el.*, ec.name AS category_name, ec.category_group, ec.category_type
-        FROM expense_line el
-        JOIN expense_category ec ON el.expense_category_id = ec.id
-        ORDER BY el.expense_category_id, el.as_of DESC, el.id DESC
-      ) sub
-      WHERE (sub.actual_annual IS NOT NULL AND sub.actual_annual > 0)
-         OR (sub.current_monthly > 0)
-         OR (sub.retirement_monthly IS NOT NULL AND sub.retirement_monthly > 0)`
-    );
+    const result = await pool.query(EXPENSE_LINES_SQL);
     res.json(result.rows);
   } catch (error) {
+    if (error && error.code === '42703') {
+      try {
+        const result = await pool.query(EXPENSE_LINES_SQL_LEGACY);
+        return res.json(result.rows);
+      } catch (fallbackError) {
+        console.error('Error fetching expense lines:', fallbackError);
+        return res.status(500).json({ error: fallbackError.message || 'Failed to fetch expense lines' });
+      }
+    }
     console.error('Error fetching expense lines:', error);
     res.status(500).json({ error: error.message || 'Failed to fetch expense lines' });
   }
@@ -958,8 +1051,6 @@ function parseCategoryPath(path) {
   const category_name = s.slice(s.lastIndexOf(':') + 1).trim();
   return { category_group: category_group || s, category_name: category_name || s };
 }
-
-const ALLOWED_GROUPS = ['discretionary', 'fixed', 'insurance', 'utilities', 'tax', 'personal'];
 
 function normalizeCategoryGroup(raw) {
   if (!raw || typeof raw !== 'string') return 'discretionary';

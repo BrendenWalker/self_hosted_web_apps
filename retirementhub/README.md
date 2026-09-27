@@ -78,6 +78,12 @@ If your database was created before **tax parameters** (editable IRS tables), ru
 psql -U postgres -d retirementhub -f retirementhub/database/migrations/016_tax_parameters.sql
 ```
 
+If your database was created before adding expense categories from the Expenses page, run:
+
+```bash
+psql -U postgres -d retirementhub -f retirementhub/database/migrations/021_expense_category_keep_visible.sql
+```
+
 ### Environment Configuration
 
 1. Create a `.env` file in the project root directory (same level as `docker-compose.yml`):
