@@ -134,7 +134,8 @@ export default function YearDetailDrawer({ year, row, household, onClose }) {
 
         <section className="year-drawer-section">
           <h3>Spending</h3>
-          <DetailRow label="Expenses" value={row.expenses} />
+          <DetailRow label="Living expenses" value={row.living_expenses ?? row.expenses} />
+          <DetailRow label="Discretionary" value={row.discretionary_expenses ?? 0} />
           {spendRows.length === 0 ? (
             <p className="year-drawer-muted">No spending-source breakdown for this year.</p>
           ) : (

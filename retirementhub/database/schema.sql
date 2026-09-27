@@ -64,8 +64,11 @@ CREATE TABLE IF NOT EXISTS expense_category (
     sort_order INTEGER NOT NULL DEFAULT 0,
     category_type VARCHAR(40) NOT NULL DEFAULT 'regular'
         CHECK (category_type IN ('regular', 'p2_health_until_medicare')),
+    keep_visible BOOLEAN NOT NULL DEFAULT FALSE,
     modified TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_expense_category_name_lower ON expense_category (LOWER(name));
 
 -- Expense line: one row per (category, as_of). Latest as_of per category = "current". History preserved.
 CREATE TABLE IF NOT EXISTS expense_line (

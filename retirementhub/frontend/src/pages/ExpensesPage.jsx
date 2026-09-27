@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { getExpenseLines, updateExpenseLine, getMortgage, updateMortgage, getBudgetSummary, getRetirementTaxGuide, patchExpenseCategory } from '../api/api';
+import { getExpenseLines, updateExpenseLine, getMortgage, updateMortgage, getBudgetSummary, getRetirementTaxGuide, patchExpenseCategory, createExpenseCategory } from '../api/api';
 
 const GROUP_LABELS = {
   discretionary: 'Discretionary',
@@ -31,6 +31,9 @@ export default function ExpensesPage() {
   const [taxableIncomeInput, setTaxableIncomeInput] = useState('');
   const [taxGuideApplying, setTaxGuideApplying] = useState(null);
   const [patchingCategoryId, setPatchingCategoryId] = useState(null);
+  const [showAddCategory, setShowAddCategory] = useState(false);
+  const [addingCategory, setAddingCategory] = useState(false);
+  const [addCategoryForm, setAddCategoryForm] = useState({ name: '', category_group: 'discretionary' });
 
   useEffect(() => {
     load();
@@ -141,6 +144,38 @@ export default function ExpensesPage() {
 
   const handleEstimateFederal = () => {
     loadTaxGuide(taxGuideYear, taxableIncomeInput);
+  };
+
+  const handleAddCategory = async (e) => {
+    e.preventDefault();
+    const name = addCategoryForm.name.trim().replace(/\s+/g, ' ');
+    if (!name) {
+      setMessage('Category name is required');
+      return;
+    }
+    setMessage(null);
+    setAddingCategory(true);
+    try {
+      await createExpenseCategory({ name, category_group: addCategoryForm.category_group });
+      setAddCategoryForm({ name: '', category_group: 'discretionary' });
+      setShowAddCategory(false);
+      await load();
+    } catch (err) {
+      setMessage(err.response?.data?.error || 'Failed to add category');
+    } finally {
+      setAddingCategory(false);
+    }
+  };
+
+  const openAddCategory = () => {
+    if (addingCategory) return;
+    setShowAddCategory(true);
+  };
+
+  const cancelAddCategory = () => {
+    if (addingCategory) return;
+    setAddCategoryForm({ name: '', category_group: 'discretionary' });
+    setShowAddCategory(false);
   };
 
   const handleMortgageSubmit = async (e) => {
@@ -318,7 +353,63 @@ export default function ExpensesPage() {
       </div>
 
       <div className="card">
-        <h2>Expense categories</h2>
+        <div className="card-header-row">
+          <h2>Expense categories</h2>
+          {!showAddCategory && (
+            <button
+              type="button"
+              className="btn btn-primary"
+              onClick={openAddCategory}
+              disabled={addingCategory}
+            >
+              Add Expense Category
+            </button>
+          )}
+        </div>
+        {showAddCategory && (
+          <form onSubmit={handleAddCategory} className="accounts-form">
+            <div className="form-row">
+              <div className="form-group">
+                <label htmlFor="add_category_name">Name</label>
+                <input
+                  id="add_category_name"
+                  type="text"
+                  maxLength={120}
+                  value={addCategoryForm.name}
+                  onChange={(e) => setAddCategoryForm((p) => ({ ...p, name: e.target.value }))}
+                  placeholder="e.g. Pet care"
+                  autoFocus
+                  required
+                />
+              </div>
+              <div className="form-group">
+                <label htmlFor="add_category_group">Group</label>
+                <select
+                  id="add_category_group"
+                  value={addCategoryForm.category_group}
+                  onChange={(e) => setAddCategoryForm((p) => ({ ...p, category_group: e.target.value }))}
+                >
+                  {groupOrder.map((group) => (
+                    <option key={group} value={group}>{GROUP_LABELS[group]}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="form-group expense-category-actions" style={{ alignSelf: 'flex-end' }}>
+                <button type="submit" className="btn btn-primary" disabled={addingCategory}>
+                  {addingCategory ? 'Adding…' : 'Add'}
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-quiet"
+                  onClick={cancelAddCategory}
+                  disabled={addingCategory}
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          </form>
+        )}
         <p style={{ marginBottom: '0.5rem', color: '#5a6b64', fontSize: '0.9rem' }}>
           Current monthly and retirement monthly. Amounts are stored by “as of” date so history is kept; the most recent snapshot is shown.
         </p>

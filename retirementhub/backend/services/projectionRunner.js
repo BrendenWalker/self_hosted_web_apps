@@ -72,7 +72,7 @@ async function runProjection(pool, query = {}) {
        ORDER BY ab.account_id, ab.as_of DESC, ab.id DESC`
     ),
     pool.query(
-      `SELECT el.current_monthly, el.retirement_monthly, ec.category_type
+      `SELECT el.current_monthly, el.retirement_monthly, ec.category_type, ec.category_group
        FROM (SELECT DISTINCT ON (expense_category_id) expense_category_id, current_monthly, retirement_monthly
              FROM expense_line ORDER BY expense_category_id, as_of DESC, id DESC) el
        JOIN expense_category ec ON el.expense_category_id = ec.id`
@@ -184,19 +184,26 @@ async function runProjection(pool, query = {}) {
 
   let currentAnnual = 0;
   let retirementAnnual = 0;
+  let currentDiscretionaryAnnual = 0;
+  let retirementDiscretionaryAnnual = 0;
   const p2HealthUntilMedicareMonthly = [];
   for (const row of summaryRes.rows) {
+    const isDiscretionary = row.category_group === 'discretionary';
     const catType = row.category_type || 'regular';
     if (catType === 'p2_health_until_medicare') {
       const retVal = row.retirement_monthly != null ? parseFloat(row.retirement_monthly) : null;
       if (retVal != null && retVal > 0) p2HealthUntilMedicareMonthly.push(retVal);
       continue;
     }
-    currentAnnual += (parseFloat(row.current_monthly) || 0) * 12;
+    const currentPart = (parseFloat(row.current_monthly) || 0) * 12;
+    currentAnnual += currentPart;
+    if (isDiscretionary) currentDiscretionaryAnnual += currentPart;
     const retVal = row.retirement_monthly != null ? parseFloat(row.retirement_monthly) : null;
     if (retVal !== 0) {
       const r = retVal != null ? retVal : parseFloat(row.current_monthly) || 0;
-      retirementAnnual += r * 12;
+      const retirementPart = r * 12;
+      retirementAnnual += retirementPart;
+      if (isDiscretionary) retirementDiscretionaryAnnual += retirementPart;
     }
   }
   const mortgageResult = await pool.query('SELECT monthly_payment FROM mortgage LIMIT 1');
@@ -329,6 +336,13 @@ async function runProjection(pool, query = {}) {
     const inP2HealthBridge =
       p1RetirementYear != null && p2MedicareYear != null && y >= p1RetirementYear && y < p2MedicareYear;
 
+    const expenseGrowthYears =
+      expensesUseRetirement && expenseRetirementYear != null ? y - expenseRetirementYear : y - startYear;
+    const discretionaryBase = expensesUseRetirement ? retirementDiscretionaryAnnual : currentDiscretionaryAnnual;
+    const grownDiscretionary = Math.round(
+      discretionaryBase * Math.pow(expenseGrowthFactor, Math.max(0, expenseGrowthYears)) * 100
+    ) / 100;
+
     let expensesAmount;
     let withdrawals = {
       cashWithdrawals: 0,
@@ -379,6 +393,9 @@ async function runProjection(pool, query = {}) {
         expensesAmount = Math.round((expensesAmount + bridgeAnnual) * 100) / 100;
       }
     }
+
+    const discretionaryExpenses = Math.min(grownDiscretionary, expensesAmount);
+    const livingExpenses = Math.round((expensesAmount - discretionaryExpenses) * 100) / 100;
 
     const spendingGap = Math.max(0, expensesAmount - totalSs - rmdTotal - wageIncome - bonusAnnual);
     if (spendingGap > 0) {
@@ -603,6 +620,8 @@ async function runProjection(pool, query = {}) {
       savings_added_total: savingsAddedTotal,
       income: incomeAmount,
       expenses: expensesAmount,
+      living_expenses: livingExpenses,
+      discretionary_expenses: discretionaryExpenses,
       savings: savingsAmount,
       income_wages: Math.round(wageIncome * 100) / 100,
       income_wage_p1: Math.round((p1Retired ? 0 : salaryP1) * 100) / 100,
@@ -706,7 +725,11 @@ async function runProjection(pool, query = {}) {
     retirement_year: retirementYear,
     starting_net_worth: startingNetWorth,
     current_annual: Math.round(currentAnnual * 100) / 100,
+    current_living_annual: Math.round((currentAnnual - currentDiscretionaryAnnual) * 100) / 100,
+    current_discretionary_annual: Math.round(currentDiscretionaryAnnual * 100) / 100,
     retirement_annual: Math.round(retirementAnnual * 100) / 100,
+    retirement_living_annual: Math.round((retirementAnnual - retirementDiscretionaryAnnual) * 100) / 100,
+    retirement_discretionary_annual: Math.round(retirementDiscretionaryAnnual * 100) / 100,
     required_monthly_income_retirement: rmiMonthly,
     annual_spending_target: spendingAnnualBase,
     by_year: byYear,

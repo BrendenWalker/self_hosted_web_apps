@@ -90,7 +90,11 @@ function ProjectionsSummary({ data }) {
     starting_net_worth,
     year_reaches_target,
     current_annual,
+    current_living_annual,
+    current_discretionary_annual,
     retirement_annual,
+    retirement_living_annual,
+    retirement_discretionary_annual,
     annual_spending_target,
     required_monthly_income_retirement,
     projection_meta,
@@ -136,7 +140,9 @@ function ProjectionsSummary({ data }) {
         </div>
       </div>
       <p className="projections-summary-note">
-        Current annual expenses: {formatCurrency(current_annual)}
+        Current annual living expenses: {formatCurrency(current_living_annual ?? current_annual)}
+        {' · '}
+        Discretionary: {formatCurrency(current_discretionary_annual ?? 0)}
         {' · '}
         {annual_spending_target != null && annual_spending_target > 0 ? (
           <>
@@ -149,7 +155,11 @@ function ProjectionsSummary({ data }) {
             {formatCurrency(required_monthly_income_retirement * 12)}/yr in first retirement year, +{expense_growth_pct}%/yr)
           </>
         ) : (
-          <>Retirement annual (from expense categories + mortgage): {formatCurrency(retirement_annual)}</>
+          <>
+            Retirement living (categories other than discretionary, plus mortgage): {formatCurrency(retirement_living_annual ?? retirement_annual)}
+            {' · '}
+            Discretionary: {formatCurrency(retirement_discretionary_annual ?? 0)}
+          </>
         )}
       </p>
       {projection_meta && (
@@ -332,8 +342,8 @@ function ProjectionsTaxDetailTable({ rows, projectionMeta, household, onYearSele
           <span className="projections-detail-meta"> {projectionMeta.tax_model_note}</span>
         )}
       </p>
-      <div className="projections-detail-table-wrap">
-        <table className="projections-detail-table projections-tax-table">
+      <div className="projections-detail-table-wrap projections-detail-viewport">
+        <table className="projections-detail-table projections-tax-table projections-sticky-year">
           <thead>
             <tr>
               <th scope="col">Year</th>
@@ -425,8 +435,8 @@ function ProjectionsYearDetailTable({ rows, household, projectionMeta, onYearSel
           <> In required-income mode, retirement spending is your required monthly amount (with expense growth); income is funded Social Security → RMD → wages/bonus → withdrawals from non-RMD savings.</>
         )}
       </p>
-      <div className="projections-detail-table-wrap">
-        <table className="projections-detail-table">
+      <div className="projections-detail-table-wrap projections-detail-viewport">
+        <table className="projections-detail-table projections-sticky-year">
           <thead>
             <tr>
               <th scope="col">Year</th>
@@ -447,7 +457,8 @@ function ProjectionsYearDetailTable({ rows, household, projectionMeta, onYearSel
               {useRmi && <th scope="col" className="num">From savings</th>}
               {useRmi && <th scope="col" className="num">Funding shortfall</th>}
               <th scope="col" className="num">Ordinary income (before ded.)</th>
-              <th scope="col" className="num">Expenses</th>
+              <th scope="col" className="num">Living Expenses</th>
+              <th scope="col" className="num">Discretionary</th>
               <th scope="col" className="num">Savings</th>
               <th scope="col" className="num">401(k) contrib.</th>
             </tr>
@@ -493,7 +504,8 @@ function ProjectionsYearDetailTable({ rows, household, projectionMeta, onYearSel
                   </td>
                 )}
                 <td className="num">{formatCurrency(row.taxable_income_before_deduction ?? row.taxable_income_estimate)}</td>
-                <td className="num">{formatCurrency(row.expenses)}</td>
+                <td className="num">{formatCurrency(row.living_expenses ?? row.expenses)}</td>
+                <td className="num">{formatCurrency(row.discretionary_expenses ?? 0)}</td>
                 <td className="num">{formatCurrency(row.savings)}</td>
                 <td className="num">{formatCurrency(row.contributions_401k)}</td>
               </tr>
@@ -588,14 +600,15 @@ function IncomeVsExpensesChart({ data, household, projectionMeta, onYearSelect }
                         {(p.rmd_p2 ?? 0) > 0 && ` · ${p2Name}: ${formatCurrency(p.rmd_p2)}`}
                       </div>
                     )}
-                    <div>Expenses: {formatCurrency(p.expenses)}</div>
+                    <div>Living expenses: {formatCurrency(p.living_expenses ?? p.expenses)}</div>
+                    <div>Discretionary: {formatCurrency(p.discretionary_expenses ?? 0)}</div>
                     {(p.income_from_savings_draw ?? 0) > 0 && (
                       <div>From savings (draw): {formatCurrency(p.income_from_savings_draw)}</div>
                     )}
                     {(p.retirement_funding_shortfall ?? 0) > 0 && (
                       <div className="tooltip-rmd">Funding shortfall: {formatCurrency(p.retirement_funding_shortfall)}</div>
                     )}
-                    <div>Income minus expenses: {formatCurrency(p.savings)}</div>
+                    <div>Income minus living and discretionary: {formatCurrency(p.savings)}</div>
                     {(p.income_ss_p1 > 0 || p.income_ss_p2 > 0) && (
                       <div className="tooltip-ss">
                         {p.income_ss_p1 > 0 && <span>SS {p1Name}: {formatCurrency(p.income_ss_p1)}</span>}
@@ -610,7 +623,8 @@ function IncomeVsExpensesChart({ data, household, projectionMeta, onYearSelect }
             />
             <Legend />
             <Bar dataKey="income" name="Income (incl. RMD)" fill="#0d5c4a" radius={[2, 2, 0, 0]} />
-            <Bar dataKey="expenses" name="Expenses" fill="#5a6b64" radius={[2, 2, 0, 0]} />
+            <Bar dataKey="living_expenses" name="Living Expenses" fill="#5a6b64" radius={[2, 2, 0, 0]} />
+            <Bar dataKey="discretionary_expenses" name="Discretionary" fill="#c4a574" radius={[2, 2, 0, 0]} />
             <Line type="monotone" dataKey="rmd" name="RMD" stroke="#a67c52" strokeWidth={2} dot={{ r: 2 }} />
           </ComposedChart>
         </ResponsiveContainer>

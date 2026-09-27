@@ -70,7 +70,10 @@
 }
 
 .main-content .page-scroll {
+  overflow-x: hidden;
   overflow-y: auto;
+  min-width: 0;
+  width: 100%;
   -webkit-overflow-scrolling: touch;
 }
 
@@ -394,6 +397,23 @@
   background: #4a5b54;
 }
 
+.btn-quiet {
+  background: #e6ebe8;
+  color: #6b7c75;
+  font-weight: 500;
+}
+
+.btn-quiet:hover:not(:disabled) {
+  background: #d7dfdb;
+  color: #4e5e57;
+}
+
+.expense-category-actions {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+
 .page-title {
   color: #1a3d35;
   margin-bottom: 1.5rem;
@@ -406,6 +426,8 @@
   padding: 1.5rem;
   box-shadow: 0 1px 4px rgba(0,0,0,0.08);
   margin-bottom: 1.5rem;
+  min-width: 0;
+  max-width: 100%;
 }
 
 .card h2 {
@@ -580,6 +602,9 @@
 
 .projections-chart-card .chart-container {
   min-height: 360px;
+  width: 100%;
+  min-width: 0;
+  overflow: hidden;
 }
 
 .projection-chart-tabs {
@@ -775,7 +800,25 @@
 
 .projections-detail-table-wrap {
   overflow-x: auto;
+  max-width: 100%;
+  min-width: 0;
   margin: 0 -0.25rem;
+  -webkit-overflow-scrolling: touch;
+}
+
+.projections-detail-viewport {
+  --projections-row-height: 2rem;
+  max-height: calc(var(--projections-row-height) * 21);
+  overflow-x: auto;
+  overflow-y: scroll;
+}
+
+.projections-detail-viewport .projections-detail-table th,
+.projections-detail-viewport .projections-detail-table td {
+  height: var(--projections-row-height);
+  line-height: 1.2;
+  padding-top: 0;
+  padding-bottom: 0;
 }
 
 .projections-detail-table {
@@ -795,11 +838,12 @@
 .projections-detail-table thead th {
   position: sticky;
   top: 0;
-  z-index: 1;
+  z-index: 2;
   font-weight: 600;
   color: #1a3d35;
   background: #f5f9f8;
   text-align: left;
+  box-shadow: 0 1px 0 #e8eeec;
 }
 
 .projections-detail-table th.num,
@@ -810,6 +854,37 @@
 
 .projections-detail-table tbody tr:nth-child(even) {
   background: #fafcfb;
+}
+
+.projections-detail-table.projections-sticky-year {
+  border-collapse: separate;
+  border-spacing: 0;
+}
+
+.projections-detail-table.projections-sticky-year th:first-child,
+.projections-detail-table.projections-sticky-year td:first-child {
+  position: sticky;
+  left: 0;
+  background: #fff;
+  box-shadow: 1px 0 0 #e8eeec;
+}
+
+.projections-detail-table.projections-sticky-year td:first-child {
+  z-index: 1;
+}
+
+.projections-detail-table.projections-sticky-year thead th:first-child {
+  z-index: 3;
+  background: #f5f9f8;
+  box-shadow: 1px 0 0 #e8eeec, 0 1px 0 #e8eeec;
+}
+
+.projections-detail-table.projections-sticky-year tbody tr:nth-child(even) td:first-child {
+  background: #fafcfb;
+}
+
+.projections-detail-table.projections-sticky-year tbody tr.projections-year-row-clickable:hover td:first-child {
+  background: #f0f7f4;
 }
 
 .table-sort-btn {
