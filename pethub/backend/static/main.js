@@ -308,7 +308,7 @@ async function refreshTable() {
       const parts = [];
       if (a.sub_type) parts.push(a.sub_type);
       if (a.location) parts.push(a.location);
-      if (a.rating) parts.push('Score ' + a.rating);
+      if (a.rating) parts.push((a.sub_type === 'pee' ? 'Amount ' : 'Score ') + a.rating);
       details = parts.join(' • ');
     } else if (a.activity_type === 'water') {
       details = a.rating ? ('Hydration: ' + a.rating) : (a.notes || '');
@@ -671,11 +671,11 @@ const wizard = {
         <div id="toilet_pee_options">
           <h3>Pee amount</h3>
           <div class="row" style="align-items: center; margin-bottom: 0;">
-            <input type="range" min="1" max="7" value="7" id="toilet_score" style="flex: 1; max-width: 400px;">
-            <span id="toilet_score_val" style="min-width: 40px; text-align: center; font-weight: bold;">7</span>
+            <input type="range" min="1" max="10" value="10" id="toilet_score" style="flex: 1; max-width: 400px;">
+            <span id="toilet_score_val" style="min-width: 40px; text-align: center; font-weight: bold;">10</span>
           </div>
           <div class="row" style="justify-content: space-between; max-width: 400px; font-size: 0.85rem; opacity: 0.85; margin-top: 6px;">
-            <span>Interrupted</span>
+            <span>Tiny amount</span>
             <span>Full</span>
           </div>
         </div>
@@ -830,8 +830,8 @@ const wizard = {
         this.data.subType = 'poop';
         this.data.amount = null;
       } else {
-        // Pee uses a 1..7 scale (1=little bit, 7=full pee), default to 7
-        this.data.rating = parseInt($('#toilet_score')?.value || '7', 10);
+        // Pee uses a 1..10 scale (1=tiny amount, 10=full), default to 10
+        this.data.rating = parseInt($('#toilet_score')?.value || '10', 10);
         this.data.subType = 'pee';
         this.data.amount = null;
       }
@@ -1042,7 +1042,7 @@ async function recordDoubleGood() {
   const peePayload = {
     ...base,
     sub_type: 'pee',
-    rating: 7, // matches wizard default for pee
+    rating: 10, // matches wizard default for pee (10 = full)
   };
 
   try {
