@@ -183,7 +183,13 @@ function ActivityTab({ pets, f }) {
                   <td>{a.activity_type}</td>
                   <td>
                     {a.activity_type === 'toilet'
-                      ? [a.sub_type, a.location, a.rating ? `score ${a.rating}` : ''].filter(Boolean).join(' • ')
+                      ? [
+                          a.sub_type,
+                          a.location,
+                          a.rating ? (a.sub_type === 'pee' ? `amount ${a.rating}` : `score ${a.rating}`) : '',
+                        ]
+                          .filter(Boolean)
+                          .join(' • ')
                       : a.activity_type === 'water' || a.activity_type === 'food'
                         ? a.rating || a.notes || ''
                         : a.notes || ''}

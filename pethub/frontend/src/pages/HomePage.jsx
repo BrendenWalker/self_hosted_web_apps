@@ -336,7 +336,7 @@ export default function HomePage() {
     setErr('');
     try {
       const poop = await postActivityResilient({ ...base, sub_type: 'poop', rating: 2 });
-      const pee = await postActivityResilient({ ...base, sub_type: 'pee', rating: 7 });
+      const pee = await postActivityResilient({ ...base, sub_type: 'pee', rating: 10 });
       const nQueued = (poop.queued ? 1 : 0) + (pee.queued ? 1 : 0);
       if (nQueued > 0) {
         const total = getOfflineQueueCount();
@@ -454,7 +454,7 @@ function RecentTypeCard({ label, entry }) {
 function WizardBody({ wizard, setWizard, petId, saving, onSave }) {
   const [subType, setSubType] = useState('pee');
   const [location, setLocation] = useState('outside');
-  const [rating, setRating] = useState(7);
+  const [rating, setRating] = useState(wizard.type === 'toilet' ? 10 : wizard.type === 'water' ? 4 : 7);
   const [notes, setNotes] = useState('');
   const [eventAt, setEventAt] = useState(() => toDatetimeLocalValue());
 
@@ -463,7 +463,7 @@ function WizardBody({ wizard, setWizard, petId, saving, onSave }) {
     if (wizard.type === 'toilet') {
       setSubType('pee');
       setLocation('outside');
-      setRating(7);
+      setRating(10);
       setNotes('');
     } else if (wizard.type === 'water') {
       setRating(4);
@@ -487,7 +487,7 @@ function WizardBody({ wizard, setWizard, petId, saving, onSave }) {
           value={subType}
           onChange={(v) => {
             setSubType(v);
-            setRating(v === 'pee' ? 7 : 2);
+            setRating(v === 'pee' ? 10 : 2);
           }}
           options={[
             { value: 'pee', label: 'Pee', icon: '💦' },
@@ -504,12 +504,12 @@ function WizardBody({ wizard, setWizard, petId, saving, onSave }) {
           ]}
         />
         <label>
-          {subType === 'pee' ? 'Pee amount (1–7)' : 'Poop score (1–7)'}
+          {subType === 'pee' ? 'Pee amount (1–10)' : 'Poop score (1–7)'}
           <div className="row gap" style={{ alignItems: 'center', flexWrap: 'wrap' }}>
             <input
               type="range"
               min={1}
-              max={7}
+              max={subType === 'pee' ? 10 : 7}
               value={rating}
               onChange={(e) => setRating(Number(e.target.value))}
             />
@@ -517,8 +517,8 @@ function WizardBody({ wizard, setWizard, petId, saving, onSave }) {
           </div>
           {subType === 'pee' ? (
             <div className="row-between muted small" style={{ marginTop: 4 }}>
-              <span>Little bit</span>
-              <span>Full pee</span>
+              <span>Tiny amount</span>
+              <span>Full</span>
             </div>
           ) : null}
         </label>

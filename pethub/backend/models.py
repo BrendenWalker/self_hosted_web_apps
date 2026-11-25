@@ -70,7 +70,7 @@ class Activity(Base):
     activity_type: Mapped[str] = mapped_column(String(50), nullable=False)
     sub_type: Mapped[Optional[str]] = mapped_column(String(50))
     location: Mapped[Optional[str]] = mapped_column(String(10))  # inside/outside for potty
-    rating: Mapped[Optional[int]] = mapped_column(Integer)       # 1-7 scale for activities like potty/water
+    rating: Mapped[Optional[int]] = mapped_column(Integer)       # pee amount 1-10 (10=full); poop/water/food stay 1-7
     notes: Mapped[Optional[str]] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(UTCTimestamp, server_default=func.now(), nullable=False)
     trend: Mapped[Optional[float]] = mapped_column(Float, nullable=True)     # Smoothed interval between toilet events (hours)
